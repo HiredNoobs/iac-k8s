@@ -17,6 +17,9 @@ env:
   # Kubernetes' schemas at a fixed commit (kubeconform's default follows master).
   KUBERNETES_VERSION: "1.37.0"
   KUBERNETES_SCHEMAS_COMMIT: "8df8a883b68a24a104b4a9e43c1288090ae60b3b"
+  # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers).
+  ESO_VERSION: "2.11.0"
+  ESO_CRDS_SHA256: "2b2aa2e85a4c081a11688f0b31ebdb33153c0885d4c2e3604d11058995a11b75"
 
 jobs:
   lint:
@@ -36,6 +39,9 @@ jobs:
 
       - name: Install tools
         run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-yaml
+
           curl -fsSLo /tmp/kustomize.tar.gz \
             "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
           echo "${KUSTOMIZE_SHA256}  /tmp/kustomize.tar.gz" | sha256sum -c -
@@ -52,7 +58,16 @@ jobs:
           mkdir -p /tmp/flux-crd-schemas
           tar -xzf /tmp/flux-crd-schemas.tar.gz -C /tmp/flux-crd-schemas
 
-      # A missing schema fails the run, add the CRD schemas of new controllers (D4) here. CRDs
+      # The controllers' CRDs converted to schemas, named like Flux's.
+      - name: Controller CRD schemas
+        run: |
+          curl -fsSLo /tmp/eso-crds.yaml \
+            "https://raw.githubusercontent.com/external-secrets/external-secrets/v${ESO_VERSION}/deploy/crds/bundle.yaml"
+          echo "${ESO_CRDS_SHA256}  /tmp/eso-crds.yaml" | sha256sum -c -
+
+          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml
+
+      # A missing schema fails the run, add the CRD schemas of new controllers to the step above. CRDs
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).
       - name: Validate
         run: |
@@ -60,6 +75,7 @@ jobs:
             kubeconform -strict -summary -skip CustomResourceDefinition -kubernetes-version "$KUBERNETES_VERSION" \
               -schema-location "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/${KUBERNETES_SCHEMAS_COMMIT}/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json" \
               -schema-location "/tmp/flux-crd-schemas/{{.ResourceKind}}{{.KindSuffix}}.json" \
+              -schema-location "/tmp/crd-schemas/{{.ResourceKind}}{{.KindSuffix}}.json" \
               "$@"
           }
 

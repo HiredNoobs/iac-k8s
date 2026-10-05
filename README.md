@@ -32,7 +32,33 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 - Upstream Helm charts as a ``HelmRelease`` at an exact chart version, Kustomize manifests otherwise. Images pinned by digest.
 - No secrets in git. One ``ExternalSecret`` per app from Vault (``labv2/production/<app>``).
 - Placement with replicas, ``topologySpreadConstraints`` on ``topology.kubernetes.io/zone``, PDBs and resource requests. ``nodeSelector`` only for hardware (the Longhorn disk), no stack labels.
-- A new controller's CRDs need their schemas added to ``lint.yml``, a missing schema fails CI.
+- A new controller's CRDs need their schemas added to ``lint.yml`` (download the release's CRDs, pinned by checksum, and convert them with ``.forgejo/scripts/crd-schemas.py``), a missing schema fails CI.
+
+## Secrets
+
+External Secrets Operator syncs them from Vault through the ``vault`` ClusterSecretStore (``infrastructure/configs``). ESO logs in with Vault's ``kubernetes/<cluster>`` auth mount, set up by iac-homelab's ``terraform/vault`` root, and can only read ``labv2/<environment>/*``.
+
+One ``ExternalSecret`` per app, every key of the app's Vault secret becomes a key of the Kubernetes secret:
+
+```yaml
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: <app>
+  namespace: <app>
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: <app>
+  dataFrom:
+    - extract:
+        key: production/<app>
+```
+
+Annotate the workloads reading it with ``reloader.stakater.com/auto: "true"``, Reloader restarts them when the secret changes.
 
 ## Bootstrap
 

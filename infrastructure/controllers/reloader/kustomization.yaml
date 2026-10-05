@@ -1,0 +1,8 @@
+# Reloader: restarts workloads annotated with reloader.stakater.com/auto when the secrets or
+# configmaps they read change (e.g. an ExternalSecret refreshed from Vault).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - repository.yaml
+  - release.yaml

@@ -1,0 +1,22 @@
+# Vault on prx-999, for every ExternalSecret in the cluster (secretStoreRef: ClusterSecretStore
+# vault). ESO logs in with its own service account through the cluster's Kubernetes auth mount
+# (${cluster} is set by the cluster's infra-configs), configured by iac-homelab's terraform/vault
+# root, which also limits what it can read (labv2/production/*). Keys are paths in labv2, e.g.
+# key: production/<app>.
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: vault
+spec:
+  provider:
+    vault:
+      server: https://vault.hirednoobs.com
+      path: labv2
+      version: v2
+      auth:
+        kubernetes:
+          mountPath: kubernetes/${cluster}
+          role: external-secrets
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets

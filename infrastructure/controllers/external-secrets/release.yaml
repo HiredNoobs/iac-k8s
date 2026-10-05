@@ -1,0 +1,44 @@
+# Bump the chart version and the image together, the image is the chart's appVersion pinned by
+# its digest (the multi-arch index). The CRDs come with the chart, add their schemas to lint.yml.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: external-secrets
+      version: "2.11.0"
+      sourceRef:
+        kind: HelmRepository
+        name: external-secrets
+  install:
+    crds: Create
+  upgrade:
+    crds: CreateReplace
+  values:
+    image:
+      tag: v2.11.0@sha256:66fb710878cbf3eba4a927e35c5d75e29a202c9bab238aad64bfb23b786b962b
+    webhook:
+      image:
+        tag: v2.11.0@sha256:66fb710878cbf3eba4a927e35c5d75e29a202c9bab238aad64bfb23b786b962b
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+    certController:
+      image:
+        tag: v2.11.0@sha256:66fb710878cbf3eba4a927e35c5d75e29a202c9bab238aad64bfb23b786b962b
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+    # Vault's Kubernetes auth reviews ESO's token with that same token (no long-lived reviewer
+    # token in Vault), which needs the TokenReview API.
+    systemAuthDelegator: true

@@ -32,3 +32,7 @@ spec:
     name: flux-system
   path: ./infrastructure/configs
   prune: true
+  # ${cluster} in the configs, e.g. the cluster's Kubernetes auth mount in Vault.
+  postBuild:
+    substitute:
+      cluster: production-core
