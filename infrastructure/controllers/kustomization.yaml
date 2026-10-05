@@ -1,0 +1,4 @@
+# Cluster controllers (ESO, Reloader, cert-manager, ...), one directory each.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: []

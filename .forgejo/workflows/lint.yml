@@ -1,0 +1,77 @@
+# Validates the manifests on every push, on the general runner (no credentials, nothing reaches
+# the cluster: Flux pulls and applies from the cluster). Tools and schemas are pinned, bump the
+# version and its checksum together.
+name: Lint
+
+on:
+  push:
+
+env:
+  KUSTOMIZE_VERSION: "5.8.2"
+  KUSTOMIZE_SHA256: "06af0a202c2b831207d0173f9c9cdb1b30abceca0747cb3fbb72792d26055c95"
+  KUBECONFORM_VERSION: "0.8.0"
+  KUBECONFORM_SHA256: "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
+  # The Flux CRDs' schemas, same version as FLUX_VERSION in tools-bin's context-setup.
+  FLUX_VERSION: "2.9.6"
+  FLUX_CRD_SCHEMAS_SHA256: "380b713bd28a2c27cfc7710219aae79e1c9ceff9bee50197c023047190532987"
+  # Kubernetes' schemas at a fixed commit (kubeconform's default follows master).
+  KUBERNETES_VERSION: "1.37.0"
+  KUBERNETES_SCHEMAS_COMMIT: "8df8a883b68a24a104b4a9e43c1288090ae60b3b"
+
+jobs:
+  lint:
+    runs-on: docker
+    steps:
+      # Not actions/checkout: the runner clones actions anonymously, which REQUIRE_SIGNIN_VIEW refuses.
+      # The job token can read this repo, it's sent as a header so it isn't saved in .git/config.
+      - name: Checkout
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          git init -q .
+          git -c http.extraHeader="Authorization: Basic $auth" \
+            fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+
+      - name: Install tools
+        run: |
+          curl -fsSLo /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          echo "${KUSTOMIZE_SHA256}  /tmp/kustomize.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin kustomize
+
+          curl -fsSLo /tmp/kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  /tmp/kubeconform.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/kubeconform.tar.gz -C /usr/local/bin kubeconform
+
+          curl -fsSLo /tmp/flux-crd-schemas.tar.gz \
+            "https://github.com/fluxcd/flux2/releases/download/v${FLUX_VERSION}/crd-schemas.tar.gz"
+          echo "${FLUX_CRD_SCHEMAS_SHA256}  /tmp/flux-crd-schemas.tar.gz" | sha256sum -c -
+          mkdir -p /tmp/flux-crd-schemas
+          tar -xzf /tmp/flux-crd-schemas.tar.gz -C /tmp/flux-crd-schemas
+
+      # A missing schema fails the run, add the CRD schemas of new controllers (D4) here. CRDs
+      # themselves are skipped, they come from the upstream releases (and there's no schema for them).
+      - name: Validate
+        run: |
+          kubeconform_() {
+            kubeconform -strict -summary -skip CustomResourceDefinition -kubernetes-version "$KUBERNETES_VERSION" \
+              -schema-location "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/${KUBERNETES_SCHEMAS_COMMIT}/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json" \
+              -schema-location "/tmp/flux-crd-schemas/{{.ResourceKind}}{{.KindSuffix}}.json" \
+              "$@"
+          }
+
+          # Flux reads clusters/<cluster>/ as plain manifests. flux-system/kustomization.yaml is
+          # kustomize's config, not a manifest.
+          echo "::group::clusters"
+          kubeconform_ -ignore-filename-pattern 'kustomization\.yaml$' clusters/
+          echo "::endgroup::"
+
+          # Everything a Flux Kustomization points at is built the way Flux builds it.
+          find . -name kustomization.yaml -not -path './clusters/*' -printf '%h\n' | sort | while read -r dir; do
+            echo "::group::$dir"
+            kustomize build "$dir" | kubeconform_ -
+            echo "::endgroup::"
+          done
