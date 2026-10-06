@@ -6,4 +6,5 @@ resources:
   - envoy-gateway
   - external-secrets
   - kube-vip
+  - longhorn
   - reloader

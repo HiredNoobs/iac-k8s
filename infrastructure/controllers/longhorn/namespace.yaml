@@ -1,0 +1,11 @@
+# Longhorn expects longhorn-system. Its pods need host access (iSCSI, the disks), which Talos'
+# default pod security standard (baseline) refuses. Never pruned: deleting the namespace would
+# delete every volume.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: longhorn-system
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
