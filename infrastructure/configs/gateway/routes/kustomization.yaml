@@ -8,7 +8,6 @@ resources:
   - auth.yaml
   - bazarr.yaml
   - grafana.yaml
-  - homepage.yaml
   - jellyfin.yaml
   - lidarr.yaml
   - lldap.yaml

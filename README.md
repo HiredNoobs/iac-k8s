@@ -85,7 +85,7 @@ spec:
           port: <port>
 ```
 
-Behind Authelia: a ``SecurityPolicy`` targeting the route, copy one from ``infrastructure/configs/gateway/routes`` (e.g. ``homepage.yaml``).
+Behind Authelia: a ``SecurityPolicy`` targeting the route (copy ``apps/base/homepage/security-policy.yaml``), and the app's namespace added to the ``authelia`` ReferenceGrant in ``infrastructure/configs/gateway/authelia.yaml``.
 
 Sites outside the cluster (the NAS, Proxmox) and the stacks not migrated yet are in ``infrastructure/configs/gateway/routes``, with a ``Backend`` for the upstream. Move a stack's route to its app when it's migrated.
 
