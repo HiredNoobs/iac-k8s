@@ -1,0 +1,19 @@
+# Redis, TLS only with ACL users. A single instance (no replication yet) with its data (the AOF
+# and users.acl) on a Longhorn volume. Clients need a certificate from the redis-ca ClusterIssuer
+# (infrastructure/configs/cluster-issuer/redis-ca.yaml) and their ACL user's password.
+#
+# The LoadBalancer IP (clients outside the cluster, redis.hirednoobs.com) is per cluster
+# (apps/<cluster>/), base has none. Plain manifests, upstream has no chart.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: redis
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - statefulset.yaml
+  - services.yaml
+# A change rolls the pod (the name gets a hash).
+configMapGenerator:
+  - name: redis-config
+    files:
+      - config/redis.conf

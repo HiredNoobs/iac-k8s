@@ -1,0 +1,36 @@
+# Gives the pod a stable name, redis-0.redis.redis.svc, for when replication is added.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis-tls
+      port: 6379
+      targetPort: redis-tls
+      protocol: TCP
+---
+# Clients in the cluster use redis-tls.redis.svc, clients outside it redis.hirednoobs.com
+# (Pi-hole's record for the LoadBalancer IP set per cluster, see apps/<cluster>/). kube-vip
+# announces the IP from the node running Redis.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-tls
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis-tls
+      port: 6379
+      targetPort: redis-tls
+      protocol: TCP

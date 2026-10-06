@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - ../base/homepage
   - ../base/pihole
+  - ../base/redis
 patches:
   # The LAN's DNS IP (the router hands it out), announced by kube-vip.
   - target:
@@ -15,3 +16,13 @@ patches:
         path: /metadata/annotations
         value:
           kube-vip.io/loadbalancerIPs: "192.168.111.100"
+  # Redis for clients outside the cluster (redis.hirednoobs.com), announced by kube-vip.
+  - target:
+      kind: Service
+      name: redis-tls
+      namespace: redis
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          kube-vip.io/loadbalancerIPs: "192.168.111.102"

@@ -1,0 +1,25 @@
+# Redis' server certificate, renewed by cert-manager (Reloader restarts Redis to load it). Also
+# used as the client certificate of the readiness probe. The secret holds tls.crt, tls.key and
+# ca.crt (redis-ca, which clients are checked against).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: redis
+spec:
+  secretName: redis-tls
+  commonName: redis
+  dnsNames:
+    - redis-tls
+    - redis-tls.redis.svc
+    - redis-tls.redis.svc.cluster.local
+    - redis-0.redis.redis.svc
+    - redis-0.redis.redis.svc.cluster.local
+    - redis.hirednoobs.com
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: redis-ca
