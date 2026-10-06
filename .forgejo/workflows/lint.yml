@@ -27,6 +27,9 @@ env:
   # The Gateway API version Envoy Gateway's chart installs (experimental channel).
   GATEWAY_API_VERSION: "1.6.1"
   GATEWAY_API_CRDS_SHA256: "d7fa77650e4ef28fca0411536fcb5e237deb4d50301cfded3be49d9a1b7bbd02"
+  # The release manifest, for its CRDs (the chart renders them as templates).
+  LONGHORN_VERSION: "1.12.1"
+  LONGHORN_MANIFEST_SHA256: "41648963af867ac1d0c85755fb53cf61cacd57c9bb22e1942e3fb0439eeb04fd"
 
 jobs:
   lint:
@@ -81,7 +84,10 @@ jobs:
           curl -fsSLo /tmp/gateway-api-crds.yaml             "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GATEWAY_API_VERSION}/experimental-install.yaml"
           echo "${GATEWAY_API_CRDS_SHA256}  /tmp/gateway-api-crds.yaml" | sha256sum -c -
 
-          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml
+          curl -fsSLo /tmp/longhorn.yaml             "https://raw.githubusercontent.com/longhorn/longhorn/v${LONGHORN_VERSION}/deploy/longhorn.yaml"
+          echo "${LONGHORN_MANIFEST_SHA256}  /tmp/longhorn.yaml" | sha256sum -c -
+
+          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml
 
       # A missing schema fails the run, add the CRD schemas of new controllers to the step above. CRDs
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).

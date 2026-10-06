@@ -6,3 +6,4 @@ resources:
   - cluster-secret-store
   - flux-notifications
   - gateway
+  - longhorn

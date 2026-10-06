@@ -1,0 +1,15 @@
+# Nightly backup of every volume to the NAS, keeping 5 days. Volumes without recurring job
+# labels are in the default group, so new volumes are included automatically. Backups are
+# incremental, only changed blocks are uploaded.
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backup-nightly
+  namespace: longhorn-system
+spec:
+  task: backup
+  cron: "0 3 * * *"
+  retain: 5
+  concurrency: 2
+  groups:
+    - default
