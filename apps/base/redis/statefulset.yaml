@@ -32,6 +32,8 @@ spec:
         runAsGroup: 999
         fsGroup: 999
         fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       # Time to flush the AOF on shutdown.
       terminationGracePeriodSeconds: 60
       containers:
@@ -44,6 +46,11 @@ spec:
             - |
               touch /data/users.acl
               exec redis-server /usr/local/etc/redis/redis.conf
+          # Talos warns about anything short of the restricted pod security standard.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: redis-tls
               containerPort: 6379
