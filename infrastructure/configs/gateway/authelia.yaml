@@ -12,3 +12,20 @@ spec:
     - fqdn:
         hostname: authelia.authelia-core.svc.cluster.local
         port: 9091
+---
+# Lets the SecurityPolicies of apps behind Authelia use the Backend above, one entry per
+# namespace.
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: authelia
+  namespace: gateway
+spec:
+  from:
+    - group: gateway.envoyproxy.io
+      kind: SecurityPolicy
+      namespace: homepage
+  to:
+    - group: gateway.envoyproxy.io
+      kind: Backend
+      name: authelia

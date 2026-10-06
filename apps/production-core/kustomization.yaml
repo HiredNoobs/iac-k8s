@@ -1,4 +1,5 @@
-# The apps production-core runs: ../../base/<app>, plus patches for this cluster.
+# The apps production-core runs: ../base/<app>, plus patches for this cluster.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: []
+resources:
+  - ../base/homepage

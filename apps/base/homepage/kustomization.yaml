@@ -1,0 +1,22 @@
+# Homepage (https://gethomepage.dev), the dashboard at homepage.hirednoobs.com, behind Authelia.
+# Plain manifests: upstream only documents a community chart. Stateless, the config is in
+# config/ and the widgets' credentials come from Vault.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: homepage
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  - deployment.yaml
+  - service.yaml
+  - httproute.yaml
+  - security-policy.yaml
+# The name gets a hash of the files, so a config change rolls the pods.
+configMapGenerator:
+  - name: homepage-config
+    files:
+      - config/settings.yaml
+      - config/widgets.yaml
+      - config/services.yaml
+      - config/bookmarks.yaml
+      - config/custom.css

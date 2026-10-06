@@ -1,0 +1,143 @@
+# href is opened in the browser, so it uses the hirednoobs.com names (through the Gateway). A
+# widget's url is called from the homepage pod, so it goes straight to the upstream, the same
+# ones as the Gateway's routes (infrastructure/configs/gateway/routes, or the app's own
+# HTTPRoute). Self-signed certs are accepted. {{HOMEPAGE_VAR_*}} are the widgets' credentials,
+# from the homepage secret (external-secret.yaml).
+
+- Infra:
+  - Router:
+      href: https://router.hirednoobs.com
+      icon: router
+  - Proxmox:
+      href: https://proxmox.hirednoobs.com
+      icon: proxmox
+      widget:
+        type: proxmox
+        url: https://192.168.111.2:8006
+        username: {{HOMEPAGE_VAR_PROXMOX_API_USER}}
+        password: {{HOMEPAGE_VAR_PROXMOX_API_PASS}}
+  - Proxmox 999:
+      href: https://proxmox-999.hirednoobs.com
+      description: GitOps server
+      icon: proxmox
+  - NAS:
+      href: https://nas.hirednoobs.com
+      icon: ugreen
+  # One app password (PIHOLE_API_APP_PWHASH in stack-pihole) is shared by every replica.
+  - Pi-hole 1:
+      href: https://pihole1.hirednoobs.com/admin
+      icon: pi-hole
+      widget:
+        type: pihole
+        url: https://pihole-0.pihole.pihole-core.svc.cluster.local
+        version: 6
+        key: {{HOMEPAGE_VAR_PIHOLE_API_KEY}}
+  - Pi-hole 2:
+      href: https://pihole2.hirednoobs.com/admin
+      icon: pi-hole
+      widget:
+        type: pihole
+        url: https://pihole-1.pihole.pihole-core.svc.cluster.local
+        version: 6
+        key: {{HOMEPAGE_VAR_PIHOLE_API_KEY}}
+  - Pi-hole 3:
+      href: https://pihole3.hirednoobs.com/admin
+      icon: pi-hole
+      widget:
+        type: pihole
+        url: https://pihole-2.pihole.pihole-core.svc.cluster.local
+        version: 6
+        key: {{HOMEPAGE_VAR_PIHOLE_API_KEY}}
+
+- Monitoring:
+  - Grafana:
+      href: https://grafana.hirednoobs.com
+      icon: grafana
+      widget:
+        type: grafana
+        version: 2
+        alerts: alertmanager
+        url: https://grafana.grafana-core.svc.cluster.local:3000
+        username: {{HOMEPAGE_VAR_GRAFANA_USER}}
+        password: {{HOMEPAGE_VAR_GRAFANA_PASS}}
+  - VictoriaLogs:
+      href: https://victorialogs.hirednoobs.com
+      icon: victorialogs
+  - VictoriaMetrics:
+      href: https://victoriametrics.hirednoobs.com
+      icon: victoriametrics
+  - VMAlert:
+      href: https://vmalert.hirednoobs.com
+      icon: victoriametrics
+  - VMAgent:
+      href: https://vmagent.hirednoobs.com
+      icon: victoriametrics
+  - Alertmanager:
+      href: https://alertmanager.hirednoobs.com
+      icon: alertmanager
+
+- Services:
+  - Vaultwarden:
+      href: https://vaultwarden.hirednoobs.com
+      icon: vaultwarden
+  - Vault:
+      href: https://vault.hirednoobs.com
+      icon: vault
+  - Forgejo:
+      href: https://git.hirednoobs.com
+      icon: forgejo
+  - RabbitMQ:
+      href: https://rabbitmq.hirednoobs.com
+      icon: rabbitmq
+  - qBittorrent:
+      href: https://qbittorrent.hirednoobs.com
+      icon: qbittorrent
+      widget:
+        type: qbittorrent
+        url: http://192.168.111.6:8080
+        username: {{HOMEPAGE_VAR_QBITTORRENT_USER}}
+        password: {{HOMEPAGE_VAR_QBITTORRENT_PASS}}
+        enableLeechProgress: true
+        enableLeechSize: true
+
+- Media:
+  - Seerr:
+      href: https://seerr.hirednoobs.com
+      icon: seerr
+  - Jellyfin:
+      href: https://jellyfin.hirednoobs.com
+      icon: jellyfin
+  - Sonarr:
+      href: https://sonarr.hirednoobs.com
+      icon: sonarr
+      widget:
+        type: sonarr
+        url: http://192.168.111.6:8989
+        key: {{HOMEPAGE_VAR_SONARR_API_KEY}}
+  - Radarr:
+      href: https://radarr.hirednoobs.com
+      icon: radarr
+      widget:
+        type: radarr
+        url: http://192.168.111.6:7878
+        key: {{HOMEPAGE_VAR_RADARR_API_KEY}}
+  - Lidarr:
+      href: https://lidarr.hirednoobs.com
+      icon: lidarr
+      widget:
+        type: lidarr
+        url: http://192.168.111.6:8686
+        key: {{HOMEPAGE_VAR_LIDARR_API_KEY}}
+  - Bazarr:
+      href: https://bazarr.hirednoobs.com
+      icon: bazarr
+      widget:
+        type: bazarr
+        url: http://192.168.111.6:6767
+        key: {{HOMEPAGE_VAR_BAZARR_API_KEY}}
+  - Profilarr:
+      href: https://profilarr.hirednoobs.com
+      icon: profilarr
+  - Prowlarr:
+      href: https://prowlarr.hirednoobs.com
+      icon: prowlarr

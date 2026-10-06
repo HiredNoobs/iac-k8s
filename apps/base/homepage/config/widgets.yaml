@@ -1,0 +1,14 @@
+- datetime:
+    locale: en-GB
+    timezone: Europe/London
+    text_size: xl
+    align: left
+    format:
+      timeStyle: short
+      dateStyle: long
+
+- search:
+    provider: duckduckgo
+    focus: true
+    align: center
+    width: medium

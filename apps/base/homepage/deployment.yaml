@@ -1,0 +1,87 @@
+# One replica, no PDB: a short outage (updates, node drains) doesn't matter for a dashboard.
+# Requests for any host but homepage.hirednoobs.com are refused (HOMEPAGE_ALLOWED_HOSTS),
+# localhost is always allowed (the probes). Reloader restarts it when the credentials change,
+# a config change renames the ConfigMap (kustomization.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  labels:
+    app.kubernetes.io/name: homepage
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homepage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homepage
+    spec:
+      containers:
+        - name: homepage
+          image: gethomepage/homepage:v1.13.1@sha256:d8d784e5090111b6e4c56dfd90e272d2953a2094e87349f647165df0fa6c4401
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: homepage.hirednoobs.com
+          envFrom:
+            - secretRef:
+                name: homepage
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost:3000
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost:3000
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          # Mounted one by one, homepage writes its logs to /app/config/logs.
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/settings.yaml
+              subPath: settings.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/widgets.yaml
+              subPath: widgets.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/services.yaml
+              subPath: services.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/bookmarks.yaml
+              subPath: bookmarks.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/custom.css
+              subPath: custom.css
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: homepage-config

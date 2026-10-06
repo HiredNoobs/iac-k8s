@@ -1,0 +1,9 @@
+title: "Homelab Dashboard"
+theme: dark
+color: slate
+headerStyle: underlined
+showStats: false
+hideVersion: true
+
+background: https://raw.githubusercontent.com/linuxdotexe/nordic-wallpapers/refs/heads/master/wallpapers/ign-0011.png
+cardBlur: xs

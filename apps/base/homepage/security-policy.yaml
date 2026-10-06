@@ -1,0 +1,32 @@
+# Behind Authelia, see infrastructure/configs/gateway/authelia.yaml (the Backend, and the
+# ReferenceGrant letting this namespace use it).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: homepage
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: homepage
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+          namespace: gateway
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email

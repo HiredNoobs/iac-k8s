@@ -1,0 +1,40 @@
+- Dev:
+  - GitHub:
+    - href: https://github.com/HiredNoobs
+      icon: github
+  - Proxmox Community Scripts:
+    - href: https://community-scripts.github.io/ProxmoxVE/scripts
+      icon: proxmox
+
+- Email:
+  - Proton:
+    - href: https://account.proton.me/login
+      icon: proton-mail
+  - Gmail:
+    - href: https://mail.google.com/
+      icon: gmail
+
+- GW2:
+  - KP clears:
+    - href: https://killproof.me/proof/y258e/clear
+      icon: https://killproof.me/static/images/site_icon_192x192.png
+  - GW2 Efficiency:
+    - href: https://gw2efficiency.com/
+      icon: https://gw2efficiency.com/favicon-32x32.png
+  - Snowcrows:
+    - href: https://snowcrows.com/
+      icon: https://snowcrows.com/assets/logo_icon_white.png
+  - Wingman:
+    - href: https://gw2wingman.nevermindcreations.de/account
+      icon: https://gw2wingman.nevermindcreations.de/static/favicon.png
+
+- Socials:
+  - YouTube:
+    - href: https://youtube.com/
+      icon: youtube
+  - Twitter:
+    - href: https://twitter.com/
+      icon: twitter
+  - Reddit:
+    - href: https://reddit.com/
+      icon: reddit
