@@ -1,0 +1,36 @@
+# Redis' own CA (the one stack-redis created, kept so the client certs it signed stay valid),
+# from labv2/production/redis (ca.crt, ca.key). Redis only lets in clients with a certificate
+# signed by it (tls-auth-clients), who they are is their ACL user and password.
+#
+# Server and client certificates are Certificates with issuerRef ClusterIssuer redis-ca: the
+# server's in apps/base/redis, each client's in its own app (cert-manager puts tls.crt, tls.key
+# and ca.crt in the client's namespace). Clients outside the cluster get a long-lived
+# Certificate in apps/base/redis, copied out once.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: redis-ca
+  namespace: cert-manager
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: redis-ca
+    template:
+      type: kubernetes.io/tls
+      data:
+        tls.crt: "{{ index . \"ca.crt\" }}"
+        tls.key: "{{ index . \"ca.key\" }}"
+  dataFrom:
+    - extract:
+        key: production/redis
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: redis-ca
+spec:
+  ca:
+    secretName: redis-ca
