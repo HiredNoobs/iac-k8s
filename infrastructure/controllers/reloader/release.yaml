@@ -25,6 +25,12 @@ spec:
       reloadStrategy: annotations
       readOnlyRootFileSystem: true
       deployment:
+        # The chart already sets the pod's (non-root, RuntimeDefault), this is the rest of the
+        # restricted pod security standard. readOnlyRootFilesystem is added by the chart.
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         resources:
           requests:
             cpu: 10m
