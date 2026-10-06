@@ -4,3 +4,4 @@ resources:
   - external-secret.yaml
   - cluster-issuer.yaml
   - redis-ca.yaml
+  - rabbitmq-ca.yaml

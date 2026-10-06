@@ -1,0 +1,30 @@
+# The web UI, rabbitmq.hirednoobs.com (RabbitMQ's own login, not behind Authelia). A Backend
+# rather than the Service: the UI is HTTPS, its certificate (rabbitmq-ca) isn't verified.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: rabbitmq
+spec:
+  endpoints:
+    - fqdn:
+        hostname: rabbitmq-broker.rabbitmq.svc.cluster.local
+        port: 15671
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rabbitmq
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - rabbitmq.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: rabbitmq

@@ -5,6 +5,7 @@ resources:
   - ../base/homepage
   - ../base/pihole
   - ../base/redis
+  - ../base/rabbitmq
 patches:
   # The LAN's DNS IP (the router hands it out), announced by kube-vip.
   - target:

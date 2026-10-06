@@ -1,0 +1,47 @@
+# Gives the pod its stable name, rabbitmq-0.rabbitmq.rabbitmq.svc, which is also the RabbitMQ
+# node name. Published before the pod is ready so RabbitMQ can resolve itself at boot.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  labels:
+    app.kubernetes.io/name: rabbitmq
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: rabbitmq
+  ports:
+    - name: amqps
+      port: 5671
+      targetPort: amqps
+      protocol: TCP
+---
+# Clients in the cluster use rabbitmq-broker.rabbitmq.svc, clients outside it
+# rabbitmq-broker.hirednoobs.com (Pi-hole's record for the LoadBalancer IP set per cluster, see
+# apps/<cluster>/). kube-vip announces the IP from the node running RabbitMQ. The web UI is
+# rabbitmq.hirednoobs.com (routes.yaml), the metrics port is scraped by vmagent.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-broker
+  labels:
+    app.kubernetes.io/name: rabbitmq
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: rabbitmq
+  ports:
+    - name: amqps
+      port: 5671
+      targetPort: amqps
+      protocol: TCP
+    - name: management
+      port: 15671
+      targetPort: management
+      protocol: TCP
+    - name: prometheus
+      port: 15692
+      targetPort: prometheus
+      protocol: TCP

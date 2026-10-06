@@ -1,0 +1,37 @@
+# RabbitMQ's own CA (the one stack-rabbitmq created, kept so the client certs it signed stay
+# valid), from labv2/production/rabbitmq (ca.crt, ca.key). RabbitMQ only lets in clients with a
+# certificate signed by it (verify_peer, fail_if_no_peer_cert), who they are is their user and
+# password.
+#
+# Server and client certificates are Certificates with issuerRef ClusterIssuer rabbitmq-ca: the
+# server's in apps/base/rabbitmq, each client's in its own app (cert-manager puts tls.crt,
+# tls.key and ca.crt in the client's namespace). Clients outside the cluster get a long-lived
+# Certificate in apps/base/rabbitmq, copied out once.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-ca
+  namespace: cert-manager
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: rabbitmq-ca
+    template:
+      type: kubernetes.io/tls
+      data:
+        tls.crt: "{{ index . \"ca.crt\" }}"
+        tls.key: "{{ index . \"ca.key\" }}"
+  dataFrom:
+    - extract:
+        key: production/rabbitmq
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: rabbitmq-ca
+spec:
+  ca:
+    secretName: rabbitmq-ca

@@ -1,0 +1,22 @@
+# RabbitMQ, TLS only (AMQPS and the web UI). A single node (no clustering yet) with its data on
+# a Longhorn volume. Clients need a certificate from the rabbitmq-ca ClusterIssuer
+# (infrastructure/configs/cluster-issuer/rabbitmq-ca.yaml) and their user's password.
+#
+# The LoadBalancer IP (clients outside the cluster, rabbitmq-broker.hirednoobs.com) is per
+# cluster (apps/<cluster>/), base has none. Plain manifests, upstream only ships an operator.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rabbitmq
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  - certificate.yaml
+  - statefulset.yaml
+  - services.yaml
+  - routes.yaml
+# A change rolls the pod (the name gets a hash).
+configMapGenerator:
+  - name: rabbitmq-config
+    files:
+      - config/rabbitmq.conf
+      - config/enabled_plugins

@@ -1,0 +1,26 @@
+# RabbitMQ's server certificate, renewed by cert-manager (Reloader restarts RabbitMQ to load
+# it). The secret holds tls.crt, tls.key and ca.crt (rabbitmq-ca, which clients are checked
+# against). No commonName: the CA's is "rabbitmq", OpenSSL would take a certificate with the
+# same one for self-signed.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rabbitmq
+spec:
+  secretName: rabbitmq-tls
+  dnsNames:
+    - rabbitmq-broker
+    - rabbitmq-broker.rabbitmq.svc
+    - rabbitmq-broker.rabbitmq.svc.cluster.local
+    - rabbitmq-0.rabbitmq.rabbitmq.svc
+    - rabbitmq-0.rabbitmq.rabbitmq.svc.cluster.local
+    - rabbitmq-broker.hirednoobs.com
+    # The CLI in the pod.
+    - localhost
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: rabbitmq-ca

@@ -1,0 +1,134 @@
+# A single RabbitMQ node, its data (definitions, users and durable queues) on a Longhorn volume
+# that follows the pod to any node. No PDB: with one node there's nothing to keep up during a
+# drain.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  labels:
+    app.kubernetes.io/name: rabbitmq
+  annotations:
+    # Restart to load a renewed certificate or a changed default user.
+    secret.reloader.stakater.com/reload: rabbitmq-tls,rabbitmq-default-user
+spec:
+  serviceName: rabbitmq
+  # Clustering isn't set up yet, a second independent node would split the queues.
+  replicas: 1
+  # The volume outlives the StatefulSet, removing RabbitMQ from git doesn't delete the data.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rabbitmq
+    spec:
+      # The rabbitmq user from the image, fsGroup lets it read the certs and write its data.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      # Time to close connections and sync queues to disk on shutdown.
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.2.4-management@sha256:aeee1db0ff9fdb1347f3585242c14ed10877b56c22eeaa113b21208ef3dd3edf
+          # Talos warns about anything short of the restricted pod security standard.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # The data directory is named after the node, so it's the pod's stable FQDN
+            # (rabbit@rabbitmq-0.rabbitmq.rabbitmq.svc.cluster.local), which won't change when
+            # clustering is added. Changing it (e.g. the namespace) starts an empty node.
+            - name: RABBITMQ_USE_LONGNAME
+              value: "true"
+            - name: RABBITMQ_NODENAME
+              value: "rabbit@$(POD_NAME).rabbitmq.$(POD_NAMESPACE).svc.cluster.local"
+          # RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS, only used when the volume is empty.
+          envFrom:
+            - secretRef:
+                name: rabbitmq-default-user
+          ports:
+            - name: amqps
+              containerPort: 5671
+              protocol: TCP
+            - name: management
+              containerPort: 15671
+              protocol: TCP
+            - name: prometheus
+              containerPort: 15692
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: amqps
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: amqps
+            periodSeconds: 10
+            failureThreshold: 3
+          # Checks the node itself responds, not just the port. Runs the CLI, so not too often.
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            # RabbitMQ's memory high watermark (0.4 by default) is taken from this limit.
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/rabbitmq/rabbitmq.conf
+              subPath: rabbitmq.conf
+              readOnly: true
+            - name: config
+              mountPath: /etc/rabbitmq/enabled_plugins
+              subPath: enabled_plugins
+              readOnly: true
+            - name: certs
+              mountPath: /etc/rabbitmq/tls
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/rabbitmq
+      volumes:
+        - name: config
+          configMap:
+            name: rabbitmq-config
+        - name: certs
+          secret:
+            secretName: rabbitmq-tls
+            defaultMode: 0440
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: rabbitmq
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 2Gi
