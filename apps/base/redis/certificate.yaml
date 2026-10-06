@@ -7,7 +7,6 @@ metadata:
   name: redis
 spec:
   secretName: redis-tls
-  commonName: redis
   dnsNames:
     - redis-tls
     - redis-tls.redis.svc
