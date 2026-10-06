@@ -14,7 +14,7 @@ spec:
         type: LoadBalancer
         externalTrafficPolicy: Local
         annotations:
-          kube-vip.io/loadbalancerIPs: "192.168.111.105"
+          kube-vip.io/loadbalancerIPs: "192.168.111.101"
       envoyDeployment:
         replicas: 2
         container:
