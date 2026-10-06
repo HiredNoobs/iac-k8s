@@ -1,0 +1,52 @@
+# Announces LoadBalancer IPs with ARP. Only Services with a kube-vip.io/loadbalancerIPs
+# annotation get an IP:
+#
+#   metadata:
+#     annotations:
+#       kube-vip.io/loadbalancerIPs: "192.168.111.100"
+#   spec:
+#     type: LoadBalancer
+#     externalTrafficPolicy: Local
+#
+# Each Service elects its own leader, so the IPs are spread across the nodes. With
+# externalTrafficPolicy: Local only nodes running a ready pod for the Service take part, the IP
+# moves when that pod goes away. The Kubernetes API VIP is Talos', not kube-vip's.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-vip
+  namespace: kube-vip
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: kube-vip
+      version: "0.11.1"
+      sourceRef:
+        kind: HelmRepository
+        name: kube-vip
+  values:
+    image:
+      tag: v1.2.4@sha256:dde4c0669d9058c74c69c0bc2f0122e26900e1e4b913c03577cb6e4e28083079
+    # Services only, null removes the chart's control plane load balancer defaults. vip_interface
+    # is unset, so the interface with the default route is used.
+    env:
+      vip_arp: "true"
+      svc_enable: "true"
+      svc_election: "true"
+      cp_enable: "false"
+      lb_enable: null
+      lb_port: null
+    # Needed to find local endpoints for externalTrafficPolicy: Local.
+    envValueFrom:
+      vip_nodename:
+        fieldRef:
+          fieldPath: spec.nodeName
+    # Workers only, the chart tolerates the control plane taint by default.
+    tolerations: []
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi

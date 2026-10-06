@@ -1,0 +1,8 @@
+# kube-vip needs the host network and NET_ADMIN/NET_RAW to answer ARP, which Talos' default
+# pod security standard (baseline) refuses.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-vip
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
