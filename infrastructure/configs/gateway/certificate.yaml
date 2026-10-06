@@ -1,5 +1,5 @@
-# The Gateway's wildcard certificate. Switch issuerRef to letsencrypt once it's issued from
-# staging, cert-manager then replaces it with a trusted one.
+# The Gateway's wildcard certificate, renewed by cert-manager 30 days before it expires. A
+# change to it (names, key) is safest tried on letsencrypt-staging first.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -14,4 +14,4 @@ spec:
     size: 256
   issuerRef:
     kind: ClusterIssuer
-    name: letsencrypt-staging
+    name: letsencrypt
