@@ -14,4 +14,4 @@ patches:
       - op: add
         path: /metadata/annotations
         value:
-          kube-vip.io/loadbalancerIPs: "192.168.111.106"
+          kube-vip.io/loadbalancerIPs: "192.168.111.100"
