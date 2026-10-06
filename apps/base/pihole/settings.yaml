@@ -1,0 +1,116 @@
+# Pi-hole's settings as FTLCONF_ env vars, so they're read only in the web UI. A change rolls
+# the pods (the name gets a hash). https://docs.pi-hole.net/docker/configuration/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pihole-settings
+data:
+  TZ: Europe/London
+  # Unbound runs in the same pod (config/unbound/).
+  FTLCONF_dns_upstreams: "127.0.0.1#5335"
+  FTLCONF_dns_listeningMode: ALL
+  FTLCONF_ntp_ipv4_active: "false"
+  FTLCONF_ntp_ipv6_active: "false"
+  # Local DNS records, one "<ip> <name>;" per line (the line breaks aren't part of the value).
+  # Web services all go through the Gateway (.101), the rest have their own LoadBalancer IP.
+  # The router UI isn't reachable from VLAN 111, so router. points straight at it. Forgejo and
+  # Vault run on prx-999 outside the cluster. The router has the same records so they resolve
+  # while Pi-hole is down, they're here too as Pi-hole doesn't ask the router for names it
+  # doesn't know. Names not listed (e.g. a public host on hirednoobs.com) resolve upstream.
+  FTLCONF_dns_hosts: "\
+    192.168.111.101 alertmanager.hirednoobs.com;\
+    192.168.111.101 auth.hirednoobs.com;\
+    192.168.111.101 bazarr.hirednoobs.com;\
+    192.168.111.101 grafana.hirednoobs.com;\
+    192.168.111.101 homepage.hirednoobs.com;\
+    192.168.111.101 jellyfin.hirednoobs.com;\
+    192.168.111.101 lidarr.hirednoobs.com;\
+    192.168.111.101 lldap.hirednoobs.com;\
+    192.168.111.101 nas.hirednoobs.com;\
+    192.168.111.101 pihole.hirednoobs.com;\
+    192.168.111.101 pihole1.hirednoobs.com;\
+    192.168.111.101 pihole2.hirednoobs.com;\
+    192.168.111.101 pihole3.hirednoobs.com;\
+    192.168.111.101 profilarr.hirednoobs.com;\
+    192.168.111.101 prowlarr.hirednoobs.com;\
+    192.168.111.101 proxmox.hirednoobs.com;\
+    192.168.111.101 proxmox-001.hirednoobs.com;\
+    192.168.111.101 proxmox-002.hirednoobs.com;\
+    192.168.111.101 proxmox-003.hirednoobs.com;\
+    192.168.111.101 proxmox-999.hirednoobs.com;\
+    192.168.111.101 qbittorrent.hirednoobs.com;\
+    192.168.111.101 rabbitmq.hirednoobs.com;\
+    192.168.111.101 radarr.hirednoobs.com;\
+    192.168.111.101 seerr.hirednoobs.com;\
+    192.168.111.101 sonarr.hirednoobs.com;\
+    192.168.111.101 vaultwarden.hirednoobs.com;\
+    192.168.111.101 victorialogs.hirednoobs.com;\
+    192.168.111.101 victoriametrics.hirednoobs.com;\
+    192.168.111.101 vmalert.hirednoobs.com;\
+    192.168.111.101 vmagent.hirednoobs.com;\
+    192.168.111.103 rabbitmq-broker.hirednoobs.com;\
+    192.168.111.102 redis.hirednoobs.com;\
+    192.168.111.104 rsyslog.hirednoobs.com;\
+    192.168.50.1 router.hirednoobs.com;\
+    192.168.111.2 prx-001.hirednoobs.com;\
+    192.168.111.3 prx-002.hirednoobs.com;\
+    192.168.111.4 prx-003.hirednoobs.com;\
+    192.168.111.9 prx-999.hirednoobs.com;\
+    192.168.111.11 prx-001-srv-prod-core-control-001.hirednoobs.com;\
+    192.168.111.12 prx-001-srv-prod-core-worker-001.hirednoobs.com;\
+    192.168.111.13 prx-001-srv-prod-core-worker-002.hirednoobs.com;\
+    192.168.111.14 prx-001-srv-prod-core-worker-003.hirednoobs.com;\
+    192.168.111.15 prx-001-srv-prod-core-worker-004.hirednoobs.com;\
+    192.168.111.254 prx-999-srv-mgmt-001.hirednoobs.com;\
+    192.168.111.200 git.hirednoobs.com;\
+    192.168.111.202 vault.hirednoobs.com;"
+  # A local=/<name>/ line for each record above, so Pi-hole answers every query type for those
+  # names itself (e.g. an empty AAAA or HTTPS answer) instead of forwarding them upstream. Keep
+  # it in line with the records.
+  FTLCONF_misc_dnsmasq_lines: "\
+    local=/alertmanager.hirednoobs.com/;\
+    local=/auth.hirednoobs.com/;\
+    local=/bazarr.hirednoobs.com/;\
+    local=/grafana.hirednoobs.com/;\
+    local=/homepage.hirednoobs.com/;\
+    local=/jellyfin.hirednoobs.com/;\
+    local=/lidarr.hirednoobs.com/;\
+    local=/lldap.hirednoobs.com/;\
+    local=/nas.hirednoobs.com/;\
+    local=/pihole.hirednoobs.com/;\
+    local=/pihole1.hirednoobs.com/;\
+    local=/pihole2.hirednoobs.com/;\
+    local=/pihole3.hirednoobs.com/;\
+    local=/profilarr.hirednoobs.com/;\
+    local=/prowlarr.hirednoobs.com/;\
+    local=/proxmox.hirednoobs.com/;\
+    local=/proxmox-001.hirednoobs.com/;\
+    local=/proxmox-002.hirednoobs.com/;\
+    local=/proxmox-003.hirednoobs.com/;\
+    local=/proxmox-999.hirednoobs.com/;\
+    local=/qbittorrent.hirednoobs.com/;\
+    local=/rabbitmq.hirednoobs.com/;\
+    local=/radarr.hirednoobs.com/;\
+    local=/seerr.hirednoobs.com/;\
+    local=/sonarr.hirednoobs.com/;\
+    local=/vaultwarden.hirednoobs.com/;\
+    local=/victorialogs.hirednoobs.com/;\
+    local=/victoriametrics.hirednoobs.com/;\
+    local=/vmalert.hirednoobs.com/;\
+    local=/vmagent.hirednoobs.com/;\
+    local=/rabbitmq-broker.hirednoobs.com/;\
+    local=/redis.hirednoobs.com/;\
+    local=/rsyslog.hirednoobs.com/;\
+    local=/router.hirednoobs.com/;\
+    local=/prx-001.hirednoobs.com/;\
+    local=/prx-002.hirednoobs.com/;\
+    local=/prx-003.hirednoobs.com/;\
+    local=/prx-999.hirednoobs.com/;\
+    local=/prx-001-srv-prod-core-control-001.hirednoobs.com/;\
+    local=/prx-001-srv-prod-core-worker-001.hirednoobs.com/;\
+    local=/prx-001-srv-prod-core-worker-002.hirednoobs.com/;\
+    local=/prx-001-srv-prod-core-worker-003.hirednoobs.com/;\
+    local=/prx-001-srv-prod-core-worker-004.hirednoobs.com/;\
+    local=/prx-999-srv-mgmt-001.hirednoobs.com/;\
+    local=/git.hirednoobs.com/;\
+    local=/vault.hirednoobs.com/;"

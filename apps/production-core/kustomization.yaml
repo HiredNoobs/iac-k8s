@@ -3,3 +3,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base/homepage
+  - ../base/pihole
+patches:
+  # The LAN's DNS IP (the router hands it out), announced by kube-vip.
+  - target:
+      kind: Service
+      name: pihole-dns
+      namespace: pihole
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          kube-vip.io/loadbalancerIPs: "192.168.111.106"

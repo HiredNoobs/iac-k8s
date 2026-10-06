@@ -1,0 +1,1 @@
+# Denied domains (regex), one per line.

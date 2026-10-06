@@ -29,7 +29,7 @@
       icon: pi-hole
       widget:
         type: pihole
-        url: https://pihole-0.pihole.pihole-core.svc.cluster.local
+        url: https://pihole-0.pihole.pihole.svc.cluster.local
         version: 6
         key: {{HOMEPAGE_VAR_PIHOLE_API_KEY}}
   - Pi-hole 2:
@@ -37,7 +37,7 @@
       icon: pi-hole
       widget:
         type: pihole
-        url: https://pihole-1.pihole.pihole-core.svc.cluster.local
+        url: https://pihole-1.pihole.pihole.svc.cluster.local
         version: 6
         key: {{HOMEPAGE_VAR_PIHOLE_API_KEY}}
   - Pi-hole 3:
@@ -45,7 +45,7 @@
       icon: pi-hole
       widget:
         type: pihole
-        url: https://pihole-2.pihole.pihole-core.svc.cluster.local
+        url: https://pihole-2.pihole.pihole.svc.cluster.local
         version: 6
         key: {{HOMEPAGE_VAR_PIHOLE_API_KEY}}
 

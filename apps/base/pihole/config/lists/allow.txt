@@ -1,0 +1,1 @@
+# Allowed domains (exact match), one per line.

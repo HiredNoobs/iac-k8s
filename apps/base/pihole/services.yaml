@@ -1,0 +1,57 @@
+# Gives each pod a stable name, e.g. pihole-0.pihole.pihole.svc, for per replica access to the
+# web UI/API (homepage's widgets, pihole1, pihole2, ...).
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole
+  labels:
+    app.kubernetes.io/name: pihole
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: pihole
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+---
+# Web UI/API on any replica.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole-web
+  labels:
+    app.kubernetes.io/name: pihole
+spec:
+  selector:
+    app.kubernetes.io/name: pihole
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+---
+# DNS for the LAN, on the LoadBalancer IP set per cluster (kube-vip.io/loadbalancerIPs, see
+# apps/<cluster>/). kube-vip announces it from a node running a ready replica and moves it if
+# that replica fails. Local keeps the client IPs for Pi-hole's per client stats.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole-dns
+  labels:
+    app.kubernetes.io/name: pihole
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: pihole
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP

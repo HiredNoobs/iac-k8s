@@ -1,0 +1,118 @@
+# The web UIs: pihole.hirednoobs.com on any replica, pihole<n> on replica n-1 (only those that
+# exist answer). Backends rather than the Services: the UI is HTTPS with a self-signed
+# certificate, which isn't verified.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: pihole
+spec:
+  endpoints:
+    - fqdn:
+        hostname: pihole-web.pihole.svc.cluster.local
+        port: 443
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pihole
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - pihole.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: pihole
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: pihole1
+spec:
+  endpoints:
+    - fqdn:
+        hostname: pihole-0.pihole.pihole.svc.cluster.local
+        port: 443
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pihole1
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - pihole1.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: pihole1
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: pihole2
+spec:
+  endpoints:
+    - fqdn:
+        hostname: pihole-1.pihole.pihole.svc.cluster.local
+        port: 443
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pihole2
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - pihole2.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: pihole2
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: pihole3
+spec:
+  endpoints:
+    - fqdn:
+        hostname: pihole-2.pihole.pihole.svc.cluster.local
+        port: 443
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pihole3
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - pihole3.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: pihole3

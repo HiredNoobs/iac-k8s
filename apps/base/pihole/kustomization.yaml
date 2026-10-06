@@ -1,0 +1,39 @@
+# Pi-hole with Unbound, the LAN's DNS. One replica per Proxmox host, each pod running Pi-hole,
+# its own Unbound (Pi-hole's upstream) and sync-lists. No volume: the block lists are downloaded
+# again when a pod starts and query history doesn't survive a restart. Plain manifests, upstream
+# has no chart.
+#
+# The DNS Service's LoadBalancer IP is per cluster (apps/<cluster>/), base has none.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pihole
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  # Pi-hole's settings, Reloader rolls the pods when they change (statefulset.yaml).
+  - settings.yaml
+  - statefulset.yaml
+  - services.yaml
+  - pdb.yaml
+  - routes.yaml
+configMapGenerator:
+  # Unbound's config and the sync script, a change rolls the pods (the names get a hash).
+  - name: unbound
+    files:
+      - config/unbound/unbound.conf
+      - config/unbound/pihole.conf
+      - config/unbound/trust-anchor.conf
+      - config/unbound/access-control.conf
+  - name: pihole-scripts
+    files:
+      - config/sync-lists.sh
+  # Block lists and allow/deny domains, picked up live by sync-lists without a restart.
+  - name: pihole-lists
+    files:
+      - config/lists/adlists.txt
+      - config/lists/allow.txt
+      - config/lists/deny.txt
+      - config/lists/allow-regex.txt
+      - config/lists/deny-regex.txt
+    options:
+      disableNameSuffixHash: true

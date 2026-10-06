@@ -1,0 +1,161 @@
+# One replica per Proxmox host (topology.kubernetes.io/zone), never two on the same one: a
+# replica with nowhere to go stays Pending. Raise replicas as hosts are added (prx-002/003).
+# A StatefulSet for the stable pod names (pihole-0.pihole.pihole.svc: the per replica web UIs
+# and homepage's widgets), the replicas are independent.
+#
+# The web UI uses Pi-hole's own self-signed certificate, the Gateway and homepage don't verify
+# it.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pihole
+  labels:
+    app.kubernetes.io/name: pihole
+  annotations:
+    # Settings and passwords are env vars, only read when a pod starts. The lists are synced
+    # live, so they aren't listed.
+    configmap.reloader.stakater.com/reload: pihole-settings
+    secret.reloader.stakater.com/reload: pihole
+spec:
+  serviceName: pihole
+  replicas: 1
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pihole
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pihole
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: pihole
+              topologyKey: topology.kubernetes.io/zone
+      containers:
+        - name: pihole
+          image: pihole/pihole:2026.07.2@sha256:f7d1be836e3bc608b56d82fc9904f5a831cdfbc0dc9c6d58f94e4c985c70038b
+          envFrom:
+            - configMapRef:
+                name: pihole-settings
+          env:
+            - name: FTLCONF_webserver_api_password
+              valueFrom:
+                secretKeyRef:
+                  name: pihole
+                  key: PIHOLE_WEB_ADMIN_PASS
+            - name: FTLCONF_webserver_api_app_pwhash
+              valueFrom:
+                secretKeyRef:
+                  name: pihole
+                  key: PIHOLE_API_APP_PWHASH
+                  optional: true
+          ports:
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+          # Allow time for the first gravity update.
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "dig +short +time=2 +tries=1 @127.0.0.1 pi.hole | grep -q ."]
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "dig +short +time=2 +tries=1 @127.0.0.1 pi.hole | grep -q ."]
+            periodSeconds: 20
+            failureThreshold: 3
+          # Not ready (so no LAN traffic) until the lists have been synced.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "test -f /run/pihole-sync/ready && dig +short +time=2 +tries=1 @127.0.0.1 pi.hole | grep -q ."]
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: sync
+              mountPath: /run/pihole-sync
+              readOnly: true
+
+        - name: unbound
+          image: madnuttah/unbound:1.26.0-1@sha256:a48db2fbf382cf5f5969987ef3552cbd8043cbb30817e95661ab49ec3819505c
+          env:
+            - name: TZ
+              value: Europe/London
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              # pihole.conf sets rrset-cache-size 256m and msg-cache-size 128m.
+              memory: 768Mi
+          volumeMounts:
+            - name: unbound
+              mountPath: /usr/local/unbound/unbound.conf
+              subPath: unbound.conf
+              readOnly: true
+            - name: unbound
+              mountPath: /usr/local/unbound/conf.d/pihole.conf
+              subPath: pihole.conf
+              readOnly: true
+            - name: unbound
+              mountPath: /usr/local/unbound/conf.d/trust-anchor.conf
+              subPath: trust-anchor.conf
+              readOnly: true
+            - name: unbound
+              mountPath: /usr/local/unbound/conf.d/access-control.conf
+              subPath: access-control.conf
+              readOnly: true
+
+        # Keeps Pi-hole's lists in line with config/lists/ through the local API.
+        - name: sync-lists
+          image: pihole/pihole:2026.07.2@sha256:f7d1be836e3bc608b56d82fc9904f5a831cdfbc0dc9c6d58f94e4c985c70038b
+          command: ["bash", "/scripts/sync-lists.sh"]
+          env:
+            - name: PIHOLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pihole
+                  key: PIHOLE_WEB_ADMIN_PASS
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: lists
+              mountPath: /etc/pihole-lists
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: sync
+              mountPath: /run/pihole-sync
+
+      volumes:
+        - name: unbound
+          configMap:
+            name: unbound
+        - name: lists
+          configMap:
+            name: pihole-lists
+        - name: scripts
+          configMap:
+            name: pihole-scripts
+        - name: sync
+          emptyDir: {}

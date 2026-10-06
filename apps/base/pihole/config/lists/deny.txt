@@ -1,0 +1,1 @@
+# Denied domains (exact match), one per line.
