@@ -1,0 +1,16 @@
+# Envoy gives up on a response after 15s by default, which would cut off video streams
+# (Jellyfin), downloads and uploads (ISOs through Proxmox). No overall limit, like nginx: a
+# connection with no traffic for 5 minutes (Envoy's stream idle timeout) is still closed.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: public
+  namespace: gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: public
+  timeout:
+    http:
+      requestTimeout: 0s

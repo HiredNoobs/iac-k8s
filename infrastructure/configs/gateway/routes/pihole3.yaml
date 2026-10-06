@@ -1,0 +1,31 @@
+# pihole3.hirednoobs.com -> https://pihole-2.pihole.pihole-core.svc.cluster.local:443, one Pi-hole pod, pihole-core (still a stack, move this to the app in D5).
+# Envoy reaches it over HTTPS, its self-signed certificate isn't verified (like nginx).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: pihole3
+  namespace: gateway
+spec:
+  endpoints:
+    - fqdn:
+        hostname: pihole-2.pihole.pihole-core.svc.cluster.local
+        port: 443
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pihole3
+  namespace: gateway
+spec:
+  parentRefs:
+    - name: public
+      sectionName: https
+  hostnames:
+    - pihole3.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: pihole3

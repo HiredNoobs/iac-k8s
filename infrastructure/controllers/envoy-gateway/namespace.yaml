@@ -1,0 +1,5 @@
+# The controller, and the Envoy proxy pods it creates for each Gateway.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: envoy-gateway

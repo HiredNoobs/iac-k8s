@@ -5,3 +5,4 @@ resources:
   - cluster-issuer
   - cluster-secret-store
   - flux-notifications
+  - gateway

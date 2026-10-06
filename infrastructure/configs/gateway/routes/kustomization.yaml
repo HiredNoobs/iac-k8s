@@ -1,0 +1,36 @@
+# One file per site: a Backend (where it is), an HTTPRoute (its hostname on the Gateway) and,
+# behind Authelia, a SecurityPolicy. Clients always get HTTPS with the Gateway's wildcard
+# certificate, the http:// or https:// in each file's header is only how Envoy reaches the site.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - alertmanager.yaml
+  - auth.yaml
+  - bazarr.yaml
+  - grafana.yaml
+  - homepage.yaml
+  - jellyfin.yaml
+  - lidarr.yaml
+  - lldap.yaml
+  - nas.yaml
+  - pihole.yaml
+  - pihole1.yaml
+  - pihole2.yaml
+  - pihole3.yaml
+  - profilarr.yaml
+  - prowlarr.yaml
+  - proxmox.yaml
+  - proxmox-001.yaml
+  - proxmox-002.yaml
+  - proxmox-003.yaml
+  - proxmox-999.yaml
+  - qbittorrent.yaml
+  - rabbitmq.yaml
+  - radarr.yaml
+  - seerr.yaml
+  - sonarr.yaml
+  - vaultwarden.yaml
+  - victorialogs.yaml
+  - victoriametrics.yaml
+  - vmagent.yaml
+  - vmalert.yaml

@@ -19,7 +19,7 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | ``clusters/<cluster>/`` | Read by Flux as the cluster's entry point. ``flux-system/`` is written by the bootstrap, don't edit it. |
 | ``clusters/<cluster>/infrastructure.yaml`` | ``infra-controllers`` (``infrastructure/controllers``), then ``infra-configs`` (``infrastructure/configs``) once the controllers are ready. |
 | ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. |
-| ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, Longhorn, kube-vip, the gateway. |
+| ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn. |
 | ``infrastructure/configs/`` | Config using the controllers' CRDs: ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway. |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
 | ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. |
@@ -59,6 +59,35 @@ spec:
 ```
 
 Annotate the workloads reading it with ``reloader.stakater.com/auto: "true"``, Reloader restarts them when the secret changes.
+
+## Routing
+
+Everything on ``*.hirednoobs.com`` goes through one Gateway, ``public`` in ``gateway`` (``infrastructure/configs/gateway``), run by Envoy Gateway on the kube-vip IP in its ``EnvoyProxy``. Port 80 only redirects to HTTPS, which uses the wildcard certificate.
+
+An app adds its own ``HTTPRoute``:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: <app>
+  namespace: <app>
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - <app>.hirednoobs.com
+  rules:
+    - backendRefs:
+        - name: <service>
+          port: <port>
+```
+
+Behind Authelia: a ``SecurityPolicy`` targeting the route, copy one from ``infrastructure/configs/gateway/routes`` (e.g. ``homepage.yaml``).
+
+Sites outside the cluster (the NAS, Proxmox) and the stacks not migrated yet are in ``infrastructure/configs/gateway/routes``, with a ``Backend`` for the upstream. Move a stack's route to its app when it's migrated.
 
 ## Bootstrap
 

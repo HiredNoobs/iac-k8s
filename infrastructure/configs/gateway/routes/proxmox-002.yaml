@@ -1,0 +1,31 @@
+# proxmox-002.hirednoobs.com -> https://192.168.111.3:8006, Proxmox.
+# Envoy reaches it over HTTPS, its self-signed certificate isn't verified (like nginx).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: proxmox-002
+  namespace: gateway
+spec:
+  endpoints:
+    - ip:
+        address: 192.168.111.3
+        port: 8006
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: proxmox-002
+  namespace: gateway
+spec:
+  parentRefs:
+    - name: public
+      sectionName: https
+  hostnames:
+    - proxmox-002.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: proxmox-002

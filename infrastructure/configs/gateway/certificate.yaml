@@ -1,0 +1,17 @@
+# The Gateway's wildcard certificate. Switch issuerRef to letsencrypt once it's issued from
+# staging, cert-manager then replaces it with a trusted one.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard
+  namespace: gateway
+spec:
+  secretName: wildcard-tls
+  dnsNames:
+    - "*.hirednoobs.com"
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-staging

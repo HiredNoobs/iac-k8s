@@ -1,0 +1,26 @@
+# How Envoy Gateway runs the Gateway's proxy (pods in envoy-gateway). Its LoadBalancer IP is
+# announced by kube-vip. externalTrafficPolicy: Local keeps the client IP (Authelia, logs) and
+# only announces the IP from a node with a ready Envoy pod.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: public
+  namespace: gateway
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+        annotations:
+          kube-vip.io/loadbalancerIPs: "192.168.111.105"
+      envoyDeployment:
+        replicas: 2
+        container:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi

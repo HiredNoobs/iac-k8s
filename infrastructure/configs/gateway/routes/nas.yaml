@@ -1,0 +1,28 @@
+# nas.hirednoobs.com -> http://192.168.111.6:9999, the NAS.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: nas
+  namespace: gateway
+spec:
+  endpoints:
+    - ip:
+        address: 192.168.111.6
+        port: 9999
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nas
+  namespace: gateway
+spec:
+  parentRefs:
+    - name: public
+      sectionName: https
+  hostnames:
+    - nas.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: nas

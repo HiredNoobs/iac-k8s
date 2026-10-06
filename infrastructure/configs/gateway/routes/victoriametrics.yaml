@@ -1,0 +1,63 @@
+# victoriametrics.hirednoobs.com -> https://victoriametrics.grafana-core.svc.cluster.local:8428, grafana-core (still a stack, move this to the app in D5).
+# Envoy reaches it over HTTPS, its self-signed certificate isn't verified (like nginx).
+# Behind Authelia (SecurityPolicy), see ../authelia.yaml.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: victoriametrics
+  namespace: gateway
+spec:
+  endpoints:
+    - fqdn:
+        hostname: victoriametrics.grafana-core.svc.cluster.local
+        port: 8428
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: victoriametrics
+  namespace: gateway
+spec:
+  parentRefs:
+    - name: public
+      sectionName: https
+  hostnames:
+    - victoriametrics.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: victoriametrics
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: victoriametrics
+  namespace: gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: victoriametrics
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email

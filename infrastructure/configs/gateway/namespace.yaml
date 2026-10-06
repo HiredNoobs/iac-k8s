@@ -1,0 +1,6 @@
+# The shared Gateway, and the routes to things that aren't apps in this repo (the NAS, Proxmox)
+# or not yet (the stacks). An app's own HTTPRoute lives with the app.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway

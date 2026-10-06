@@ -1,0 +1,14 @@
+# Authelia (stack-authelia, still a stack), for the SecurityPolicies of routes behind it. Each
+# request is checked with Authelia's ext-authz endpoint first: anyone not logged in is redirected
+# to auth.hirednoobs.com, and the user is passed on as Remote-User/-Groups/-Name/-Email (set by
+# Authelia, a client's own are replaced). Move it to Authelia's app when that's migrated (D5).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: authelia
+  namespace: gateway
+spec:
+  endpoints:
+    - fqdn:
+        hostname: authelia.authelia-core.svc.cluster.local
+        port: 9091

@@ -1,0 +1,41 @@
+# The one entry point for *.hirednoobs.com: HTTP (only redirects, https-redirect.yaml) and HTTPS
+# with the wildcard certificate (certificate.yaml). Routes in any namespace can attach to it,
+# with parentRefs: [{name: public, namespace: gateway, sectionName: https}].
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+  namespace: gateway
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: public
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.hirednoobs.com"
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.hirednoobs.com"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: All

@@ -22,6 +22,11 @@ env:
   ESO_CRDS_SHA256: "2b2aa2e85a4c081a11688f0b31ebdb33153c0885d4c2e3604d11058995a11b75"
   CERT_MANAGER_VERSION: "1.21.2"
   CERT_MANAGER_CRDS_SHA256: "262fef78478492cd35b73a1b227106b7802f9c056361d1f561d04b32d751337f"
+  ENVOY_GATEWAY_VERSION: "1.9.2"
+  ENVOY_GATEWAY_CRDS_SHA256: "b339119f8f3a4046688fc96837b4129553f42c9998976913ef9dff25694d85cc"
+  # The Gateway API version Envoy Gateway's chart installs (experimental channel).
+  GATEWAY_API_VERSION: "1.6.1"
+  GATEWAY_API_CRDS_SHA256: "d7fa77650e4ef28fca0411536fcb5e237deb4d50301cfded3be49d9a1b7bbd02"
 
 jobs:
   lint:
@@ -70,7 +75,13 @@ jobs:
           curl -fsSLo /tmp/cert-manager-crds.yaml             "https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.crds.yaml"
           echo "${CERT_MANAGER_CRDS_SHA256}  /tmp/cert-manager-crds.yaml" | sha256sum -c -
 
-          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml
+          curl -fsSLo /tmp/envoy-gateway-crds.yaml             "https://github.com/envoyproxy/gateway/releases/download/v${ENVOY_GATEWAY_VERSION}/envoy-gateway-crds.yaml"
+          echo "${ENVOY_GATEWAY_CRDS_SHA256}  /tmp/envoy-gateway-crds.yaml" | sha256sum -c -
+
+          curl -fsSLo /tmp/gateway-api-crds.yaml             "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GATEWAY_API_VERSION}/experimental-install.yaml"
+          echo "${GATEWAY_API_CRDS_SHA256}  /tmp/gateway-api-crds.yaml" | sha256sum -c -
+
+          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml
 
       # A missing schema fails the run, add the CRD schemas of new controllers to the step above. CRDs
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).
