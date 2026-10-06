@@ -20,7 +20,6 @@ resources:
   - proxmox-003.yaml
   - proxmox-999.yaml
   - qbittorrent.yaml
-  - rabbitmq.yaml
   - radarr.yaml
   - seerr.yaml
   - sonarr.yaml

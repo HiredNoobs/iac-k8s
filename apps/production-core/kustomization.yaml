@@ -27,3 +27,14 @@ patches:
         path: /metadata/annotations
         value:
           kube-vip.io/loadbalancerIPs: "192.168.111.102"
+  # RabbitMQ for clients outside the cluster (rabbitmq-broker.hirednoobs.com), announced by
+  # kube-vip.
+  - target:
+      kind: Service
+      name: rabbitmq-broker
+      namespace: rabbitmq
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          kube-vip.io/loadbalancerIPs: "192.168.111.103"
