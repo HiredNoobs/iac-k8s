@@ -20,14 +20,31 @@ spec:
       labels:
         app.kubernetes.io/name: homepage
     spec:
+      # The image's files are owned by 1000 (node), its entrypoint skips the chowns and
+      # su-exec when it doesn't start as root.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: homepage
           image: gethomepage/homepage:v1.13.1@sha256:d8d784e5090111b6e4c56dfd90e272d2953a2094e87349f647165df0fa6c4401
+          # Talos warns about anything short of the restricted pod security standard.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: PORT
               value: "3000"
             - name: HOMEPAGE_ALLOWED_HOSTS
               value: homepage.hirednoobs.com
+            # Pod logs only, no homepage.log in the config directory.
+            - name: LOG_TARGETS
+              value: stdout
           envFrom:
             - secretRef:
                 name: homepage
@@ -59,8 +76,12 @@ spec:
               memory: 128Mi
             limits:
               memory: 512Mi
-          # Mounted one by one, homepage writes its logs to /app/config/logs.
+          # A writable /app/config with the files mounted one by one over it: homepage copies
+          # a skeleton for any config file that's missing (docker.yaml, kubernetes.yaml,
+          # proxmox.yaml, on page loads) and exits if it can't.
           volumeMounts:
+            - name: config-dir
+              mountPath: /app/config
             - name: config
               mountPath: /app/config/settings.yaml
               subPath: settings.yaml
@@ -82,6 +103,9 @@ spec:
               subPath: custom.css
               readOnly: true
       volumes:
+        - name: config-dir
+          emptyDir:
+            sizeLimit: 16Mi
         - name: config
           configMap:
             name: homepage-config
