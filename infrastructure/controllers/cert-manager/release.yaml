@@ -20,6 +20,11 @@ spec:
     crds:
       enabled: true
       keep: true
+    # DNS-01's check that the TXT record is visible, over DNS-over-HTTPS: the LAN intercepts
+    # DNS (port 53) to any server and answers locally, so the authoritative servers can't be
+    # asked directly. 1.1.1.1 sees Cloudflare's own zones straight away.
+    dns01RecursiveNameservers: https://1.1.1.1/dns-query
+    dns01RecursiveNameserversOnly: true
     image:
       digest: sha256:70f532fd9cfde0b09d55687200942399d89838bc2d5d5b45152eb799a15912b8
     resources:
