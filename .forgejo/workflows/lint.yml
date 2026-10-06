@@ -20,6 +20,8 @@ env:
   # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers).
   ESO_VERSION: "2.11.0"
   ESO_CRDS_SHA256: "2b2aa2e85a4c081a11688f0b31ebdb33153c0885d4c2e3604d11058995a11b75"
+  CERT_MANAGER_VERSION: "1.21.2"
+  CERT_MANAGER_CRDS_SHA256: "262fef78478492cd35b73a1b227106b7802f9c056361d1f561d04b32d751337f"
 
 jobs:
   lint:
@@ -65,7 +67,10 @@ jobs:
             "https://raw.githubusercontent.com/external-secrets/external-secrets/v${ESO_VERSION}/deploy/crds/bundle.yaml"
           echo "${ESO_CRDS_SHA256}  /tmp/eso-crds.yaml" | sha256sum -c -
 
-          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml
+          curl -fsSLo /tmp/cert-manager-crds.yaml             "https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.crds.yaml"
+          echo "${CERT_MANAGER_CRDS_SHA256}  /tmp/cert-manager-crds.yaml" | sha256sum -c -
+
+          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml
 
       # A missing schema fails the run, add the CRD schemas of new controllers to the step above. CRDs
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).

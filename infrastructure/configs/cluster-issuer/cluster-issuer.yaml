@@ -1,0 +1,35 @@
+# Let's Encrypt with Cloudflare DNS-01, for any namespace (issuerRef kind: ClusterIssuer). Try
+# new Certificates on letsencrypt-staging first: production allows 5 certificates per week for
+# the same set of names, staging's limits are far higher (its certificates aren't trusted).
+# No email: Let's Encrypt doesn't send expiry emails any more.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-account
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare
+              key: api-token
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare
+              key: api-token
