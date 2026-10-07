@@ -1,0 +1,185 @@
+# The chatbot and the worker, the same image with a different argument. Each runs exactly once:
+# a second chatbot would join the channel twice, and the worker hasn't been checked with more than
+# one replica. Recreate stops the old pod before the new one starts. If a node dies without a
+# clean shutdown, Kubernetes starts a replacement about 5 minutes later, before the old pod is
+# confirmed gone, so a second chatbot can briefly be in the channel. One replica, no PDB.
+#
+# The image runs as root, its dictionary (/etc/contentbot/eng_dict.txt) is only readable by root,
+# so the pods meet the baseline pod security standard, not restricted (to fix in app-contentbot's
+# Dockerfile). Root needs no capability to read its own file. The config files are mounted one
+# by one so the dictionary isn't hidden.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot
+  labels:
+    app.kubernetes.io/name: contentbot
+    app.kubernetes.io/component: chatbot
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: contentbot
+      app.kubernetes.io/component: chatbot
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: contentbot
+        app.kubernetes.io/component: chatbot
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: chatbot
+          image: hirednoobs/contentbot:0.0.94@sha256:8855a0b9120cf9fd762084628e236f6aa208fd75764f94b08fa4e5313811a62a
+          args: ["chatbot"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            # Logs to stdout.
+            - name: RUNNING_ENVIRONMENT
+              value: DOCKER
+            - name: LOG_LEVEL
+              value: INFO
+            - name: CONFIG_PATH
+              value: /etc/contentbot/contentbot.conf
+            - name: SECRETS_PATH
+              value: /etc/contentbot/contentbot_secrets.conf
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/contentbot/contentbot.conf
+              subPath: contentbot.conf
+              readOnly: true
+            - name: secrets
+              mountPath: /etc/contentbot/contentbot_secrets.conf
+              subPath: contentbot_secrets.conf
+              readOnly: true
+            - name: tls
+              mountPath: /etc/contentbot/tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: contentbot-config
+        - name: secrets
+          secret:
+            secretName: contentbot
+        # The file names config/contentbot.conf expects.
+        - name: tls
+          projected:
+            sources:
+              - secret:
+                  name: contentbot-redis-tls
+                  items:
+                    - { key: ca.crt, path: redis_ca.crt }
+                    - { key: tls.crt, path: redis.crt }
+                    - { key: tls.key, path: redis.key }
+              - secret:
+                  name: contentbot-rabbitmq-tls
+                  items:
+                    - { key: ca.crt, path: rabbitmq_ca.crt }
+                    - { key: tls.crt, path: rabbitmq.crt }
+                    - { key: tls.key, path: rabbitmq.key }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: contentbot
+    app.kubernetes.io/component: worker
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: contentbot
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: contentbot
+        app.kubernetes.io/component: worker
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: hirednoobs/contentbot:0.0.94@sha256:8855a0b9120cf9fd762084628e236f6aa208fd75764f94b08fa4e5313811a62a
+          args: ["worker"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            # Logs to stdout.
+            - name: RUNNING_ENVIRONMENT
+              value: DOCKER
+            - name: LOG_LEVEL
+              value: INFO
+            - name: CONFIG_PATH
+              value: /etc/contentbot/contentbot.conf
+            - name: SECRETS_PATH
+              value: /etc/contentbot/contentbot_secrets.conf
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/contentbot/contentbot.conf
+              subPath: contentbot.conf
+              readOnly: true
+            - name: secrets
+              mountPath: /etc/contentbot/contentbot_secrets.conf
+              subPath: contentbot_secrets.conf
+              readOnly: true
+            - name: tls
+              mountPath: /etc/contentbot/tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: contentbot-config
+        - name: secrets
+          secret:
+            secretName: contentbot
+        # The file names config/contentbot.conf expects.
+        - name: tls
+          projected:
+            sources:
+              - secret:
+                  name: contentbot-redis-tls
+                  items:
+                    - { key: ca.crt, path: redis_ca.crt }
+                    - { key: tls.crt, path: redis.crt }
+                    - { key: tls.key, path: redis.key }
+              - secret:
+                  name: contentbot-rabbitmq-tls
+                  items:
+                    - { key: ca.crt, path: rabbitmq_ca.crt }
+                    - { key: tls.crt, path: rabbitmq.crt }
+                    - { key: tls.key, path: rabbitmq.key }

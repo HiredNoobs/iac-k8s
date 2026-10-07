@@ -1,0 +1,18 @@
+# contentbot (app-contentbot): a chatbot in a CyTube channel and a worker, talking through
+# RabbitMQ, with their data in Redis. Stateless. Plain manifests, the app has no chart.
+#
+# Its RabbitMQ user and permission are in the rabbitmq app (apps/base/rabbitmq/topology), its
+# Redis ACL user is in Redis' users.acl.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: contentbot
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  - certificates.yaml
+  - deployments.yaml
+# The name gets a hash of the file, so a config change rolls the pods.
+configMapGenerator:
+  - name: contentbot-config
+    files:
+      - config/contentbot.conf
