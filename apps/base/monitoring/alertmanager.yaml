@@ -72,9 +72,9 @@ spec:
             - name: tls
               mountPath: /etc/alertmanager/tls
               readOnly: true
-            # The ntfy webhook URLs (url, url-critical), from the alertmanager-ntfy ExternalSecret.
-            - name: ntfy
-              mountPath: /etc/alertmanager/ntfy
+            # The ntfy and healthchecks.io URLs, from the alertmanager-notifiers ExternalSecret.
+            - name: notifiers
+              mountPath: /etc/alertmanager/notifiers
               readOnly: true
             - name: data
               mountPath: /alertmanager
@@ -85,9 +85,9 @@ spec:
         - name: tls
           secret:
             secretName: monitoring-tls
-        - name: ntfy
+        - name: notifiers
           secret:
-            secretName: alertmanager-ntfy
+            secretName: alertmanager-notifiers
         - name: data
           emptyDir: {}
 ---

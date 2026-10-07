@@ -7,6 +7,14 @@ route:
   group_interval: 5m
   repeat_interval: 12h
   routes:
+    # The always-firing Watchdog (config/vmalert/kubernetes.yml) pings healthchecks.io every 2
+    # minutes. healthchecks.io notifies when the pings stop: monitoring, the cluster or the
+    # network is down. Never notified anywhere else.
+    - matchers: ['alertname="Watchdog"']
+      receiver: healthchecks
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 2m
     # Informational (underused hosts, kernel changes, correctable memory errors): Grafana only.
     - matchers: ['severity="info"']
       receiver: blackhole
@@ -15,11 +23,15 @@ route:
 
 receivers:
   - name: blackhole
+  - name: healthchecks
+    webhook_configs:
+      - url_file: /etc/alertmanager/notifiers/healthchecks-url
+        send_resolved: false
   - name: ntfy
     webhook_configs:
-      - url_file: /etc/alertmanager/ntfy/url
+      - url_file: /etc/alertmanager/notifiers/url
         send_resolved: true
   - name: ntfy-critical
     webhook_configs:
-      - url_file: /etc/alertmanager/ntfy/url-critical
+      - url_file: /etc/alertmanager/notifiers/url-critical
         send_resolved: true

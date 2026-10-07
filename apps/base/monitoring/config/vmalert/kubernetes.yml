@@ -4,6 +4,14 @@ groups:
   - name: Scrape
     interval: 60s
     rules:
+      # Always firing: Alertmanager sends it to healthchecks.io, which
+      # notifies when it stops arriving. Not shown on the overview, not notified.
+      - alert: Watchdog
+        expr: 'vector(1)'
+        labels:
+          severity: none
+        annotations:
+          summary: Watchdog, always firing while vmalert, VictoriaMetrics and Alertmanager work
       # Every job vmagent scrapes, including the monitoring components themselves.
       - alert: TargetDown
         expr: 'up == 0'
