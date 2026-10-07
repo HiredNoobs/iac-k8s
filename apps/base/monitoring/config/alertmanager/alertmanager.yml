@@ -1,5 +1,25 @@
 route:
-  receiver: blackhole
+  receiver: ntfy
+  # One notification per alert name and namespace, gathered for 30s; changes to a group at most
+  # every 5 minutes; still firing, again every 12 hours. Resolved alerts are notified too.
+  group_by: [alertname, namespace]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    # Informational (underused hosts, kernel changes, correctable memory errors): Grafana only.
+    - matchers: ['severity="info"']
+      receiver: blackhole
+    - matchers: ['severity="critical"']
+      receiver: ntfy-critical
 
 receivers:
   - name: blackhole
+  - name: ntfy
+    webhook_configs:
+      - url_file: /etc/alertmanager/ntfy/url
+        send_resolved: true
+  - name: ntfy-critical
+    webhook_configs:
+      - url_file: /etc/alertmanager/ntfy/url-critical
+        send_resolved: true

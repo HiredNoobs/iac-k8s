@@ -1,5 +1,5 @@
-# Alertmanager, a single replica (not clustered). Silences and notification state are kept in an
-# emptyDir, so they're lost on restart.
+# Alertmanager, a single replica, notifying through ntfy.sh (config/alertmanager).
+# Silences and notification state are kept in an emptyDir, so they're lost on restart.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,6 +72,10 @@ spec:
             - name: tls
               mountPath: /etc/alertmanager/tls
               readOnly: true
+            # The ntfy webhook URLs (url, url-critical), from the alertmanager-ntfy ExternalSecret.
+            - name: ntfy
+              mountPath: /etc/alertmanager/ntfy
+              readOnly: true
             - name: data
               mountPath: /alertmanager
       volumes:
@@ -81,6 +85,9 @@ spec:
         - name: tls
           secret:
             secretName: monitoring-tls
+        - name: ntfy
+          secret:
+            secretName: alertmanager-ntfy
         - name: data
           emptyDir: {}
 ---
