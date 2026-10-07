@@ -1,0 +1,20 @@
+# Authelia binds over ldap (ldap://lldap.lldap.svc:3890), the Gateway routes lldap.hirednoobs.com
+# to http for the admin UI.
+apiVersion: v1
+kind: Service
+metadata:
+  name: lldap
+  labels:
+    app.kubernetes.io/name: lldap
+spec:
+  selector:
+    app.kubernetes.io/name: lldap
+  ports:
+    - name: ldap
+      port: 3890
+      targetPort: ldap
+      protocol: TCP
+    - name: http
+      port: 17170
+      targetPort: http
+      protocol: TCP

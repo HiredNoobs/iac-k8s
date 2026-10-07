@@ -1,0 +1,16 @@
+# The portal (auth.hirednoobs.com, httproute.yaml) and the ext-authz endpoint the
+# SecurityPolicies check each request against (through the authelia Backend in gateway).
+apiVersion: v1
+kind: Service
+metadata:
+  name: authelia
+  labels:
+    app.kubernetes.io/name: authelia
+spec:
+  selector:
+    app.kubernetes.io/name: authelia
+  ports:
+    - name: http
+      port: 9091
+      targetPort: http
+      protocol: TCP

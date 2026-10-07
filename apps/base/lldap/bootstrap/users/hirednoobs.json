@@ -1,0 +1,7 @@
+{
+  "id": "hirednoobs",
+  "email": "hirednoobs@hirednoobs.com",
+  "displayName": "hirednoobs",
+  "password_file": "/passwords/hirednoobs",
+  "groups": ["admins", "lldap_admin"]
+}

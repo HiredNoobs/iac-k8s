@@ -5,12 +5,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - alertmanager.yaml
-  - auth.yaml
   - bazarr.yaml
   - grafana.yaml
   - jellyfin.yaml
   - lidarr.yaml
-  - lldap.yaml
   - nas.yaml
   - profilarr.yaml
   - prowlarr.yaml

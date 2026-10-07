@@ -1,0 +1,7 @@
+{
+  "id": "authelia",
+  "email": "authelia@hirednoobs.com",
+  "displayName": "Authelia",
+  "password_file": "/passwords/authelia",
+  "groups": ["lldap_strict_readonly"]
+}

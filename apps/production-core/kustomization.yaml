@@ -7,6 +7,8 @@ resources:
   - ../base/redis
   - ../base/rabbitmq
   - ../base/contentbot
+  - ../base/lldap
+  - ../base/authelia
 patches:
   # The LAN's DNS IP (the router hands it out), announced by kube-vip.
   - target:

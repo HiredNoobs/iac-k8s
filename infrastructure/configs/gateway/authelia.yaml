@@ -1,7 +1,8 @@
-# Authelia (stack-authelia, still a stack), for the SecurityPolicies of routes behind it. Each
-# request is checked with Authelia's ext-authz endpoint first: anyone not logged in is redirected
-# to auth.hirednoobs.com, and the user is passed on as Remote-User/-Groups/-Name/-Email (set by
-# Authelia, a client's own are replaced). Move it to Authelia's app when that's migrated (D5).
+# Authelia (apps/base/authelia), for the SecurityPolicies of routes behind it. Each request is
+# checked with Authelia's ext-authz endpoint first: anyone not logged in is redirected to
+# auth.hirednoobs.com, and the user is passed on as Remote-User/-Groups/-Name/-Email (set by
+# Authelia, a client's own are replaced). A Backend here rather than Authelia's Service, so every
+# SecurityPolicy references the gateway namespace (one ReferenceGrant) and not the app's.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -10,7 +11,7 @@ metadata:
 spec:
   endpoints:
     - fqdn:
-        hostname: authelia.authelia-core.svc.cluster.local
+        hostname: authelia.authelia.svc.cluster.local
         port: 9091
 ---
 # Lets the SecurityPolicies of apps behind Authelia use the Backend above, one entry per

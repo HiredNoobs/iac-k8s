@@ -1,0 +1,21 @@
+# Authelia (https://www.authelia.com), SSO for the sites behind the Gateway, its portal at
+# auth.hirednoobs.com. Users and groups come from LLDAP (apps/base/lldap). Plain manifests: the
+# official chart is still beta. SQLite on a Longhorn volume.
+#
+# Sites are put behind it with a SecurityPolicy using the authelia Backend in the gateway
+# namespace (infrastructure/configs/gateway/authelia.yaml), access rules are in
+# config/configuration.yml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: authelia
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  - statefulset.yaml
+  - service.yaml
+  - httproute.yaml
+# The name gets a hash of the file, so a config change rolls the pod.
+configMapGenerator:
+  - name: authelia-config
+    files:
+      - config/configuration.yml

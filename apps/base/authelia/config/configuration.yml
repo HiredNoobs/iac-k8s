@@ -1,0 +1,54 @@
+# Authelia's config. Secrets aren't in here, they're mounted from the authelia Secret and passed
+# with the AUTHELIA_*_FILE env vars (statefulset.yaml).
+#
+# https://www.authelia.com/configuration/prologue/introduction/
+
+server:
+  address: 'tcp://:9091/'
+
+log:
+  level: 'info'
+  format: 'json'
+
+theme: 'auto'
+
+totp:
+  issuer: 'hirednoobs.com'
+
+webauthn:
+  display_name: 'hirednoobs.com'
+
+authentication_backend:
+  # The authelia user is in lldap_strict_readonly, so it can't change passwords. They're reset in
+  # LLDAP's UI (lldap.hirednoobs.com) instead.
+  password_reset:
+    disable: true
+  ldap:
+    implementation: 'lldap'
+    address: 'ldap://lldap.lldap.svc.cluster.local:3890'
+    base_dn: 'dc=hirednoobs,dc=com'
+    user: 'uid=authelia,ou=people,dc=hirednoobs,dc=com'
+
+session:
+  cookies:
+    - domain: 'hirednoobs.com'
+      authelia_url: 'https://auth.hirednoobs.com'
+      default_redirection_url: 'https://homepage.hirednoobs.com'
+
+storage:
+  local:
+    path: '/data/db.sqlite3'
+
+# One-time codes (e.g. registering 2FA) are written here rather than emailed, read them with
+# kubectl -n authelia exec authelia-0 -- cat /data/notification.txt
+notifier:
+  filesystem:
+    filename: '/data/notification.txt'
+
+# Nothing is protected until a route gets a SecurityPolicy, this is who gets in once it has one.
+access_control:
+  default_policy: 'deny'
+  rules:
+    - domain: '*.hirednoobs.com'
+      subject: 'group:admins'
+      policy: 'two_factor'

@@ -1,0 +1,120 @@
+# LLDAP's users and groups from git: bootstrap/users/<user>.json and bootstrap/groups/<group>.json,
+# applied by the image's own bootstrap script (/app/bootstrap.sh, see LLDAP's
+# example_configs/bootstrap/bootstrap.md) through the admin API. It creates what's missing, sets
+# the declared groups and resets each user's password to Vault's (password_file), so a run that
+# finds nothing to change changes nothing.
+#
+# A CronJob rather than a Job: a Job only runs again when its spec changes, and a password
+# rotated in Vault doesn't change it. Hourly, it also undoes changes made in the UI to what's
+# declared here. To run it now:
+#
+#   kubectl -n lldap create job --from=cronjob/lldap-bootstrap lldap-bootstrap-manual
+#
+# Users and groups that aren't declared are only reported ("is not declared in config files"),
+# DO_CLEANUP would delete them (never the admin user or the lldap_* groups).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lldap-bootstrap
+  labels:
+    app.kubernetes.io/name: lldap
+    app.kubernetes.io/component: bootstrap
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: lldap
+            app.kubernetes.io/component: bootstrap
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: bootstrap
+              # The same image as LLDAP: the script, lldap_set_password, jq, curl and jo.
+              image: lldap/lldap:v0.6.3-alpine-rootless@sha256:ba2c50930ea998eefd5454aa678a7977448019248b1827da87d330df0b71c284
+              command: ["/app/bootstrap.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: LLDAP_URL
+                  value: http://lldap.lldap.svc.cluster.local:17170
+                - name: LLDAP_ADMIN_USERNAME
+                  value: admin
+                # Fails the run if LLDAP_ADMIN_PASS in Vault no longer matches the admin's.
+                - name: LLDAP_ADMIN_PASSWORD_FILE
+                  value: /passwords/admin
+                - name: USER_CONFIGS_DIR
+                  value: /bootstrap/users
+                - name: GROUP_CONFIGS_DIR
+                  value: /bootstrap/groups
+                - name: DO_CLEANUP
+                  value: "false"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              volumeMounts:
+                - name: users
+                  mountPath: /bootstrap/users
+                  readOnly: true
+                - name: groups
+                  mountPath: /bootstrap/groups
+                  readOnly: true
+                - name: passwords
+                  mountPath: /passwords
+                  readOnly: true
+          volumes:
+            - name: users
+              configMap:
+                name: lldap-bootstrap-users
+            - name: groups
+              configMap:
+                name: lldap-bootstrap-groups
+            - name: passwords
+              secret:
+                secretName: lldap-bootstrap
+---
+# The passwords the bootstrap uses, its own Secret so a missing key only stops the bootstrap, not
+# LLDAP. authelia's is the one Authelia reads (labv2/production/authelia), so Vault is the only
+# copy: rotate it there, the next run sets it in LLDAP and Reloader restarts Authelia.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: lldap-bootstrap
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: lldap-bootstrap
+  data:
+    - secretKey: admin
+      remoteRef:
+        key: production/lldap
+        property: LLDAP_ADMIN_PASS
+    - secretKey: authelia
+      remoteRef:
+        key: production/authelia
+        property: AUTHELIA_LDAP_PASSWORD
+    - secretKey: hirednoobs
+      remoteRef:
+        key: production/lldap
+        property: HIREDNOOBS_PASSWORD

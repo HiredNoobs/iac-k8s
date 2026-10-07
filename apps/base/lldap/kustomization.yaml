@@ -1,0 +1,26 @@
+# LLDAP (https://github.com/lldap/lldap), the user directory for Authelia, its admin UI at
+# lldap.hirednoobs.com (LLDAP's own login, not behind Authelia). Plain manifests, upstream has no
+# chart. SQLite on a Longhorn volume.
+#
+# The base DN is dc=hirednoobs,dc=com: users are uid=<user>,ou=people,dc=hirednoobs,dc=com, groups
+# cn=<group>,ou=groups,dc=hirednoobs,dc=com. LDAP is only reachable inside the cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lldap
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  - statefulset.yaml
+  - service.yaml
+  - httproute.yaml
+  - bootstrap.yaml
+# The users and groups bootstrap.yaml applies. A change renames them (hash), the next run picks it
+# up.
+configMapGenerator:
+  - name: lldap-bootstrap-users
+    files:
+      - bootstrap/users/authelia.json
+      - bootstrap/users/hirednoobs.json
+  - name: lldap-bootstrap-groups
+    files:
+      - bootstrap/groups/admins.json
