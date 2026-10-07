@@ -1,0 +1,16 @@
+# Only for its ca.crt: vlagent checks VictoriaLogs' certificate (monitoring-ca) with it.
+# VictoriaLogs doesn't ask for a client certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vlagent
+spec:
+  secretName: vlagent-tls
+  commonName: vlagent
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

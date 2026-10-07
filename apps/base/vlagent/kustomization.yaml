@@ -1,0 +1,10 @@
+# Pod logs: vlagent (VictoriaLogs' agent) on every node tails the containers' log files and sends
+# them to VictoriaLogs (apps/base/monitoring) with their namespace, pod, container and the pod's
+# labels. Syslog from the LAN still goes through rsyslog (apps/base/rsyslog).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vlagent
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - release.yaml

@@ -1,0 +1,8 @@
+# vlagent reads every pod's log files on the node (hostPath /var/log, as root), which Talos'
+# default pod security standard (baseline) refuses.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vlagent
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

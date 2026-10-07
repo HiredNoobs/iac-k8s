@@ -1,0 +1,84 @@
+# vlagent with its Kubernetes collector, a DaemonSet on every node (control planes included).
+# Upstream's chart (victoria-logs-collector). Log lines get kubernetes.pod_namespace,
+# kubernetes.pod_name, kubernetes.container_name (the stream fields) and kubernetes.pod_labels.*;
+# JSON lines are split into fields (msg/message as the message, time/ts/timestamp as the time).
+#
+# Keep it at VictoriaLogs' version (apps/base/monitoring/victorialogs.yaml) and bump them together:
+# chart 0.2.10 is vlagent v1.46.0, the image is pinned by its digest (the multi-arch index).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: victoriametrics
+spec:
+  interval: 24h
+  url: https://victoriametrics.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vlagent
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: victoria-logs-collector
+      version: "0.2.10"
+      sourceRef:
+        kind: HelmRepository
+        name: victoriametrics
+  values:
+    fullnameOverride: vlagent
+    image:
+      tag: v1.46.0@sha256:849cb9c23eb8426bcfd2c1825af905e67e6435fd4804ea19cd4188960cffc643
+    remoteWrite:
+      - url: https://victorialogs.monitoring.svc:9428
+        tlsCAFile: /etc/vlagent/tls/ca.crt
+    # Scraped by vmagent's pods job (its own metrics: lines read, sent, buffered).
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9429"
+    tolerations:
+      - operator: Exists
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+    # Root (the image's user, and the log files are root's), but nothing else: no capabilities,
+    # read-only root filesystem.
+    podSecurityContext:
+      enabled: true
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      enabled: true
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+    # Only /var/log (/var/log/pods, and /var/log/containers' links into it). The chart also mounts
+    # /var/lib for kind/minikube, which on Talos holds etcd's data on the control planes.
+    defaultVolumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+    defaultVolumeMounts:
+      - name: varlog
+        mountPath: /var/log
+        readOnly: true
+    # Its read positions (checkpoints) and the buffer while VictoriaLogs is down, kept on the node
+    # across restarts.
+    persistence:
+      volume:
+        hostPath:
+          path: /var/lib/vl-collector
+          type: DirectoryOrCreate
+    extraVolumes:
+      - name: tls
+        secret:
+          secretName: vlagent-tls
+    extraVolumeMounts:
+      - name: tls
+        mountPath: /etc/vlagent/tls
+        readOnly: true

@@ -1146,7 +1146,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 41
       },
@@ -1159,8 +1159,65 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "* | stats by (hostname) rate() as eps",
+          "expr": "kubernetes.pod_namespace:\"\" | stats by (hostname) rate() as eps",
           "legendFormat": "{{hostname}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pod log lines per second",
+      "id": 24,
+      "description": "Container log lines collected by vlagent, per namespace. Explore them in VictoriaLogs: {kubernetes.pod_namespace=\"<ns>\"} for a namespace's stream.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 41
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "statsRange",
+          "expr": "kubernetes.pod_namespace:* | stats by (kubernetes.pod_namespace) rate() as lps",
+          "legendFormat": "{{kubernetes.pod_namespace}}"
         }
       ],
       "fieldConfig": {

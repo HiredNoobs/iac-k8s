@@ -1,4 +1,4 @@
-# VictoriaLogs, with its data on a Longhorn volume, kept 7 days. rsyslog (apps/base/rsyslog)
+# VictoriaLogs, with its data on a Longhorn volume, kept 7 days (or less, see its args). rsyslog (apps/base/rsyslog)
 # forwards syslog to it on 514, Grafana reads from it.
 apiVersion: apps/v1
 kind: StatefulSet
@@ -48,6 +48,10 @@ spec:
             - --tlsCertFile=/etc/victorialogs/tls/tls.crt
             - --tlsKeyFile=/etc/victorialogs/tls/tls.key
             - --retentionPeriod=7d
+            # Drops the oldest days early when the volume passes 85% (pod logs can outgrow 7 days
+            # in 10Gi), rather than filling it and stopping ingestion. A percentage, so it follows
+            # the volume if it's grown.
+            - --retention.maxDiskUsagePercent=85
           ports:
             - name: https
               containerPort: 9428
