@@ -160,6 +160,11 @@ scrape_configs:
       - source_labels: [__meta_kubernetes_pod_phase]
         regex: "Running"
         action: keep
+      # Discovery makes a target per declared container port, all rewritten to the annotated
+      # port below: keep only the one declaring it (else duplicates, e.g. Envoy Gateway's
+      # controller declares five ports).
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_container_port_number]
+        action: keep_if_equal
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scheme]
         regex: "(https?)"
         target_label: __scheme__
