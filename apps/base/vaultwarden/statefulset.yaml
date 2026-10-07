@@ -1,0 +1,86 @@
+# A single Vaultwarden. It uses SQLite, so it can't run more than once. The data is on a Longhorn
+# volume that follows the pod to any node. An update stops the old pod before starting the new
+# one. No PDB: with one instance there's nothing to keep up during a drain.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vaultwarden
+  labels:
+    app.kubernetes.io/name: vaultwarden
+spec:
+  serviceName: vaultwarden
+  replicas: 1
+  # The volume outlives the StatefulSet, removing Vaultwarden from git doesn't delete the data.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vaultwarden
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vaultwarden
+    spec:
+      # The image runs as root, any non-root user works. fsGroup lets it write /data.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vaultwarden
+          image: vaultwarden/server:1.37.1@sha256:ebdfe70701c60ac0c28c697e787cea767d7972940b786037b29fe0d507f821e8
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: DOMAIN
+              value: https://vaultwarden.hirednoobs.com
+            - name: SIGNUPS_ALLOWED
+              value: "false"
+            # Above 1024, it isn't running as root.
+            - name: ROCKET_PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /alive
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  # Moved from stack-vaultwarden by re-attaching its volume: the PVC data-vaultwarden-0 was
+  # created by hand before the first sync, bound to the old PV.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: vaultwarden
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 2Gi

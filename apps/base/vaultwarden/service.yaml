@@ -1,0 +1,16 @@
+# The Gateway routes vaultwarden.hirednoobs.com here, websockets included (live sync on
+# /notifications/hub, same port).
+apiVersion: v1
+kind: Service
+metadata:
+  name: vaultwarden
+  labels:
+    app.kubernetes.io/name: vaultwarden
+spec:
+  selector:
+    app.kubernetes.io/name: vaultwarden
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

@@ -1,0 +1,17 @@
+# Not behind Authelia: the Bitwarden clients (apps, browser extensions) can't get through its
+# login, and Vaultwarden has its own (master password, 2FA).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vaultwarden
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - vaultwarden.hirednoobs.com
+  rules:
+    - backendRefs:
+        - name: vaultwarden
+          port: 80

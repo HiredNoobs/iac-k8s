@@ -1,0 +1,15 @@
+# Vaultwarden (https://github.com/dani-garcia/vaultwarden), from stack-vaultwarden. Plain
+# manifests, the stack's. SQLite on a Longhorn volume: the database, attachments, sends and its
+# keys, the one volume here that can't be lost (nightly backups, infrastructure/configs/longhorn).
+#
+# Signups are off and the admin panel is disabled (no ADMIN_TOKEN). To create accounts: set
+# SIGNUPS_ALLOWED to "true" in statefulset.yaml, create them at vaultwarden.hirednoobs.com, set it
+# back.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vaultwarden
+resources:
+  - namespace.yaml
+  - statefulset.yaml
+  - service.yaml
+  - httproute.yaml

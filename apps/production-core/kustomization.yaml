@@ -12,6 +12,7 @@ resources:
   - ../base/monitoring
   - ../base/node-exporter
   - ../base/rsyslog
+  - ../base/vaultwarden
 patches:
   # The LAN's DNS IP (the router hands it out), announced by kube-vip.
   - target:
