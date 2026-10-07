@@ -10,8 +10,8 @@
 #
 #   kubectl -n lldap create job --from=cronjob/lldap-bootstrap lldap-bootstrap-manual
 #
-# Users and groups that aren't declared are only reported ("is not declared in config files"),
-# DO_CLEANUP would delete them (never the admin user or the lldap_* groups).
+# Users and groups that aren't declared are deleted (DO_CLEANUP), except the admin user and the
+# lldap_* groups: anything made in the UI goes on the next run, declare it here instead.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -63,7 +63,7 @@ spec:
                 - name: GROUP_CONFIGS_DIR
                   value: /bootstrap/groups
                 - name: DO_CLEANUP
-                  value: "false"
+                  value: "true"
               resources:
                 requests:
                   cpu: 10m
