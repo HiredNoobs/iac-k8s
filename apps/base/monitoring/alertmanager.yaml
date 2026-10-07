@@ -1,0 +1,101 @@
+# Alertmanager, a single replica (not clustered). Silences and notification state are kept in an
+# emptyDir, so they're lost on restart.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  labels:
+    app.kubernetes.io/name: alertmanager
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+    spec:
+      # nobody, the image's user (by number, runAsNonRoot can't check a name).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.31.1@sha256:88b605de9aba0410775c1eb3438f951115054e0d307f23f274a4c705f51630c1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          args:
+            - --config.file=/etc/alertmanager/config/alertmanager.yml
+            - --web.config.file=/etc/alertmanager/config/alertmanager_web.yml
+            - --web.listen-address=:9093
+            - --web.external-url=https://alertmanager.hirednoobs.com
+            - --storage.path=/alertmanager
+          ports:
+            - name: https
+              containerPort: 9093
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: https
+              scheme: HTTPS
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: https
+              scheme: HTTPS
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager/config
+              readOnly: true
+            - name: tls
+              mountPath: /etc/alertmanager/tls
+              readOnly: true
+            - name: data
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: tls
+          secret:
+            secretName: monitoring-tls
+        - name: data
+          emptyDir: {}
+---
+# In the cluster for vmalert and Grafana.
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  labels:
+    app.kubernetes.io/name: alertmanager
+spec:
+  selector:
+    app.kubernetes.io/name: alertmanager
+  ports:
+    - name: https
+      port: 9093
+      targetPort: https
+      protocol: TCP

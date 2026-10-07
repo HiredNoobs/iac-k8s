@@ -1,0 +1,23 @@
+# Syslog for the LAN as rsyslog.hirednoobs.com (Pi-hole's record for the LoadBalancer IP set per
+# cluster, see apps/<cluster>/). kube-vip announces the IP from a node running a ready replica,
+# Local keeps the senders' IPs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rsyslog
+  labels:
+    app.kubernetes.io/name: rsyslog
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: rsyslog
+  ports:
+    - name: syslog-udp
+      port: 514
+      targetPort: syslog-udp
+      protocol: UDP
+    - name: syslog-tcp
+      port: 514
+      targetPort: syslog-tcp
+      protocol: TCP

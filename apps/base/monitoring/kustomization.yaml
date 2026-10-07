@@ -1,0 +1,45 @@
+# Monitoring, from stack-grafana: Grafana, VictoriaMetrics, VictoriaLogs, vmagent, vmalert and
+# Alertmanager, each a single instance. Plain manifests, the stack's. node_exporter is its own app
+# (apps/base/node-exporter, it needs a privileged namespace), rsyslog forwards syslog to
+# VictoriaLogs (apps/base/rsyslog).
+#
+# The components talk to each other over TLS by their service names (<component>.monitoring.svc),
+# with one certificate from the monitoring-ca ClusterIssuer (certificate.yaml).
+# Grafana, VictoriaMetrics and VictoriaLogs keep their data on Longhorn volumes.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - external-secret.yaml
+  - grafana.yaml
+  - victoriametrics.yaml
+  - victorialogs.yaml
+  - vmagent.yaml
+  - vmalert.yaml
+  - alertmanager.yaml
+  - routes.yaml
+# A change rolls the pods that use it (the name gets a hash), except grafana-dashboards.
+configMapGenerator:
+  - name: grafana-provisioning
+    files:
+      - config/grafana/datasources.yml
+      - config/grafana/dashboards.yml
+  # Grafana picks up dashboard changes while it runs (every 30s, config/grafana/dashboards.yml),
+  # so a fixed name: the pod isn't restarted and the mounted files follow the ConfigMap.
+  - name: grafana-dashboards
+    files:
+      - config/grafana/dashboards/nginx-dashboard.json
+    options:
+      disableNameSuffixHash: true
+  - name: vmagent-config
+    files:
+      - config/vmagent/vmagent.yml
+  - name: vmalert-rules
+    files:
+      - config/vmalert/alerts.yml
+  - name: alertmanager-config
+    files:
+      - config/alertmanager/alertmanager.yml
+      - config/alertmanager/alertmanager_web.yml

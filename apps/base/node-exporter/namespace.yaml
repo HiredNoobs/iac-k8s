@@ -1,0 +1,8 @@
+# node_exporter needs the host's network, PIDs and filesystem, which Talos' default pod security
+# standard (baseline) refuses. Its own namespace so the rest of monitoring stays restricted.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-exporter
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

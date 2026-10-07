@@ -1,0 +1,11 @@
+# Node drains (Talos upgrades) take one replica at a time. With a single replica it doesn't
+# block the drain, syslog is down until the pod is back (UDP senders' messages are lost).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rsyslog
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rsyslog

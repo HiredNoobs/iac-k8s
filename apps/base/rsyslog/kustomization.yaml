@@ -1,0 +1,16 @@
+# rsyslog, from stack-rsyslog: syslog from the LAN (rsyslog.hirednoobs.com) forwarded to
+# VictoriaLogs (apps/base/monitoring). The LoadBalancer IP is per cluster (apps/<cluster>/), base
+# has none.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rsyslog
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+# A change rolls the pods (the name gets a hash).
+configMapGenerator:
+  - name: rsyslog-config
+    files:
+      - config/rsyslog.conf

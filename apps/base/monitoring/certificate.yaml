@@ -1,0 +1,38 @@
+# One server certificate for every component, from the monitoring CA
+# (infrastructure/configs/cluster-issuer/monitoring-ca.yaml). The components talk to each other
+# over TLS by their service names and check each other with ca.crt from the same secret.
+# cert-manager renews it, Reloader restarts the pods to load it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: monitoring
+spec:
+  secretName: monitoring-tls
+  commonName: monitoring
+  dnsNames:
+    - grafana
+    - grafana.monitoring.svc
+    - grafana.monitoring.svc.cluster.local
+    - victoriametrics
+    - victoriametrics.monitoring.svc
+    - victoriametrics.monitoring.svc.cluster.local
+    - victorialogs
+    - victorialogs.monitoring.svc
+    - victorialogs.monitoring.svc.cluster.local
+    - vmagent
+    - vmagent.monitoring.svc
+    - vmagent.monitoring.svc.cluster.local
+    - vmalert
+    - vmalert.monitoring.svc
+    - vmalert.monitoring.svc.cluster.local
+    - alertmanager
+    - alertmanager.monitoring.svc
+    - alertmanager.monitoring.svc.cluster.local
+    - localhost
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

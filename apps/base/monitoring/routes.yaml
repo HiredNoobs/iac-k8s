@@ -1,0 +1,332 @@
+# <component>.hirednoobs.com for each component. A Backend rather than the Service: they're HTTPS,
+# their certificate (monitoring-ca) isn't verified. Grafana has its own login, the others are
+# behind Authelia (SecurityPolicy, see infrastructure/configs/gateway/authelia.yaml for the
+# Backend and the ReferenceGrant letting this namespace use it).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: grafana
+spec:
+  endpoints:
+    - fqdn:
+        hostname: grafana.monitoring.svc.cluster.local
+        port: 3000
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - grafana.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: grafana
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: alertmanager
+spec:
+  endpoints:
+    - fqdn:
+        hostname: alertmanager.monitoring.svc.cluster.local
+        port: 9093
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: alertmanager
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - alertmanager.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: alertmanager
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: alertmanager
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: alertmanager
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+          namespace: gateway
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: victorialogs
+spec:
+  endpoints:
+    - fqdn:
+        hostname: victorialogs.monitoring.svc.cluster.local
+        port: 9428
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: victorialogs
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - victorialogs.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: victorialogs
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: victorialogs
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: victorialogs
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+          namespace: gateway
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: victoriametrics
+spec:
+  endpoints:
+    - fqdn:
+        hostname: victoriametrics.monitoring.svc.cluster.local
+        port: 8428
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: victoriametrics
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - victoriametrics.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: victoriametrics
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: victoriametrics
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: victoriametrics
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+          namespace: gateway
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: vmagent
+spec:
+  endpoints:
+    - fqdn:
+        hostname: vmagent.monitoring.svc.cluster.local
+        port: 8429
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vmagent
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - vmagent.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: vmagent
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: vmagent
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vmagent
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+          namespace: gateway
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: vmalert
+spec:
+  endpoints:
+    - fqdn:
+        hostname: vmalert.monitoring.svc.cluster.local
+        port: 8880
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vmalert
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - vmalert.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: vmalert
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: vmalert
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vmalert
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: authelia
+          namespace: gateway
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email

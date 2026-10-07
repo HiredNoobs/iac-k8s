@@ -9,6 +9,9 @@ resources:
   - ../base/contentbot
   - ../base/lldap
   - ../base/authelia
+  - ../base/monitoring
+  - ../base/node-exporter
+  - ../base/rsyslog
 patches:
   # The LAN's DNS IP (the router hands it out), announced by kube-vip.
   - target:
@@ -41,3 +44,13 @@ patches:
         path: /metadata/annotations
         value:
           kube-vip.io/loadbalancerIPs: "192.168.111.103"
+  # Syslog for the LAN (rsyslog.hirednoobs.com), announced by kube-vip.
+  - target:
+      kind: Service
+      name: rsyslog
+      namespace: rsyslog
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          kube-vip.io/loadbalancerIPs: "192.168.111.104"

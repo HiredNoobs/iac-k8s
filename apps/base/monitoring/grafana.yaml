@@ -1,0 +1,147 @@
+# Grafana. SQLite, so a single instance, with its data (users, preferences, anything made in the
+# UI) on a Longhorn volume. The data sources and dashboards are provisioned from config/grafana.
+# grafana.hirednoobs.com has Grafana's own login, not Authelia.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana
+  labels:
+    app.kubernetes.io/name: grafana
+  annotations:
+    # Not reloader's auto: the dashboards ConfigMap changes without a restart (see
+    # kustomization.yaml).
+    secret.reloader.stakater.com/reload: monitoring-tls,grafana
+spec:
+  serviceName: grafana
+  replicas: 1
+  # The volume outlives the StatefulSet, removing Grafana from git doesn't delete the data.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+    spec:
+      # The grafana user from the image, fsGroup lets it write its data.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        runAsGroup: 0
+        fsGroup: 472
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: grafana
+          image: grafana/grafana:12.4.0@sha256:b0ae311af06228bcfd4a620504b653db80f5b91e94dc3dc2a5b7dab202bcde20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # Only used when the database is first created.
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana
+                  key: GRAFANA_ADMIN_PASS
+            - name: GF_SERVER_PROTOCOL
+              value: https
+            - name: GF_SERVER_HTTP_PORT
+              value: "3000"
+            - name: GF_SERVER_CERT_FILE
+              value: /etc/grafana/tls/tls.crt
+            - name: GF_SERVER_CERT_KEY
+              value: /etc/grafana/tls/tls.key
+            - name: GF_SERVER_ROOT_URL
+              value: https://grafana.hirednoobs.com
+            # Installed on start (into the data volume) when missing, pinned like everything else.
+            - name: GF_PLUGINS_PREINSTALL
+              value: victoriametrics-logs-datasource@0.32.0,victoriametrics-metrics-datasource@0.26.1
+          ports:
+            - name: https
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: https
+              scheme: HTTPS
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: https
+              scheme: HTTPS
+            # Plugins are installed before it starts listening.
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yml
+              subPath: datasources.yml
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+              readOnly: true
+            # Not a subPath, so ConfigMap changes reach the running pod.
+            - name: dashboards
+              mountPath: /etc/grafana/dashboards
+              readOnly: true
+            - name: tls
+              mountPath: /etc/grafana/tls
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: provisioning
+          configMap:
+            name: grafana-provisioning
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: tls
+          secret:
+            secretName: monitoring-tls
+            defaultMode: 0440
+  # Moved from stack-grafana by re-attaching its volume: the PVC data-grafana-0 was created by
+  # hand before the first sync, bound to the old PV.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: grafana
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app.kubernetes.io/name: grafana
+spec:
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: https
+      port: 3000
+      targetPort: https
+      protocol: TCP

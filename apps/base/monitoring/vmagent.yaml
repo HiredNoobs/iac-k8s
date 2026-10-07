@@ -1,0 +1,142 @@
+# vmagent, a single replica so nothing is scraped twice. Scrapes the targets in config/vmagent
+# (found through the Kubernetes API, see the RBAC below) and writes to VictoriaMetrics. Its
+# buffer, for while VictoriaMetrics is down, is in an emptyDir.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmagent
+  labels:
+    app.kubernetes.io/name: vmagent
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmagent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vmagent
+    spec:
+      serviceAccountName: vmagent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vmagent
+          image: victoriametrics/vmagent:v1.136.0@sha256:30efe54696dfb352fe89a1a8b0c977cfce5507f81b85741632bd810fa3e4fe86
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          args:
+            - --httpListenAddr=:8429
+            - --tls
+            - --tlsCertFile=/etc/vmagent/tls/tls.crt
+            - --tlsKeyFile=/etc/vmagent/tls/tls.key
+            - --remoteWrite.url=https://victoriametrics.monitoring.svc:8428/api/v1/write
+            - --remoteWrite.tmpDataPath=/vmagentdata
+            - --remoteWrite.tlsCAFile=/etc/vmagent/tls/ca.crt
+            - --promscrape.config=/etc/vmagent/config.yml
+          ports:
+            - name: https
+              containerPort: 8429
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vmagent/config.yml
+              subPath: vmagent.yml
+              readOnly: true
+            - name: tls
+              mountPath: /etc/vmagent/tls
+              readOnly: true
+            - name: buffer
+              mountPath: /vmagentdata
+      volumes:
+        - name: config
+          configMap:
+            name: vmagent-config
+        - name: tls
+          secret:
+            secretName: monitoring-tls
+        - name: buffer
+          emptyDir:
+            sizeLimit: 1Gi
+---
+# In the cluster for vmalert's remote write.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmagent
+  labels:
+    app.kubernetes.io/name: vmagent
+spec:
+  selector:
+    app.kubernetes.io/name: vmagent
+  ports:
+    - name: https
+      port: 8429
+      targetPort: https
+      protocol: TCP
+---
+# vmagent's Kubernetes service discovery, to find the node-exporter pods, and read access to
+# each kubelet's metrics (nodes/metrics) for the volume stats.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vmagent
+  labels:
+    app.kubernetes.io/name: vmagent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: monitoring-vmagent
+  labels:
+    app.kubernetes.io/name: vmagent
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "nodes/metrics", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitoring-vmagent
+  labels:
+    app.kubernetes.io/name: vmagent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: monitoring-vmagent
+subjects:
+  - kind: ServiceAccount
+    name: vmagent
+    namespace: monitoring

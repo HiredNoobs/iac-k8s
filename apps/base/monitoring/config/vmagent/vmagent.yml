@@ -1,0 +1,91 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # node_exporter on every k8s node (the node-exporter DaemonSet in apps/base/node-exporter, host
+  # network so the pod IP is the node's). instance is the node name, e.g.
+  # prx-001-srv-prod-core-worker-001.
+  - job_name: node
+    metrics_path: /metrics
+    scheme: http
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ["node-exporter"]
+        selectors:
+          - role: pod
+            label: "app.kubernetes.io/name=node-exporter"
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: "$1:9100"
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: instance
+
+  # node_exporter installed by iac-homelab's monitoring playbook on the Debian VMs (management
+  # and the prx-999 servers). By IP, the prx-999 VMs aren't in Pi-hole, instance is the VM name.
+  - job_name: node-debian
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["192.168.111.254:9100"]
+        labels: { vm: prx-999-srv-mgmt-001 }
+      - targets: ["192.168.111.200:9100"]
+        labels: { vm: prx-999-srv-git-001 }
+      - targets: ["192.168.111.201:9100"]
+        labels: { vm: prx-999-srv-runner-001 }
+      - targets: ["192.168.111.202:9100"]
+        labels: { vm: prx-999-srv-vault-001 }
+    relabel_configs:
+      - source_labels: [vm]
+        target_label: instance
+      - action: labeldrop
+        regex: vm
+      - target_label: job
+        replacement: node
+
+  # Each kubelet, for the persistent volume stats (node_exporter doesn't see the pod volume
+  # mounts). Authenticates with vmagent's service account token (rbac.yaml, nodes/metrics).
+  # Talos' kubelet serving certs are self-signed. Only the volume stats are kept.
+  - job_name: kubelet
+    metrics_path: /metrics
+    scheme: https
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      insecure_skip_verify: true
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: instance
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "kubelet_volume_stats_.+"
+        action: keep
+
+  # Vault on prx-999 (iac-homelab), metrics are unauthenticated and a sealed Vault is scraped
+  # too. Let's Encrypt certificate, so it's verified.
+  - job_name: "vault"
+    metrics_path: /v1/sys/metrics
+    params:
+      format: ["prometheus"]
+    scheme: https
+    static_configs:
+      - targets: ["vault.hirednoobs.com:443"]
+        labels: { vm: prx-999-srv-vault-001 }
+    relabel_configs:
+      - source_labels: [vm]
+        target_label: instance
+      - action: labeldrop
+        regex: vm
+
+  - job_name: "rabbitmq"
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "rabbitmq-broker.rabbitmq.svc:15692"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance

@@ -1,0 +1,7 @@
+# node_exporter on every node, scraped by vmagent (apps/base/monitoring). From stack-grafana.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: node-exporter
+resources:
+  - namespace.yaml
+  - daemonset.yaml
