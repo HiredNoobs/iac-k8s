@@ -1,0 +1,39 @@
+# How the Topology Operator (infrastructure/operators/rabbitmq-topology-operator) reaches this
+# RabbitMQ: the management API over HTTPS (it trusts rabbitmq-ca) as the default user, an
+# administrator. Every rabbitmq.com resource here (users/) points at it with
+#
+#   rabbitmqClusterReference:
+#     connectionSecret:
+#       name: rabbitmq-topology-operator
+#
+# It has to be in the same namespace as those resources, so they all live here rather than in
+# each client's app, and the admin password stays in this namespace. The operator only reads
+# Secrets with the rabbitmq.com/topology-operator label.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: rabbitmq-topology-operator
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: rabbitmq-topology-operator
+    template:
+      metadata:
+        labels:
+          rabbitmq.com/topology-operator: "true"
+      data:
+        uri: https://rabbitmq-broker.rabbitmq.svc:15671
+        username: "{{ .username }}"
+        password: "{{ .password }}"
+  data:
+    - secretKey: username
+      remoteRef:
+        key: production/rabbitmq
+        property: RABBITMQ_DEFAULT_USER
+    - secretKey: password
+      remoteRef:
+        key: production/rabbitmq
+        property: RABBITMQ_DEFAULT_PASS

@@ -17,9 +17,10 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | Path | Contents |
 | --- | --- |
 | ``clusters/<cluster>/`` | Read by Flux as the cluster's entry point. ``flux-system/`` is written by the bootstrap, don't edit it. |
-| ``clusters/<cluster>/infrastructure.yaml`` | ``infra-controllers`` (``infrastructure/controllers``), then ``infra-configs`` (``infrastructure/configs``) once the controllers are ready. |
+| ``clusters/<cluster>/infrastructure.yaml`` | ``infra-controllers`` (``infrastructure/controllers``), then ``infra-configs`` (``infrastructure/configs``) and ``infra-operators`` (``infrastructure/operators``) once the controllers are ready. |
 | ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. |
 | ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn. |
+| ``infrastructure/operators/`` | Controllers whose manifests need the other controllers' CRDs (cert-manager Certificates for their webhooks): RabbitMQ's Topology Operator. |
 | ``infrastructure/configs/`` | Config using the controllers' CRDs: ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway. |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
 | ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. |
@@ -32,7 +33,8 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 - Upstream Helm charts as a ``HelmRelease`` at an exact chart version, Kustomize manifests otherwise. Images pinned by digest.
 - No secrets in git. One ``ExternalSecret`` per app from Vault (``labv2/production/<app>``).
 - Placement with replicas, ``topologySpreadConstraints`` on ``topology.kubernetes.io/zone``, PDBs and resource requests. ``nodeSelector`` only for hardware (the Longhorn disk), no stack labels.
-- A new controller's CRDs need their schemas added to ``lint.yml`` (download the release's CRDs, pinned by checksum, and convert them with ``.forgejo/scripts/crd-schemas.py``), a missing schema fails CI.
+- Upstream release manifests (no chart) are vendored unmodified, with their URL and checksum in the kustomization, and changed with patches.
+- A new controller's CRDs need their schemas added to ``lint.yml`` (download the release's CRDs, pinned by checksum, or pass a vendored manifest, and convert them with ``.forgejo/scripts/crd-schemas.py``), a missing schema fails CI.
 
 ## Secrets
 

@@ -87,7 +87,7 @@ jobs:
           curl -fsSLo /tmp/longhorn.yaml             "https://raw.githubusercontent.com/longhorn/longhorn/v${LONGHORN_VERSION}/deploy/longhorn.yaml"
           echo "${LONGHORN_MANIFEST_SHA256}  /tmp/longhorn.yaml" | sha256sum -c -
 
-          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml
+          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
 
       # A missing schema fails the run, add the CRD schemas of new controllers to the step above. CRDs
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).

@@ -14,6 +14,9 @@ resources:
   - statefulset.yaml
   - services.yaml
   - routes.yaml
+  # Users and permissions, applied by the Topology Operator. One file per client.
+  - operator-connection.yaml
+  - users/contentbot.yaml
 # A change rolls the pod (the name gets a hash).
 configMapGenerator:
   - name: rabbitmq-config

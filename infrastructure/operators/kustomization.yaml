@@ -1,0 +1,6 @@
+# Controllers that can only install once infra-controllers is ready, e.g. because their
+# manifests include cert-manager Certificates (for their webhooks). One directory each.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rabbitmq-topology-operator

@@ -1,0 +1,56 @@
+# RabbitMQ's Messaging Topology Operator: users, permissions (and queues, exchanges, policies...)
+# as rabbitmq.com resources, applied through RabbitMQ's management API. Our RabbitMQ isn't
+# deployed by RabbitMQ's Cluster Operator, so every resource points at it with
+# rabbitmqClusterReference.connectionSecret (see apps/base/rabbitmq/operator-connection.yaml).
+#
+# Upstream only ships release manifests (no chart), vendored unmodified:
+# https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.3/messaging-topology-operator-with-certmanager.yaml
+# sha256 73a45a423b3abb9dddfa84248e60699f69a4dbcf3456830b9af62ef496e1e549. To upgrade, replace
+# the file with the new release's (check the checksum), and bump the image in the patch below.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - messaging-topology-operator-with-certmanager.yaml
+# rabbitmq-ca's certificate (public, not a secret), so the operator trusts RabbitMQ's management
+# API over HTTPS. Committed rather than synced from Vault: an ExternalSecret here would need ESO's
+# CRDs before this could apply. A change renames the ConfigMap, which rolls the operator.
+configMapGenerator:
+  - name: rabbitmq-ca
+    namespace: rabbitmq-system
+    files:
+      - ca.crt=rabbitmq-ca.crt
+patches:
+  # Never pruned: deleting the CRDs deletes every User, Permission, ... and the operator deletes
+  # those from RabbitMQ.
+  - target:
+      kind: CustomResourceDefinition
+    patch: |
+      - op: add
+        path: /metadata/annotations/kustomize.toolkit.fluxcd.io~1prune
+        value: disabled
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: messaging-topology-operator
+        namespace: rabbitmq-system
+      spec:
+        template:
+          spec:
+            containers:
+              - name: manager
+                image: ghcr.io/rabbitmq/messaging-topology-operator:1.20.3@sha256:f377d3c3e2215a8dfb8a7a5ab953ef7f180f295c401e5d2c2060f3b0748fefd6
+                # Upstream requests 300m, far more than it uses here.
+                resources:
+                  requests:
+                    cpu: 50m
+                # Go reads every file in /etc/ssl/certs as a trusted CA.
+                volumeMounts:
+                  - name: rabbitmq-ca
+                    mountPath: /etc/ssl/certs/rabbitmq-ca.crt
+                    subPath: ca.crt
+                    readOnly: true
+            volumes:
+              - name: rabbitmq-ca
+                configMap:
+                  name: rabbitmq-ca

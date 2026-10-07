@@ -1,5 +1,6 @@
 # Cluster-wide infrastructure, before any app. Controllers first (wait: their CRDs must exist),
-# then the configs using those CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, ...).
+# then the configs using those CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, ...) and
+# the operators whose manifests use them (cert-manager Certificates for their webhooks).
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -36,3 +37,22 @@ spec:
   postBuild:
     substitute:
       cluster: production-core
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infra-operators
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infra-controllers
+  interval: 10m
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/operators
+  prune: true
+  # Apps' resources for them (e.g. RabbitMQ users) need their webhooks up.
+  wait: true
