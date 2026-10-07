@@ -1,7 +1,7 @@
 # Monitoring, from stack-grafana: Grafana, VictoriaMetrics, VictoriaLogs, vmagent, vmalert and
-# Alertmanager, each a single instance. Plain manifests, the stack's. node_exporter is its own app
-# (apps/base/node-exporter, it needs a privileged namespace), rsyslog forwards syslog to
-# VictoriaLogs (apps/base/rsyslog).
+# Alertmanager, each a single instance. Plain manifests, the stack's. Plus kube-state-metrics
+# (upstream's chart). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
+# namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
 #
 # The components talk to each other over TLS by their service names (<component>.monitoring.svc),
 # with one certificate from the monitoring-ca ClusterIssuer (certificate.yaml).
@@ -19,6 +19,7 @@ resources:
   - vmagent.yaml
   - vmalert.yaml
   - alertmanager.yaml
+  - kube-state-metrics.yaml
   - routes.yaml
 # A change rolls the pods that use it (the name gets a hash), except grafana-dashboards.
 configMapGenerator:
@@ -30,7 +31,10 @@ configMapGenerator:
   # so a fixed name: the pod isn't restarted and the mounted files follow the ConfigMap.
   - name: grafana-dashboards
     files:
-      - config/grafana/dashboards/nginx-dashboard.json
+      # Envoy Gateway's own (charts/gateway-addons-helm/dashboards), unmodified.
+      - config/grafana/dashboards/envoy-clusters.json
+      - config/grafana/dashboards/envoy-gateway-global.json
+      - config/grafana/dashboards/envoy-proxy-global.json
     options:
       disableNameSuffixHash: true
   - name: vmagent-config
@@ -39,6 +43,8 @@ configMapGenerator:
   - name: vmalert-rules
     files:
       - config/vmalert/alerts.yml
+      - config/vmalert/kubernetes.yml
+      - config/vmalert/controllers.yml
   - name: alertmanager-config
     files:
       - config/alertmanager/alertmanager.yml

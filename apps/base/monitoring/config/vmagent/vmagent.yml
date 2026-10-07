@@ -46,7 +46,7 @@ scrape_configs:
         replacement: node
 
   # Each kubelet, for the persistent volume stats (node_exporter doesn't see the pod volume
-  # mounts). Authenticates with vmagent's service account token (rbac.yaml, nodes/metrics).
+  # mounts). Authenticates with vmagent's service account token (vmagent.yaml, nodes/metrics).
   # Talos' kubelet serving certs are self-signed. Only the volume stats are kept.
   - job_name: kubelet
     metrics_path: /metrics
@@ -62,6 +62,27 @@ scrape_configs:
     metric_relabel_configs:
       - source_labels: [__name__]
         regex: "kubelet_volume_stats_.+"
+        action: keep
+
+  # Each kubelet's cAdvisor, for per-container CPU, memory and network. Only those are kept, and
+  # only for containers (not the pod-level and system cgroups, which have no container label).
+  - job_name: cadvisor
+    metrics_path: /metrics/cadvisor
+    scheme: https
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      insecure_skip_verify: true
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: instance
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "container_(cpu_usage_seconds_total|cpu_cfs_periods_total|cpu_cfs_throttled_periods_total|memory_working_set_bytes|network_receive_bytes_total|network_transmit_bytes_total)"
+        action: keep
+      - source_labels: [__name__, container]
+        regex: "container_network_.+;|container_(cpu|memory)_.+;.+"
         action: keep
 
   # Vault on prx-999 (iac-homelab), metrics are unauthenticated and a sealed Vault is scraped
@@ -88,4 +109,111 @@ scrape_configs:
           - "rabbitmq-broker.rabbitmq.svc:15692"
     relabel_configs:
       - source_labels: [__address__]
+        target_label: instance
+
+  # The monitoring components themselves, by their service names (single instances), verified
+  # with the monitoring CA. vmagent scrapes itself the same way.
+  - job_name: monitoring
+    metrics_path: /metrics
+    scheme: https
+    tls_config:
+      ca_file: /etc/vmagent/tls/ca.crt
+    static_configs:
+      - targets:
+          - grafana.monitoring.svc:3000
+          - victoriametrics.monitoring.svc:8428
+          - victorialogs.monitoring.svc:9428
+          - vmagent.monitoring.svc:8429
+          - vmalert.monitoring.svc:8880
+          - alertmanager.monitoring.svc:9093
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^.]+)\..*'
+        target_label: instance
+
+  # kube-state-metrics (kube-state-metrics.yaml): the state of Kubernetes objects (pods,
+  # Deployments, Jobs, PVCs, ...) and Flux's resources (gotk_resource_info).
+  - job_name: kube-state-metrics
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["kube-state-metrics.monitoring.svc:8080"]
+    # The objects' own namespace/pod labels win over the target's.
+    honor_labels: true
+
+  # Pods annotated prometheus.io/scrape: "true" (with prometheus.io/port and, optionally,
+  # prometheus.io/path and prometheus.io/scheme): cert-manager, Envoy Gateway's controller and
+  # its Envoy proxies (/stats/prometheus).
+  - job_name: pods
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        regex: "true"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_phase]
+        regex: "Running"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scheme]
+        regex: "(https?)"
+        target_label: __scheme__
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        regex: "(.+)"
+        target_label: __metrics_path__
+      - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        regex: '(.+);(\d+)'
+        replacement: "$1:$2"
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_label_app]
+        regex: "(.+);.*|;(.+)"
+        replacement: "$1$2"
+        target_label: job
+
+  # Flux's controllers (port http-prom). Their resources' state comes from kube-state-metrics.
+  - job_name: flux
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ["flux-system"]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: "http-prom"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: controller
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # External Secrets' controller, webhook and cert controller (port metrics).
+  - job_name: external-secrets
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ["external-secrets"]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: "metrics"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+  # Longhorn: every node's manager (port manager) reports that node's volumes, disks and backups,
+  # so each one is scraped.
+  - job_name: longhorn
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ["longhorn-system"]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: "longhorn-manager"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: "manager"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_node_name]
         target_label: instance

@@ -1,0 +1,112 @@
+# The cluster's controllers: Longhorn, cert-manager, External Secrets, Envoy Gateway.
+groups:
+  - name: Longhorn
+    interval: 60s
+    rules:
+      # 0 unknown, 1 healthy, 2 degraded (missing replicas, rebuilding), 3 faulted (no healthy
+      # replica: the data is unavailable).
+      - alert: LonghornVolumeDegraded
+        expr: 'longhorn_volume_robustness == 2'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Longhorn volume degraded ({{ $labels.pvc_namespace }}/{{ $labels.pvc }})
+          description: "Volume {{ $labels.volume }} ({{ $labels.pvc_namespace }}/{{ $labels.pvc }}) has been missing replicas for 15 minutes."
+
+      - alert: LonghornVolumeFaulted
+        expr: 'longhorn_volume_robustness == 3'
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Longhorn volume faulted ({{ $labels.pvc_namespace }}/{{ $labels.pvc }})
+          description: "Volume {{ $labels.volume }} ({{ $labels.pvc_namespace }}/{{ $labels.pvc }}) has no healthy replica."
+
+      - alert: LonghornNodeNotReady
+        expr: 'longhorn_node_status{condition="ready"} == 0'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Longhorn node not ready ({{ $labels.node }})
+          description: "Longhorn considers {{ $labels.node }} not ready, its replicas are unavailable."
+
+      - alert: LonghornDiskAlmostFull
+        expr: 'longhorn_disk_usage_bytes / longhorn_disk_capacity_bytes > 0.85'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Longhorn disk almost full ({{ $labels.node }})
+          description: "Longhorn's disk on {{ $labels.node }} is {{ $value | humanizePercentage }} full."
+
+      # 4 is Error.
+      - alert: LonghornBackupFailed
+        expr: 'longhorn_backup_state == 4'
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Longhorn backup failed ({{ $labels.volume }})
+          description: "Backup {{ $labels.backup }} of volume {{ $labels.volume }} failed."
+
+      # The nightly RecurringJob (infrastructure/configs/longhorn) runs as a CronJob in
+      # longhorn-system. Catches backups that stopped altogether (the NAS share unreachable, the
+      # job gone), which no failed backup would show.
+      - alert: LonghornNightlyBackupMissing
+        expr: 'time() - kube_cronjob_status_last_successful_time{namespace="longhorn-system", cronjob="backup-nightly"} > 26 * 3600 or absent(kube_cronjob_status_last_successful_time{namespace="longhorn-system", cronjob="backup-nightly"})'
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Longhorn nightly backup missing
+          description: "The nightly backup (CronJob longhorn-system/backup-nightly) hasn't succeeded for more than 26 hours."
+
+  - name: cert-manager
+    interval: 60s
+    rules:
+      - alert: CertificateNotReady
+        expr: 'certmanager_certificate_ready_status{condition="False"} == 1'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Certificate not ready ({{ $labels.namespace }}/{{ $labels.name }})
+          description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} isn't ready: kubectl -n {{ $labels.namespace }} describe certificate {{ $labels.name }}"
+
+      # cert-manager renews a third of the way before expiry (30 days for Let's Encrypt's 90), so
+      # under 14 days left means renewals have been failing for a while.
+      - alert: CertificateExpiringSoon
+        expr: '(certmanager_certificate_expiration_timestamp_seconds - time()) < 14 * 86400'
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: Certificate expiring ({{ $labels.namespace }}/{{ $labels.name }})
+          description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }} and hasn't been renewed."
+
+  - name: External Secrets
+    interval: 60s
+    rules:
+      - alert: ExternalSecretNotSynced
+        expr: 'externalsecret_status_condition{condition="Ready", status="False"} == 1'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: ExternalSecret not synced ({{ $labels.namespace }}/{{ $labels.name }})
+          description: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} can't sync from Vault: kubectl -n {{ $labels.namespace }} describe externalsecret {{ $labels.name }}"
+
+  - name: Envoy Gateway
+    interval: 60s
+    rules:
+      # 5xx from the backends (not Envoy's own), per route's cluster, while there's traffic.
+      - alert: GatewayBackendErrors
+        expr: 'sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_response_code_class="5"}[5m])) / sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_total[5m])) > 0.1 and sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_total[5m])) > 0.05'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Backend errors through the Gateway ({{ $labels.envoy_cluster_name }})
+          description: "{{ $value | humanizePercentage }} of requests to {{ $labels.envoy_cluster_name }} have returned 5xx for 10 minutes."
