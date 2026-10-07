@@ -57,7 +57,7 @@
         type: grafana
         version: 2
         alerts: alertmanager
-        url: https://grafana.grafana-core.svc.cluster.local:3000
+        url: https://grafana.monitoring.svc.cluster.local:3000
         username: {{HOMEPAGE_VAR_GRAFANA_USER}}
         password: {{HOMEPAGE_VAR_GRAFANA_PASS}}
   - VictoriaLogs:
