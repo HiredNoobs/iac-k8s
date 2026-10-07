@@ -7,7 +7,6 @@ metadata:
 spec:
   dependsOn:
     - name: infra-configs
-    - name: infra-operators
   interval: 10m
   retryInterval: 1m
   timeout: 5m
@@ -15,4 +14,25 @@ spec:
     kind: GitRepository
     name: flux-system
   path: ./apps/production-core
+  prune: true
+---
+# RabbitMQ's users and permissions (Topology Operator), after apps: the operator's webhook rejects
+# them until their Secrets exist, and ESO creates those from apps' ExternalSecrets. Until ESO has
+# synced them, the dry-run fails and this retries (retryInterval).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: rabbitmq-topology
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: apps
+    - name: infra-operators
+  interval: 10m
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/production-core/rabbitmq-topology
   prune: true

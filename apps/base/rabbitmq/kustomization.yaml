@@ -14,7 +14,8 @@ resources:
   - statefulset.yaml
   - services.yaml
   - routes.yaml
-  # Users and permissions, applied by the Topology Operator. One file per client.
+  # The Secrets the Topology Operator uses: its login and each client's credentials (one file per
+  # client). The users and permissions themselves are topology/, applied after these exist.
   - operator-connection.yaml
   - users/contentbot.yaml
 # A change rolls the pod (the name gets a hash).

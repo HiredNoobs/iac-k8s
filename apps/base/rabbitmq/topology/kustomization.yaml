@@ -1,0 +1,10 @@
+# RabbitMQ's users and permissions, applied by the Topology Operator. One file per client.
+#
+# Not part of the rabbitmq app: the operator's webhook rejects a User or Permission whose Secrets
+# (operator-connection.yaml, users/<client>.yaml) don't exist yet, and ESO only creates those once
+# the app is applied. So this is its own Flux Kustomization (rabbitmq-topology), after apps.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rabbitmq
+resources:
+  - contentbot.yaml

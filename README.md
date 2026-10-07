@@ -18,12 +18,12 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | --- | --- |
 | ``clusters/<cluster>/`` | Read by Flux as the cluster's entry point. ``flux-system/`` is written by the bootstrap, don't edit it. |
 | ``clusters/<cluster>/infrastructure.yaml`` | ``infra-controllers`` (``infrastructure/controllers``), then ``infra-configs`` (``infrastructure/configs``) and ``infra-operators`` (``infrastructure/operators``) once the controllers are ready. |
-| ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. |
+| ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. Then ``rabbitmq-topology`` (``apps/<cluster>/rabbitmq-topology``), RabbitMQ's users and permissions: the Topology Operator's webhook rejects them until ``apps``' ExternalSecrets have created their Secrets. |
 | ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn. |
 | ``infrastructure/operators/`` | Controllers whose manifests need the other controllers' CRDs (cert-manager Certificates for their webhooks): RabbitMQ's Topology Operator. |
 | ``infrastructure/configs/`` | Config using the controllers' CRDs: ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway. |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
-| ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. |
+| ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. Subdirectories are separate Flux Kustomizations (``rabbitmq-topology``). |
 
 Clusters are named after their tools-bin context with a ``-`` (``production.core`` -> ``production-core``).
 

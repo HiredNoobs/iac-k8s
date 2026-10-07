@@ -1,5 +1,5 @@
-# contentbot (chatbot and worker): full permissions on /. Its password is in contentbot's own
-# Vault secret (labv2/production/contentbot, RABBITMQ_PASSWORD), which its app reads too. Its
+# contentbot's credentials for its User (topology/contentbot.yaml). Its password is in contentbot's
+# own Vault secret (labv2/production/contentbot, RABBITMQ_PASSWORD), which its app reads too. Its
 # client certificate is a Certificate from rabbitmq-ca in its own app.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -24,32 +24,3 @@ spec:
       remoteRef:
         key: production/contentbot
         property: RABBITMQ_PASSWORD
----
-# The operator re-syncs the password whenever the Secret changes. Removing the User from git
-# deletes the user from RabbitMQ.
-apiVersion: rabbitmq.com/v1beta1
-kind: User
-metadata:
-  name: contentbot
-spec:
-  importCredentialsSecret:
-    name: rabbitmq-user-contentbot
-  rabbitmqClusterReference:
-    connectionSecret:
-      name: rabbitmq-topology-operator
----
-apiVersion: rabbitmq.com/v1beta1
-kind: Permission
-metadata:
-  name: contentbot
-spec:
-  vhost: /
-  userReference:
-    name: contentbot
-  permissions:
-    configure: ".*"
-    write: ".*"
-    read: ".*"
-  rabbitmqClusterReference:
-    connectionSecret:
-      name: rabbitmq-topology-operator
