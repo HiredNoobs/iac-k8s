@@ -21,20 +21,83 @@ resources:
   - alertmanager.yaml
   - kube-state-metrics.yaml
   - routes.yaml
-# A change rolls the pods that use it (the name gets a hash), except grafana-dashboards.
+# A change rolls the pods that use it (the name gets a hash), except the dashboards'.
 configMapGenerator:
   - name: grafana-provisioning
     files:
       - config/grafana/datasources.yml
       - config/grafana/dashboards.yml
-  # Grafana picks up dashboard changes while it runs (every 30s, config/grafana/dashboards.yml),
-  # so a fixed name: the pod isn't restarted and the mounted files follow the ConfigMap.
-  - name: grafana-dashboards
+  # Dashboards, one ConfigMap per Grafana folder (config/grafana/dashboards/<Folder>, mounted as
+  # /etc/grafana/dashboards/<Folder>): each stays under a ConfigMap's 1 MiB. Grafana picks up
+  # changes while it runs (every 30s, config/grafana/dashboards.yml), so fixed names: the pod
+  # isn't restarted and the mounted files follow the ConfigMaps.
+  #
+  # Upstream's, pinned (below), except Overview. Only their data source references are changed,
+  # for file provisioning: import placeholders (${DS_...}) without a matching variable point at
+  # the prometheus data source, data source variables have no saved selection (so the default).
+  # Overview: ours, the home dashboard (grafana.yaml). To change it, edit it in Grafana, then
+  # export the JSON (not "for sharing externally") over overview.json.
+  - name: grafana-dashboards-overview
     files:
-      # Envoy Gateway's own (charts/gateway-addons-helm/dashboards), unmodified.
-      - config/grafana/dashboards/envoy-clusters.json
-      - config/grafana/dashboards/envoy-gateway-global.json
-      - config/grafana/dashboards/envoy-proxy-global.json
+      - config/grafana/dashboards/Overview/overview.json
+    options:
+      disableNameSuffixHash: true
+  # Gateway: Envoy Gateway's own (charts/gateway-addons-helm/dashboards at v1.9.2).
+  - name: grafana-dashboards-gateway
+    files:
+      - config/grafana/dashboards/Gateway/envoy-clusters.json
+      - config/grafana/dashboards/Gateway/envoy-gateway-global.json
+      - config/grafana/dashboards/Gateway/envoy-proxy-global.json
+    options:
+      disableNameSuffixHash: true
+  # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
+  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
+  - name: grafana-dashboards-kubernetes
+    files:
+      - config/grafana/dashboards/Kubernetes/k8s-views-global.json
+      - config/grafana/dashboards/Kubernetes/k8s-views-namespaces.json
+      - config/grafana/dashboards/Kubernetes/k8s-views-nodes.json
+      - config/grafana/dashboards/Kubernetes/k8s-views-pods.json
+      - config/grafana/dashboards/Kubernetes/node-exporter-full.json
+    options:
+      disableNameSuffixHash: true
+  # Monitoring: VictoriaMetrics/VictoriaMetrics v1.136.0 and VictoriaMetrics/VictoriaLogs
+  # v1.46.0 (dashboards/).
+  - name: grafana-dashboards-monitoring
+    files:
+      - config/grafana/dashboards/Monitoring/victorialogs.json
+      - config/grafana/dashboards/Monitoring/victoriametrics.json
+      - config/grafana/dashboards/Monitoring/vmagent.json
+      - config/grafana/dashboards/Monitoring/vmalert.json
+    options:
+      disableNameSuffixHash: true
+  # Storage: grafana.com 13032 rev 6 (Longhorn).
+  - name: grafana-dashboards-storage
+    files:
+      - config/grafana/dashboards/Storage/longhorn.json
+    options:
+      disableNameSuffixHash: true
+  # Flux: fluxcd/flux2-monitoring-example@7ab65dc (monitoring/configs/dashboards).
+  - name: grafana-dashboards-flux
+    files:
+      - config/grafana/dashboards/Flux/flux-cluster.json
+      - config/grafana/dashboards/Flux/flux-control-plane.json
+    options:
+      disableNameSuffixHash: true
+  # Platform: grafana.com 20842 rev 3 (cert-manager); External Secrets' chart 2.11.0
+  # (files/monitoring).
+  - name: grafana-dashboards-platform
+    files:
+      - config/grafana/dashboards/Platform/cert-manager.json
+      - config/grafana/dashboards/Platform/external-secrets.json
+    options:
+      disableNameSuffixHash: true
+  # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
+  # rev 2 (Vault).
+  - name: grafana-dashboards-services
+    files:
+      - config/grafana/dashboards/Services/rabbitmq-overview.json
+      - config/grafana/dashboards/Services/vault.json
     options:
       disableNameSuffixHash: true
   - name: vmagent-config

@@ -65,6 +65,8 @@ groups:
 
   - name: cert-manager
     interval: 60s
+    # The Certificate's namespace is exported_namespace (the pods job sets namespace to
+    # cert-manager's).
     rules:
       - alert: CertificateNotReady
         expr: 'certmanager_certificate_ready_status{condition="False"} == 1'
@@ -72,8 +74,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Certificate not ready ({{ $labels.namespace }}/{{ $labels.name }})
-          description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} isn't ready: kubectl -n {{ $labels.namespace }} describe certificate {{ $labels.name }}"
+          summary: Certificate not ready ({{ $labels.exported_namespace }}/{{ $labels.name }})
+          description: "Certificate {{ $labels.exported_namespace }}/{{ $labels.name }} isn't ready: kubectl -n {{ $labels.exported_namespace }} describe certificate {{ $labels.name }}"
 
       # cert-manager renews a third of the way before expiry (30 days for Let's Encrypt's 90), so
       # under 14 days left means renewals have been failing for a while.
@@ -83,8 +85,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: Certificate expiring ({{ $labels.namespace }}/{{ $labels.name }})
-          description: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }} and hasn't been renewed."
+          summary: Certificate expiring ({{ $labels.exported_namespace }}/{{ $labels.name }})
+          description: "Certificate {{ $labels.exported_namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }} and hasn't been renewed."
 
   - name: External Secrets
     interval: 60s

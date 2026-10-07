@@ -8,7 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/name: grafana
   annotations:
-    # Not reloader's auto: the dashboards ConfigMap changes without a restart (see
+    # Not reloader's auto: the dashboards' ConfigMaps change without a restart (see
     # kustomization.yaml).
     secret.reloader.stakater.com/reload: monitoring-tls,grafana
 spec:
@@ -59,6 +59,9 @@ spec:
               value: /etc/grafana/tls/tls.key
             - name: GF_SERVER_ROOT_URL
               value: https://grafana.hirednoobs.com
+            # The home page, for everyone without their own (Profile -> Preferences).
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /etc/grafana/dashboards/Overview/overview.json
             # Installed on start (into the data volume) when missing, pinned like everything else.
             - name: GF_PLUGINS_PREINSTALL
               value: victoriametrics-logs-datasource@0.32.0,victoriametrics-metrics-datasource@0.26.1
@@ -97,9 +100,31 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
               subPath: dashboards.yml
               readOnly: true
-            # Not a subPath, so ConfigMap changes reach the running pod.
-            - name: dashboards
-              mountPath: /etc/grafana/dashboards
+            # One directory per Grafana folder (foldersFromFilesStructure). Not subPaths, so
+            # ConfigMap changes reach the running pod.
+            - name: dashboards-overview
+              mountPath: /etc/grafana/dashboards/Overview
+              readOnly: true
+            - name: dashboards-gateway
+              mountPath: /etc/grafana/dashboards/Gateway
+              readOnly: true
+            - name: dashboards-kubernetes
+              mountPath: /etc/grafana/dashboards/Kubernetes
+              readOnly: true
+            - name: dashboards-monitoring
+              mountPath: /etc/grafana/dashboards/Monitoring
+              readOnly: true
+            - name: dashboards-storage
+              mountPath: /etc/grafana/dashboards/Storage
+              readOnly: true
+            - name: dashboards-flux
+              mountPath: /etc/grafana/dashboards/Flux
+              readOnly: true
+            - name: dashboards-platform
+              mountPath: /etc/grafana/dashboards/Platform
+              readOnly: true
+            - name: dashboards-services
+              mountPath: /etc/grafana/dashboards/Services
               readOnly: true
             - name: tls
               mountPath: /etc/grafana/tls
@@ -110,9 +135,30 @@ spec:
         - name: provisioning
           configMap:
             name: grafana-provisioning
-        - name: dashboards
+        - name: dashboards-overview
           configMap:
-            name: grafana-dashboards
+            name: grafana-dashboards-overview
+        - name: dashboards-gateway
+          configMap:
+            name: grafana-dashboards-gateway
+        - name: dashboards-kubernetes
+          configMap:
+            name: grafana-dashboards-kubernetes
+        - name: dashboards-monitoring
+          configMap:
+            name: grafana-dashboards-monitoring
+        - name: dashboards-storage
+          configMap:
+            name: grafana-dashboards-storage
+        - name: dashboards-flux
+          configMap:
+            name: grafana-dashboards-flux
+        - name: dashboards-platform
+          configMap:
+            name: grafana-dashboards-platform
+        - name: dashboards-services
+          configMap:
+            name: grafana-dashboards-services
         - name: tls
           secret:
             secretName: monitoring-tls

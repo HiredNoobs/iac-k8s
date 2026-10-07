@@ -44,6 +44,9 @@ spec:
             - --remoteWrite.url=https://victoriametrics.monitoring.svc:8428/api/v1/write
             - --remoteWrite.tmpDataPath=/vmagentdata
             - --remoteWrite.tlsCAFile=/etc/vmagent/tls/ca.crt
+            # On every series: the Kubernetes and cert-manager dashboards select by cluster.
+            # Per cluster (patch it in apps/<cluster>/ for another one).
+            - --remoteWrite.label=cluster=production-core
             - --promscrape.config=/etc/vmagent/config.yml
           ports:
             - name: https
