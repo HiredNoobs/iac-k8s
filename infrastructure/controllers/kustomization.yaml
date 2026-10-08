@@ -8,4 +8,5 @@ resources:
   - kube-vip
   - kubelet-serving-cert-approver
   - longhorn
+  - metrics-server
   - reloader

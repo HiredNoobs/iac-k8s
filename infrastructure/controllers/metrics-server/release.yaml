@@ -1,0 +1,36 @@
+# Bump the chart version and the image together, the image is the chart's appVersion pinned by
+# its digest (the multi-arch index).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: metrics-server
+  namespace: metrics-server
+spec:
+  interval: 1h
+  # Its Certificate and Issuer need cert-manager's CRDs.
+  dependsOn:
+    - name: cert-manager
+      namespace: cert-manager
+  chart:
+    spec:
+      chart: metrics-server
+      version: "3.14.0"
+      sourceRef:
+        kind: HelmRepository
+        name: metrics-server
+  values:
+    image:
+      # The chart has no digest value, so it goes in the tag.
+      tag: v0.9.0@sha256:d9862115e7c7881280d3d75ca26bda8ffc0fc213315979575bf23ce9826205c0
+    # Its serving certificate from cert-manager (a self-signed Issuer of its own), injected into
+    # the APIService's caBundle, so the API server verifies metrics-server instead of skipping it.
+    tls:
+      type: cert-manager
+    apiService:
+      insecureSkipTLSVerify: false
+    # The chart's securityContext already meets the restricted pod security standard. Requests
+    # sized for a handful of nodes (the chart's are 100m/200Mi).
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
