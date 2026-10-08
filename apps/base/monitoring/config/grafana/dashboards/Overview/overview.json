@@ -1550,10 +1550,10 @@
       }
     },
     {
-      "type": "bargauge",
+      "type": "piechart",
       "title": "Block lists",
       "id": 32,
-      "description": "Domains from each block list, the fewest of any Pi-hole pod. Red is a list that blocks nothing: its download failed (sync-lists retries after 1, 2, 5 and 15 minutes, then hourly).\n\nCLI: `kubectl -n pihole exec pihole-0 -c pihole -- pihole-FTL sqlite3 /etc/pihole/gravity.db \"select id, number, status, address from adlist;\"`",
+      "description": "Domains from each block list, the fewest of any Pi-hole pod. A list that failed to download has no slice and 0 in the legend (sync-lists retries after 1, 2, 5 and 15 minutes, then hourly), and Domains blocked turns red.\n\nCLI: `kubectl -n pihole exec pihole-0 -c pihole -- pihole-FTL sqlite3 /etc/pihole/gravity.db \"select id, number, status, address from adlist;\"`",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1579,31 +1579,29 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "min": 0,
           "decimals": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
       "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
+        "pieType": "pie",
+        "displayLabels": [],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
