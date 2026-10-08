@@ -61,8 +61,6 @@ data:
     192.168.111.11 prx-001-srv-prod-core-control-001.hirednoobs.com;\
     192.168.111.12 prx-001-srv-prod-core-worker-001.hirednoobs.com;\
     192.168.111.13 prx-001-srv-prod-core-worker-002.hirednoobs.com;\
-    192.168.111.14 prx-001-srv-prod-core-worker-003.hirednoobs.com;\
-    192.168.111.15 prx-001-srv-prod-core-worker-004.hirednoobs.com;\
     192.168.111.21 prx-002-srv-prod-core-control-001.hirednoobs.com;\
     192.168.111.22 prx-002-srv-prod-core-worker-001.hirednoobs.com;\
     192.168.111.23 prx-002-srv-prod-core-worker-002.hirednoobs.com;\
@@ -117,8 +115,6 @@ data:
     local=/prx-001-srv-prod-core-control-001.hirednoobs.com/;\
     local=/prx-001-srv-prod-core-worker-001.hirednoobs.com/;\
     local=/prx-001-srv-prod-core-worker-002.hirednoobs.com/;\
-    local=/prx-001-srv-prod-core-worker-003.hirednoobs.com/;\
-    local=/prx-001-srv-prod-core-worker-004.hirednoobs.com/;\
     local=/prx-002-srv-prod-core-control-001.hirednoobs.com/;\
     local=/prx-002-srv-prod-core-worker-001.hirednoobs.com/;\
     local=/prx-002-srv-prod-core-worker-002.hirednoobs.com/;\
