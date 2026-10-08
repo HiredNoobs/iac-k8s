@@ -1,7 +1,8 @@
 # The web UIs: pihole.hirednoobs.com on any replica, pihole<n> on replica n-1 (only those that
 # exist answer). Backends rather than the Services: the UI is HTTPS, and Envoy verifies its
 # certificate against the internal CA (ca.crt in pihole-tls) and the replica's name (sni, which
-# has to be one of the certificate's dnsNames).
+# has to be one of the certificate's dnsNames). Pi-hole's UI is under /admin/, so / redirects
+# there (its login when there's no session).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -30,6 +31,17 @@ spec:
   hostnames:
     - pihole.hirednoobs.com
   rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin/
+            statusCode: 302
     - backendRefs:
         - group: gateway.envoyproxy.io
           kind: Backend
@@ -63,6 +75,17 @@ spec:
   hostnames:
     - pihole1.hirednoobs.com
   rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin/
+            statusCode: 302
     - backendRefs:
         - group: gateway.envoyproxy.io
           kind: Backend
@@ -96,6 +119,17 @@ spec:
   hostnames:
     - pihole2.hirednoobs.com
   rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin/
+            statusCode: 302
     - backendRefs:
         - group: gateway.envoyproxy.io
           kind: Backend
@@ -129,6 +163,17 @@ spec:
   hostnames:
     - pihole3.hirednoobs.com
   rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /admin/
+            statusCode: 302
     - backendRefs:
         - group: gateway.envoyproxy.io
           kind: Backend
