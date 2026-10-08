@@ -1,0 +1,61 @@
+# Pi-hole, from the metrics sync-lists pushes every minute (apps/base/pihole/config/sync-lists.sh),
+# one series per pod. Pushed, not scraped: there's no up, PiholeMetricsMissing stands in for it.
+# The blackbox DNS probes (blackbox.yml) check the answers clients get, these say why.
+groups:
+  - name: Pi-hole
+    interval: 60s
+    rules:
+      # Fewer pods reporting than are ready: sync-lists stopped, or can't reach vmagent (its log
+      # says which).
+      - alert: PiholeMetricsMissing
+        expr: |
+          (count(pihole_blocking_enabled) or on() vector(0))
+            < on() sum(kube_statefulset_status_replicas_ready{namespace="pihole", statefulset="pihole"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pi-hole isn't reporting metrics
+          description: "Fewer Pi-hole pods are pushing metrics than are ready. Check the sync-lists container's log."
+
+      - alert: PiholeBlockingDisabled
+        expr: 'pihole_blocking_enabled == 0'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pi-hole blocking is off ({{ $labels.pod }})
+          description: "Blocking has been disabled on {{ $labels.pod }} for 15 minutes (the web UI's disable button, or pihole disable)."
+
+      # 4: the download failed with nothing cached. sync-lists retries hourly, so this only fires
+      # once a retry has failed too.
+      - alert: PiholeBlocklistFailed
+        expr: 'pihole_blocklist_status == 4 or pihole_blocklist_domains == 0'
+        for: 90m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pi-hole block list not loaded ({{ $labels.pod }})
+          description: "{{ $labels.list }} blocks nothing on {{ $labels.pod }}: its download failed and the hourly retry hasn't fixed it."
+
+      # The lists come to about 2.1M domains. A fresh pod has none until its first gravity
+      # update, which takes a few minutes.
+      - alert: PiholeGravityLow
+        expr: 'pihole_domains_being_blocked < 1000000'
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pi-hole is blocking few domains ({{ $labels.pod }})
+          description: "{{ $labels.pod }} has {{ $value | humanize }} domains on its block lists, expected about 2.1M."
+
+      # sync-lists re-syncs hourly, a sync that hasn't succeeded in 3 hours means changes in git
+      # and failed list retries aren't being applied.
+      - alert: PiholeSyncFailing
+        expr: 'time() - pihole_sync_last_success_timestamp_seconds > 3 * 3600'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pi-hole list sync failing ({{ $labels.pod }})
+          description: "sync-lists on {{ $labels.pod }} hasn't completed a sync for {{ $value | humanizeDuration }}. Check its log."

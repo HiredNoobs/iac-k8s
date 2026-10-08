@@ -1,0 +1,16 @@
+# Only for its ca.crt: sync-lists pushes Pi-hole's metrics to vmagent (statefulset.yaml) and checks
+# vmagent's certificate (monitoring-ca) with it. vmagent doesn't ask for a client certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pihole-metrics
+spec:
+  secretName: pihole-metrics-tls
+  commonName: pihole-metrics
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

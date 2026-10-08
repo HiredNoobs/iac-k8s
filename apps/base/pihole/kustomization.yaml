@@ -11,6 +11,7 @@ resources:
   - namespace.yaml
   - external-secret.yaml
   - certificate.yaml
+  - metrics-certificate.yaml
   # Pi-hole's settings, Reloader rolls the pods when they change (statefulset.yaml).
   - settings.yaml
   - statefulset.yaml

@@ -11,6 +11,12 @@
 #
 # One entry per line, blank lines and lines starting with # are ignored. Missing files
 # are treated as empty. Pi-hole isn't marked ready until the first sync has finished.
+#
+# Every CHECK_INTERVAL it also pushes a few metrics to vmagent (METRICS_URL, its Prometheus
+# import endpoint, checked with METRICS_CA): each block list's domains and download status,
+# the domains on the block lists, whether blocking is on, the last 24h's query counts (no
+# domains or clients) and when a sync last succeeded. The alerts on them are in
+# apps/base/monitoring/config/vmalert/pihole.yml.
 
 set -uo pipefail
 
@@ -21,9 +27,14 @@ CHECK_INTERVAL="${CHECK_INTERVAL:-60}"
 # Re-sync without changes to the files every so often, e.g. to undo edits made in the web UI.
 RESYNC_INTERVAL="${RESYNC_INTERVAL:-3600}"
 COMMENT="Managed by iac-k8s"
+# Unset: no metrics.
+METRICS_URL="${METRICS_URL:-}"
+METRICS_CA="${METRICS_CA:-}"
 
 SID=""
 LISTS_CHANGED=0
+LAST_SYNC_SUCCESS=0
+PUSH_FAILING=0
 
 # -----------------------------------------------------
 # Helper functions
@@ -146,8 +157,44 @@ function blocked_domains {
   api GET /stats/summary | jq -r '.gravity.domains_being_blocked // 0'
 }
 
+# The enabled block lists as "<status> <domains> <address>", from their last gravity update.
+# Status 1 downloaded, 2 unchanged, 3 unavailable (a cached copy was used), 4 unavailable
+# with nothing cached: that list blocks nothing.
+function list_status {
+  api GET "/lists?type=block" |
+    jq -r '.lists[] | select(.type == "block" and .enabled) | "\(.status) \(.number) \(.address)"'
+}
+
+# The block lists that block nothing (failed, or empty), one address per line.
+function failed_lists {
+  list_status | awk '$1 == 4 || $2 == 0 { print $3 }'
+}
+
+# Logs each block list's result from the gravity update that just ran.
+function report_lists {
+  local status number address total=0
+
+  while read -r status number address; do
+    [[ -n "$address" ]] || continue
+    total=$(( total + number ))
+    case "$status" in
+      4) log "WARNING: $address failed to download, it blocks nothing (retried hourly)." ;;
+      3) log "WARNING: $address failed to download, using the cached copy ($number domains)." ;;
+      *)
+        if (( number == 0 )); then
+          log "WARNING: $address is empty."
+        else
+          log "$address: $number domains."
+        fi
+        ;;
+    esac
+  done <<< "$(list_status)"
+
+  log "Gravity updated, $total domains on the block lists."
+}
+
 function sync {
-  local blocked
+  local blocked failed
 
   LISTS_CHANGED=0
 
@@ -165,18 +212,68 @@ function sync {
     return 1
   fi
 
-  # Block lists are only downloaded by a gravity update, also covers a fresh pod.
+  # Block lists are only downloaded by a gravity update: when they change, on a fresh pod (nothing
+  # blocked yet), and to retry a list whose download failed (each re-sync, hourly).
   blocked=$(blocked_domains) || blocked=0
-  if (( LISTS_CHANGED )) || { [[ -n "$(desired adlists.txt)" ]] && (( blocked <= 0 )); }; then
+  failed=$(failed_lists) || failed=""
+  if (( LISTS_CHANGED )) || [[ -n "$failed" ]] ||
+     { [[ -n "$(desired adlists.txt)" ]] && (( blocked <= 0 )); }; then
+    if (( ! LISTS_CHANGED )) && [[ -n "$failed" ]] && (( blocked > 0 )); then
+      log "Retrying the block lists that block nothing: $(paste -sd' ' <<< "$failed")"
+    fi
     log "Updating gravity..."
     if ! API_TIMEOUT=900 api POST /action/gravity > /dev/null; then
       logout
       return 1
     fi
-    log "Gravity updated, $(blocked_domains) domains blocked."
+    report_lists
   fi
 
   logout
+}
+
+# The metrics, in Prometheus' text format. job, namespace and pod are added by the push.
+function metrics {
+  local lists summary blocking
+
+  lists=$(api GET "/lists?type=block") &&
+    summary=$(api GET /stats/summary) &&
+    blocking=$(api GET /dns/blocking) || return 1
+
+  # The last sync's timestamp only once there's been one, so a fresh pod doesn't look like a pod
+  # that stopped syncing.
+  jq -rn --argjson lists "$lists" --argjson summary "$summary" --argjson blocking "$blocking" \
+         --argjson last "$LAST_SYNC_SUCCESS" '
+    ($lists.lists[] | select(.type == "block" and .enabled) |
+      "pihole_blocklist_domains{list=\"\(.address)\"} \(.number)",
+      "pihole_blocklist_status{list=\"\(.address)\"} \(.status)"),
+    "pihole_domains_being_blocked \($summary.gravity.domains_being_blocked // 0)",
+    "pihole_blocking_enabled \(if $blocking.blocking == "enabled" then 1 else 0 end)",
+    "pihole_queries_24h \($summary.queries.total // 0)",
+    "pihole_queries_blocked_24h \($summary.queries.blocked // 0)",
+    if $last > 0 then "pihole_sync_last_success_timestamp_seconds \($last)" else empty end'
+}
+
+# Logs only when pushing starts failing or recovers, not every minute while vmagent is away.
+function push_metrics {
+  local body="" curl_args=(-fsS --max-time 10 --data-binary @-)
+  local labels="extra_label=job=pihole-sync&extra_label=namespace=pihole&extra_label=pod=${HOSTNAME:-unknown}"
+
+  [[ -n "$METRICS_URL" ]] || return 0
+  [[ -n "$METRICS_CA" ]] && curl_args+=(--cacert "$METRICS_CA")
+
+  if login; then
+    body=$(metrics) || body=""
+  fi
+  logout
+
+  if [[ -n "$body" ]] && curl "${curl_args[@]}" "$METRICS_URL?$labels" <<< "$body" > /dev/null; then
+    (( PUSH_FAILING )) && log "Pushing metrics works again."
+    PUSH_FAILING=0
+  else
+    (( PUSH_FAILING )) || log "Pushing metrics to $METRICS_URL failed, retrying every ${CHECK_INTERVAL}s."
+    PUSH_FAILING=1
+  fi
 }
 
 function checksum {
@@ -204,6 +301,7 @@ while true; do
     if sync; then
       last_checksum="$current_checksum"
       last_sync="$now"
+      LAST_SYNC_SUCCESS="$now"
 
       if [[ ! -f "$READY_FILE" ]]; then
         touch "$READY_FILE"
@@ -214,5 +312,6 @@ while true; do
     fi
   fi
 
+  push_metrics
   sleep "$CHECK_INTERVAL"
 done

@@ -114,6 +114,7 @@ configMapGenerator:
       - config/vmalert/kubernetes.yml
       - config/vmalert/controllers.yml
       - config/vmalert/blackbox.yml
+      - config/vmalert/pihole.yml
   - name: alertmanager-config
     files:
       - config/alertmanager/alertmanager.yml
