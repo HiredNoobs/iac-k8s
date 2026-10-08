@@ -73,7 +73,9 @@ configMapGenerator:
       - config/grafana/dashboards/Monitoring/vmalert.json
     options:
       disableNameSuffixHash: true
-  # Storage: grafana.com 13032 rev 6 (Longhorn).
+  # Storage: grafana.com 13032 rev 6 (Longhorn), its volume robustness/state panels changed for
+  # Longhorn's current metrics (one series per state label, 1 for the current one, where rev 6
+  # expects a numeric code): healthy/degraded/faulted, attached/detached, volumes per node.
   - name: grafana-dashboards-storage
     files:
       - config/grafana/dashboards/Storage/longhorn.json

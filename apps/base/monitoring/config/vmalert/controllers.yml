@@ -3,10 +3,11 @@ groups:
   - name: Longhorn
     interval: 60s
     rules:
-      # 0 unknown, 1 healthy, 2 degraded (missing replicas, rebuilding), 3 faulted (no healthy
-      # replica: the data is unavailable).
+      # One series per state (state label: unknown, healthy, degraded, faulted), 1 for the
+      # volume's current state and 0 for the others. Degraded: missing replicas, rebuilding.
+      # Faulted: no healthy replica, the data is unavailable. Unknown is a detached volume.
       - alert: LonghornVolumeDegraded
-        expr: 'longhorn_volume_robustness == 2'
+        expr: 'longhorn_volume_robustness{state="degraded"} == 1'
         for: 15m
         labels:
           severity: warning
@@ -15,7 +16,7 @@ groups:
           description: "Volume {{ $labels.volume }} ({{ $labels.pvc_namespace }}/{{ $labels.pvc }}) has been missing replicas for 15 minutes."
 
       - alert: LonghornVolumeFaulted
-        expr: 'longhorn_volume_robustness == 3'
+        expr: 'longhorn_volume_robustness{state="faulted"} == 1'
         for: 2m
         labels:
           severity: critical

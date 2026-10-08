@@ -193,7 +193,7 @@
       "pluginVersion": "7.1.5",
       "targets": [
         {
-          "expr": "count(longhorn_volume_robustness==1) OR on() vector(0)",
+          "expr": "count(longhorn_volume_robustness{state=\"healthy\"}==1) OR on() vector(0)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -358,7 +358,7 @@
       "pluginVersion": "7.1.5",
       "targets": [
         {
-          "expr": "count(longhorn_volume_robustness==2) OR on() vector(0)",
+          "expr": "count(longhorn_volume_robustness{state=\"degraded\"}==1) OR on() vector(0)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -416,7 +416,7 @@
       "pluginVersion": "7.1.5",
       "targets": [
         {
-          "expr": "count(longhorn_volume_robustness==3) OR on() vector(0)",
+          "expr": "count(longhorn_volume_robustness{state=\"faulted\"}==1) OR on() vector(0)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -581,7 +581,7 @@
       "pluginVersion": "7.1.5",
       "targets": [
         {
-          "expr": "count(longhorn_volume_state==2) OR on() vector(0)",
+          "expr": "count(longhorn_volume_state{state=\"attached\"}==1) OR on() vector(0)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -639,7 +639,7 @@
       "pluginVersion": "7.1.5",
       "targets": [
         {
-          "expr": "count(longhorn_volume_state==3) OR on() vector(0)",
+          "expr": "count(longhorn_volume_state{state=\"detached\"}==1) OR on() vector(0)",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -1131,7 +1131,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count by (node) (longhorn_volume_state==2)",
+          "expr": "count by (node) (longhorn_volume_state{state=\"attached\"}==1)",
           "interval": "",
           "legendFormat": "{{node}}",
           "refId": "A"

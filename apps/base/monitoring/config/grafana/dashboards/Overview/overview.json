@@ -357,7 +357,7 @@
       "type": "stat",
       "title": "Volumes unhealthy",
       "id": 7,
-      "description": "Longhorn volumes degraded, faulted or unknown.\n\nCLI: `kubectl -n longhorn-system get volumes.longhorn.io` (STATE, ROBUSTNESS)",
+      "description": "Longhorn volumes degraded or faulted (unknown is a detached volume, not counted).\n\nCLI: `kubectl -n longhorn-system get volumes.longhorn.io` (STATE, ROBUSTNESS)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -375,7 +375,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(longhorn_volume_robustness != 1) or vector(0)",
+          "expr": "count(longhorn_volume_robustness{state=~\"degraded|faulted\"} == 1) or vector(0)",
           "instant": true
         }
       ],
