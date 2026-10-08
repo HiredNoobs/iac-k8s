@@ -21,6 +21,7 @@ resources:
   - alertmanager.yaml
   - kube-state-metrics.yaml
   - blackbox-exporter.yaml
+  - blackbox-redis-certificate.yaml
   - routes.yaml
 # A change rolls the pods that use it (the name gets a hash), except the dashboards'.
 configMapGenerator:

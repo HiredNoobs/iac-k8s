@@ -49,17 +49,37 @@ spec:
             - name: redis-tls
               containerPort: 6379
               protocol: TCP
+          # All three over TLS with Redis' own certificate (a client certificate from redis-ca
+          # too): a TCP check would abort the handshake, which Redis logs as an error each time.
+          # Started and alive: Redis answers at all, LOADING (reading the AOF) included.
           startupProbe:
-            tcpSocket:
-              port: redis-tls
+            exec:
+              command:
+                - sh
+                - -c
+                - >-
+                  redis-cli --tls -h localhost -p 6379
+                  --cacert /etc/redis/secrets/ca.crt
+                  --cert /etc/redis/secrets/tls.crt
+                  --key /etc/redis/secrets/tls.key
+                  ping | grep -qE 'PONG|NOAUTH|LOADING'
             periodSeconds: 5
             failureThreshold: 60
           livenessProbe:
-            tcpSocket:
-              port: redis-tls
+            exec:
+              command:
+                - sh
+                - -c
+                - >-
+                  redis-cli --tls -h localhost -p 6379
+                  --cacert /etc/redis/secrets/ca.crt
+                  --cert /etc/redis/secrets/tls.crt
+                  --key /etc/redis/secrets/tls.key
+                  ping | grep -qE 'PONG|NOAUTH|LOADING'
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
-          # NOAUTH once the default user is disabled, still means Redis is serving (not LOADING).
+          # Ready: serving (not LOADING). NOAUTH, as the default user is off, still means serving.
           readinessProbe:
             exec:
               command:

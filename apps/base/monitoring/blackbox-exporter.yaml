@@ -29,6 +29,14 @@ spec:
     podSecurityContext:
       seccompProfile:
         type: RuntimeDefault
+    # The client certificate for redis_tls (blackbox-redis-certificate.yaml). cert-manager renews
+    # it in place, blackbox reads the files on each probe.
+    extraSecretMounts:
+      - name: redis-tls
+        mountPath: /etc/blackbox/redis
+        secretName: blackbox-redis-tls
+        readOnly: true
+        defaultMode: 0444
     resources:
       requests:
         cpu: 10m
@@ -70,13 +78,29 @@ spec:
           timeout: 5s
           http:
             preferred_ip_protocol: ip4
-        # A port answers. For TLS-only services that want a client certificate (Redis), so no
-        # handshake: the service logs an aborted connection each time, like the kubelet's probes.
+        # A port answers (no TLS).
         tcp_connect:
           prober: tcp
           timeout: 5s
           tcp:
             preferred_ip_protocol: ip4
+        # Redis on its LoadBalancer IP: a full TLS handshake with a redis-ca client certificate,
+        # Redis' certificate checked, then a PING that has to answer like Redis (NOAUTH: blackbox
+        # has no ACL user). A complete handshake and a clean close, so Redis logs nothing.
+        redis_tls:
+          prober: tcp
+          timeout: 5s
+          tcp:
+            preferred_ip_protocol: ip4
+            tls: true
+            tls_config:
+              ca_file: /etc/blackbox/redis/ca.crt
+              cert_file: /etc/blackbox/redis/tls.crt
+              key_file: /etc/blackbox/redis/tls.key
+              server_name: redis.hirednoobs.com
+            query_response:
+              - send: "PING"
+              - expect: "^-NOAUTH"
         # Pi-hole answers a local record (every web name points at the Gateway).
         dns_local:
           prober: dns

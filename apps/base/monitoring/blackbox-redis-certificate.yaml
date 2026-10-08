@@ -1,0 +1,19 @@
+# blackbox_exporter's client certificate for Redis (its redis_tls module, blackbox-exporter.yaml):
+# Redis only completes a TLS handshake with a redis-ca client certificate, and an aborted handshake
+# is logged as an error on every probe. It gets blackbox no further than the handshake: it has no
+# ACL user, so every command answers NOAUTH. The secret holds tls.crt, tls.key and ca.crt (Redis'
+# server certificate is checked against it).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: blackbox-redis
+spec:
+  secretName: blackbox-redis-tls
+  commonName: blackbox
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: redis-ca
