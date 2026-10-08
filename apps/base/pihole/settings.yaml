@@ -63,6 +63,12 @@ data:
     192.168.111.13 prx-001-srv-prod-core-worker-002.hirednoobs.com;\
     192.168.111.14 prx-001-srv-prod-core-worker-003.hirednoobs.com;\
     192.168.111.15 prx-001-srv-prod-core-worker-004.hirednoobs.com;\
+    192.168.111.21 prx-002-srv-prod-core-control-001.hirednoobs.com;\
+    192.168.111.22 prx-002-srv-prod-core-worker-001.hirednoobs.com;\
+    192.168.111.23 prx-002-srv-prod-core-worker-002.hirednoobs.com;\
+    192.168.111.31 prx-003-srv-prod-core-control-001.hirednoobs.com;\
+    192.168.111.32 prx-003-srv-prod-core-worker-001.hirednoobs.com;\
+    192.168.111.33 prx-003-srv-prod-core-worker-002.hirednoobs.com;\
     192.168.111.254 prx-999-srv-mgmt-001.hirednoobs.com;\
     192.168.111.200 git.hirednoobs.com;\
     192.168.111.202 vault.hirednoobs.com;"
@@ -113,6 +119,12 @@ data:
     local=/prx-001-srv-prod-core-worker-002.hirednoobs.com/;\
     local=/prx-001-srv-prod-core-worker-003.hirednoobs.com/;\
     local=/prx-001-srv-prod-core-worker-004.hirednoobs.com/;\
+    local=/prx-002-srv-prod-core-control-001.hirednoobs.com/;\
+    local=/prx-002-srv-prod-core-worker-001.hirednoobs.com/;\
+    local=/prx-002-srv-prod-core-worker-002.hirednoobs.com/;\
+    local=/prx-003-srv-prod-core-control-001.hirednoobs.com/;\
+    local=/prx-003-srv-prod-core-worker-001.hirednoobs.com/;\
+    local=/prx-003-srv-prod-core-worker-002.hirednoobs.com/;\
     local=/prx-999-srv-mgmt-001.hirednoobs.com/;\
     local=/git.hirednoobs.com/;\
     local=/vault.hirednoobs.com/;"
