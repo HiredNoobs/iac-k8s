@@ -1,5 +1,6 @@
 # The web UI, rabbitmq.hirednoobs.com (RabbitMQ's own login, not behind Authelia). A Backend
-# rather than the Service: the UI is HTTPS, its certificate (rabbitmq-ca) isn't verified.
+# rather than the Service: the UI is HTTPS, and Envoy verifies its certificate against rabbitmq-ca
+# (ca.crt in rabbitmq-tls) and the service name (sni, one of the certificate's dnsNames).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -10,7 +11,11 @@ spec:
         hostname: rabbitmq-broker.rabbitmq.svc.cluster.local
         port: 15671
   tls:
-    insecureSkipVerify: true
+    sni: rabbitmq-broker.rabbitmq.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: rabbitmq-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

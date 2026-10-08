@@ -47,13 +47,15 @@ scrape_configs:
 
   # Each kubelet, for the persistent volume stats (node_exporter doesn't see the pod volume
   # mounts). Authenticates with vmagent's service account token (vmagent.yaml, nodes/metrics).
-  # Talos' kubelet serving certs are self-signed. Only the volume stats are kept.
+  # The kubelets' serving certificates are from the cluster CA (Talos' serverTLSBootstrap,
+  # approved by kubelet-serving-cert-approver) and name the node's IP, so they're verified.
+  # Only the volume stats are kept.
   - job_name: kubelet
     metrics_path: /metrics
     scheme: https
     bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
     tls_config:
-      insecure_skip_verify: true
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
     kubernetes_sd_configs:
       - role: node
     relabel_configs:
@@ -73,7 +75,7 @@ scrape_configs:
     scheme: https
     bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
     tls_config:
-      insecure_skip_verify: true
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
     kubernetes_sd_configs:
       - role: node
     relabel_configs:

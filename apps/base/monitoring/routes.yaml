@@ -1,7 +1,9 @@
 # <component>.hirednoobs.com for each component. A Backend rather than the Service: they're HTTPS,
-# their certificate (monitoring-ca) isn't verified. Grafana has its own login, the others are
-# behind Authelia (SecurityPolicy, see infrastructure/configs/gateway/authelia.yaml for the
-# Backend and the ReferenceGrant letting this namespace use it).
+# and Envoy verifies their certificate against the monitoring CA (ca.crt in monitoring-tls) and
+# the service name (sni, which has to be one of the certificate's dnsNames). Grafana has its own
+# login, the others are behind Authelia (SecurityPolicy, see
+# infrastructure/configs/gateway/authelia.yaml for the Backend and the ReferenceGrant letting this
+# namespace use it).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -12,7 +14,11 @@ spec:
         hostname: grafana.monitoring.svc.cluster.local
         port: 3000
   tls:
-    insecureSkipVerify: true
+    sni: grafana.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: monitoring-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -41,7 +47,11 @@ spec:
         hostname: alertmanager.monitoring.svc.cluster.local
         port: 9093
   tls:
-    insecureSkipVerify: true
+    sni: alertmanager.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: monitoring-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -101,7 +111,11 @@ spec:
         hostname: victorialogs.monitoring.svc.cluster.local
         port: 9428
   tls:
-    insecureSkipVerify: true
+    sni: victorialogs.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: monitoring-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -161,7 +175,11 @@ spec:
         hostname: victoriametrics.monitoring.svc.cluster.local
         port: 8428
   tls:
-    insecureSkipVerify: true
+    sni: victoriametrics.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: monitoring-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -221,7 +239,11 @@ spec:
         hostname: vmagent.monitoring.svc.cluster.local
         port: 8429
   tls:
-    insecureSkipVerify: true
+    sni: vmagent.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: monitoring-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -281,7 +303,11 @@ spec:
         hostname: vmalert.monitoring.svc.cluster.local
         port: 8880
   tls:
-    insecureSkipVerify: true
+    sni: vmalert.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: monitoring-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
