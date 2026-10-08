@@ -53,13 +53,22 @@
   - Grafana:
       href: https://grafana.hirednoobs.com
       icon: grafana
-      widget:
-        type: grafana
-        version: 2
-        alerts: alertmanager
-        url: https://grafana.monitoring.svc.cluster.local:3000
-        username: {{HOMEPAGE_VAR_GRAFANA_USER}}
-        password: {{HOMEPAGE_VAR_GRAFANA_PASS}}
+      widgets:
+        - type: grafana
+          version: 2
+          alerts: alertmanager
+          url: https://grafana.monitoring.svc.cluster.local:3000
+          username: {{HOMEPAGE_VAR_GRAFANA_USER}}
+          password: {{HOMEPAGE_VAR_GRAFANA_PASS}}
+          fields: ["dashboards", "datasources"]
+        # Firing alerts from vmalert's ALERTS series.
+        # Without this the healthchecks.io heartbeat always appears as a triggered alert
+        - type: prometheusmetric
+          url: https://victoriametrics.monitoring.svc.cluster.local:8428
+          refreshInterval: 60000
+          metrics:
+            - label: ALERTS TRIGGERED
+              query: count(ALERTS{alertstate="firing", alertname!="Watchdog"}) or vector(0)
   - VictoriaLogs:
       href: https://victorialogs.hirednoobs.com
       icon: victorialogs
