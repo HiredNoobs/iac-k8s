@@ -1,6 +1,6 @@
 # Monitoring, from stack-grafana: Grafana, VictoriaMetrics, VictoriaLogs, vmagent, vmalert and
-# Alertmanager, each a single instance. Plain manifests, the stack's. Plus kube-state-metrics
-# (upstream's chart). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
+# Alertmanager, each a single instance. Plain manifests, the stack's. Plus kube-state-metrics and
+# blackbox_exporter (upstream's charts). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
 # namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
 #
 # The components talk to each other over TLS by their service names (<component>.monitoring.svc),
@@ -20,6 +20,7 @@ resources:
   - vmalert.yaml
   - alertmanager.yaml
   - kube-state-metrics.yaml
+  - blackbox-exporter.yaml
   - routes.yaml
 # A change rolls the pods that use it (the name gets a hash), except the dashboards'.
 configMapGenerator:
@@ -93,11 +94,12 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
-  # rev 2 (Vault).
+  # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes).
   - name: grafana-dashboards-services
     files:
       - config/grafana/dashboards/Services/rabbitmq-overview.json
       - config/grafana/dashboards/Services/vault.json
+      - config/grafana/dashboards/Services/blackbox.json
     options:
       disableNameSuffixHash: true
   - name: vmagent-config
@@ -108,6 +110,7 @@ configMapGenerator:
       - config/vmalert/alerts.yml
       - config/vmalert/kubernetes.yml
       - config/vmalert/controllers.yml
+      - config/vmalert/blackbox.yml
   - name: alertmanager-config
     files:
       - config/alertmanager/alertmanager.yml

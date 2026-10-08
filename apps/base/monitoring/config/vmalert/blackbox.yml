@@ -1,0 +1,37 @@
+# The blackbox probes (vmagent's blackbox job): what a client sees. instance is the probed URL,
+# host or IP, module what was checked (blackbox-exporter.yaml).
+groups:
+  - name: Probes
+    interval: 60s
+    rules:
+      # Pi-hole is the LAN's DNS: when it fails the router falls back upstream, so nothing visibly
+      # breaks, but nothing is blocked either.
+      - alert: DnsProbeFailed
+        expr: 'probe_success{module=~"dns_.*"} == 0'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Pi-hole DNS check failing ({{ $labels.module }})
+          description: "{{ $labels.module }} against {{ $labels.instance }} has failed for 5 minutes: dns_local is the local records, dns_blocked the block lists, dns_recursive resolving through Unbound."
+
+      - alert: ProbeFailed
+        expr: 'probe_success{module!~"dns_.*"} == 0'
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Service unreachable ({{ $labels.instance }})
+          description: "The {{ $labels.module }} check of {{ $labels.instance }} has failed for 5 minutes. https_authelia means the Authelia redirect, not the app."
+
+      # cert-manager renews 30 days before expiry (CertificateExpiringSoon covers its
+      # Certificates), this is the certificate actually served, including ones outside the
+      # cluster (Forgejo, Vault).
+      - alert: ServedCertificateExpiringSoon
+        expr: '(probe_ssl_earliest_cert_expiry - time()) / 86400 < 14'
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: Certificate expiring soon ({{ $labels.instance }})
+          description: "The certificate served by {{ $labels.instance }} expires in {{ $value | humanize }} days."

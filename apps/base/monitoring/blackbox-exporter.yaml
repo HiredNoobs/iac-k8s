@@ -1,0 +1,113 @@
+# blackbox_exporter: checks the services from the outside, the way a client sees them (DNS from
+# Pi-hole, HTTPS through the Gateway, the LoadBalancer IPs). vmagent's blackbox job
+# (config/vmagent/vmagent.yml) lists the targets and the module for each, the alerts are in
+# config/vmalert/blackbox.yml. Upstream's chart (the HelmRepository in kube-state-metrics.yaml).
+#
+# No ICMP module: it needs NET_RAW, which the restricted pod security standard doesn't allow. Hosts
+# are checked on a TCP or HTTPS port instead.
+#
+# Bump the chart version and the image together, the image is the chart's appVersion pinned by its
+# digest (the multi-arch index).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: blackbox-exporter
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: prometheus-blackbox-exporter
+      version: "11.20.0"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  values:
+    fullnameOverride: blackbox-exporter
+    image:
+      digest: sha256:9613f2884689b6fad9f1939f6a3b0388c93a022cfaededb19545b329b5c83dea
+    # The chart sets the container's restricted settings, this is the pod's.
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi
+    config:
+      modules:
+        # A site through the Gateway: valid HTTPS (the public wildcard certificate, so its expiry
+        # is checked as clients see it), following redirects to the app's page or login. 401 is
+        # an app asking for credentials, so it's up.
+        https:
+          prober: http
+          timeout: 10s
+          http:
+            preferred_ip_protocol: ip4
+            follow_redirects: true
+            fail_if_not_ssl: true
+            valid_status_codes: [200, 204, 401]
+        # A site behind Authelia: without a session the Gateway's ext-authz check sends a browser
+        # to Authelia's portal. Proves the route, the Gateway and Authelia answer, not the app
+        # behind it (that needs a login).
+        https_authelia:
+          prober: http
+          timeout: 10s
+          http:
+            preferred_ip_protocol: ip4
+            follow_redirects: false
+            fail_if_not_ssl: true
+            headers:
+              Accept: text/html
+            valid_status_codes: [302]
+            fail_if_header_not_matches:
+              - header: Location
+                regexp: '^https://auth\.hirednoobs\.com/'
+        # Plain HTTP, e.g. RabbitMQ's metrics port on its LoadBalancer IP.
+        http:
+          prober: http
+          timeout: 5s
+          http:
+            preferred_ip_protocol: ip4
+        # A port answers. For TLS-only services that want a client certificate (Redis), so no
+        # handshake: the service logs an aborted connection each time, like the kubelet's probes.
+        tcp_connect:
+          prober: tcp
+          timeout: 5s
+          tcp:
+            preferred_ip_protocol: ip4
+        # Pi-hole answers a local record (every web name points at the Gateway).
+        dns_local:
+          prober: dns
+          timeout: 5s
+          dns:
+            query_name: homepage.hirednoobs.com
+            query_type: A
+            preferred_ip_protocol: ip4
+            valid_rcodes: [NOERROR]
+            validate_answer_rrs:
+              fail_if_not_matches_regexp: ['.*\s192\.168\.111\.101$']
+        # Pi-hole blocks: googlesyndication.com is on HaGeZi Pro (config/lists/adlists.txt), a
+        # blocked name gets 0.0.0.0. Fails if the lists didn't load.
+        dns_blocked:
+          prober: dns
+          timeout: 5s
+          dns:
+            query_name: googlesyndication.com
+            query_type: A
+            preferred_ip_protocol: ip4
+            valid_rcodes: [NOERROR]
+            validate_answer_rrs:
+              fail_if_not_matches_regexp: ['.*\s0\.0\.0\.0$']
+        # Pi-hole resolves the internet (through its Unbound).
+        dns_recursive:
+          prober: dns
+          timeout: 5s
+          dns:
+            query_name: example.com
+            query_type: A
+            preferred_ip_protocol: ip4
+            valid_rcodes: [NOERROR]
+            validate_answer_rrs:
+              fail_if_none_matches_regexp: ['.*\sIN\sA\s.*']
