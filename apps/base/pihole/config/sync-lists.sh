@@ -170,6 +170,53 @@ function failed_lists {
   list_status | awk '$1 == 4 || $2 == 0 { print $3 }'
 }
 
+# Waits (up to 2 minutes) until Pi-hole resolves the block lists' hosts. In a fresh pod Unbound
+# may not answer yet when the API does, and gravity would fail the first lists' downloads.
+function wait_for_upstream {
+  local host deadline=$(( $(date +%s) + 120 ))
+
+  for host in $(desired adlists.txt | sed -E 's#^[a-z]+://([^/:]+).*#\1#' | sort -u); do
+    until [[ -n "$(dig +short +time=2 +tries=1 @127.0.0.1 "$host" 2> /dev/null)" ]]; do
+      if (( $(date +%s) >= deadline )); then
+        log "WARNING: Pi-hole can't resolve $host yet, updating gravity anyway."
+        return 0
+      fi
+      sleep 2
+    done
+  done
+}
+
+# Runs gravity and logs its failures (its [✗] lines: a list that didn't download, ...).
+function update_gravity {
+  local output started
+
+  wait_for_upstream
+  log "Updating gravity..."
+  started=$(date +%s)
+  output=$(API_TIMEOUT=900 api POST /action/gravity) || return 1
+
+  # Without the colour codes.
+  sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<< "$output" | grep '✗' | while IFS= read -r line; do
+    log "gravity: ${line#"${line%%[![:space:]]*}"}"
+  done
+
+  wait_for_reload "$started"
+}
+
+# Waits (up to 2 minutes) until FTL has loaded the gravity update that started at $1, so the
+# lists' counts read afterwards are the new ones.
+function wait_for_reload {
+  local deadline=$(( $(date +%s) + 120 ))
+
+  until (( $(api GET /stats/summary | jq -r '.gravity.last_update // 0') >= $1 )); do
+    if (( $(date +%s) >= deadline )); then
+      log "WARNING: Pi-hole hasn't reloaded the lists yet, the counts below may be the old ones."
+      return 0
+    fi
+    sleep 2
+  done
+}
+
 # Logs each block list's result from the gravity update that just ran.
 function report_lists {
   local status number address total=0
@@ -221,8 +268,7 @@ function sync {
     if (( ! LISTS_CHANGED )) && [[ -n "$failed" ]] && (( blocked > 0 )); then
       log "Retrying the block lists that block nothing: $(paste -sd' ' <<< "$failed")"
     fi
-    log "Updating gravity..."
-    if ! API_TIMEOUT=900 api POST /action/gravity > /dev/null; then
+    if ! update_gravity; then
       logout
       return 1
     fi
