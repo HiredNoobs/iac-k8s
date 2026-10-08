@@ -1,0 +1,34 @@
+# The web UI's certificate, from the internal CA instead of Pi-hole's own self-signed one, so the
+# Gateway can verify it (routes.yaml). Pi-hole wants the key and certificate in one PEM file
+# (webserver.tls.cert), cert-manager writes that as tls-combined.pem. Each replica's name is
+# listed (not a wildcard), add one when replicas are raised.
+#
+# Pi-hole only reads it at start: Reloader restarts the pods when it's renewed, so it's valid for
+# a year rather than cert-manager's 90 days (a restart re-downloads the block lists).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pihole
+spec:
+  secretName: pihole-tls
+  dnsNames:
+    - pihole-web.pihole.svc
+    - pihole-web.pihole.svc.cluster.local
+    - pihole-0.pihole.pihole.svc
+    - pihole-0.pihole.pihole.svc.cluster.local
+    - pihole-1.pihole.pihole.svc
+    - pihole-1.pihole.pihole.svc.cluster.local
+    - pihole-2.pihole.pihole.svc
+    - pihole-2.pihole.pihole.svc.cluster.local
+    - pi.hole
+  duration: 8760h # 1 year
+  renewBefore: 720h
+  additionalOutputFormats:
+    - type: CombinedPEM
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: internal-ca

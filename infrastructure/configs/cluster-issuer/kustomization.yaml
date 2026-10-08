@@ -6,3 +6,4 @@ resources:
   - redis-ca.yaml
   - rabbitmq-ca.yaml
   - monitoring-ca.yaml
+  - internal-ca.yaml

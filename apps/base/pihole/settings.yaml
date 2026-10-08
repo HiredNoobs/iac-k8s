@@ -11,6 +11,8 @@ data:
   FTLCONF_dns_listeningMode: ALL
   FTLCONF_ntp_ipv4_active: "false"
   FTLCONF_ntp_ipv6_active: "false"
+  # The web UI's certificate from cert-manager (certificate.yaml) instead of a self-signed one.
+  FTLCONF_webserver_tls_cert: /etc/pihole-tls/tls.pem
   # Local DNS records, one "<ip> <name>;" per line (the line breaks aren't part of the value).
   # Web services all go through the Gateway (.101), the rest have their own LoadBalancer IP.
   # The router UI isn't reachable from VLAN 111, so router. points straight at it. Forgejo and

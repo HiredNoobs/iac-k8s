@@ -3,8 +3,7 @@
 # A StatefulSet for the stable pod names (pihole-0.pihole.pihole.svc: the per replica web UIs
 # and homepage's widgets), the replicas are independent.
 #
-# The web UI uses Pi-hole's own self-signed certificate, the Gateway and homepage don't verify
-# it.
+# The web UI's certificate is from the internal CA (certificate.yaml), the Gateway verifies it.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -12,10 +11,10 @@ metadata:
   labels:
     app.kubernetes.io/name: pihole
   annotations:
-    # Settings and passwords are env vars, only read when a pod starts. The lists are synced
-    # live, so they aren't listed.
+    # Settings, passwords and the web UI's certificate are only read when a pod starts. The
+    # lists are synced live, so they aren't listed.
     configmap.reloader.stakater.com/reload: pihole-settings
-    secret.reloader.stakater.com/reload: pihole
+    secret.reloader.stakater.com/reload: pihole,pihole-tls
 spec:
   serviceName: pihole
   replicas: 1
@@ -90,6 +89,10 @@ spec:
             - name: sync
               mountPath: /run/pihole-sync
               readOnly: true
+            # webserver.tls.cert (settings.yaml).
+            - name: tls
+              mountPath: /etc/pihole-tls
+              readOnly: true
 
         - name: unbound
           image: madnuttah/unbound:1.26.0-1@sha256:a48db2fbf382cf5f5969987ef3552cbd8043cbb30817e95661ab49ec3819505c
@@ -159,3 +162,11 @@ spec:
             name: pihole-scripts
         - name: sync
           emptyDir: {}
+        # Only the key and certificate in one file. Readable by FTL, which runs as the pihole user.
+        - name: tls
+          secret:
+            secretName: pihole-tls
+            defaultMode: 0444
+            items:
+              - key: tls-combined.pem
+                path: tls.pem
