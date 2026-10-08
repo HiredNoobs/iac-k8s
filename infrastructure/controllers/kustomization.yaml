@@ -6,5 +6,6 @@ resources:
   - envoy-gateway
   - external-secrets
   - kube-vip
+  - kubelet-serving-cert-approver
   - longhorn
   - reloader

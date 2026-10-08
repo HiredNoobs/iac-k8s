@@ -1,0 +1,30 @@
+# Approves the kubelets' serving certificate requests (CSRs for the kubernetes.io/kubelet-serving
+# signer), after checking the request is from that node and only names its own hostname and IPs.
+# The kubelets ask for one because Talos' KubeletConfig sets serverTLSBootstrap (iac-homelab), so
+# their certificates are signed by the cluster CA and metrics-server can verify them. It has to be
+# running before that's applied, and stay running: until a CSR is approved that kubelet has no
+# serving certificate, and kubectl logs/exec to its pods fail.
+#
+# Upstream ships plain manifests (no chart), vendored unmodified:
+# https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/v0.12.1/deploy/standalone-install.yaml
+# sha256 25e1a4310f03c022882d23debe31ec7bdd99c46d797f51b9d2912e6ef23c8327. To upgrade, replace the
+# file with the new tag's (check the checksum), and bump the image in the patch below.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - standalone-install.yaml
+patches:
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kubelet-serving-cert-approver
+        namespace: kubelet-serving-cert-approver
+      spec:
+        template:
+          spec:
+            containers:
+              - name: cert-approver
+                # The multi-arch index's digest. Upstream pulls Always, pointless with a digest.
+                image: ghcr.io/alex1989hu/kubelet-serving-cert-approver:0.12.1@sha256:445a8e5584f659701092d2ec8b625da8929dc75fe4d45274333bd9fe6db8fb75
+                imagePullPolicy: IfNotPresent
