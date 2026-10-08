@@ -1559,8 +1559,8 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 6,
-        "w": 12,
+        "h": 7,
+        "w": 7,
         "x": 0,
         "y": 45
       },
@@ -1591,7 +1591,7 @@
         "displayLabels": [],
         "legend": {
           "displayMode": "table",
-          "placement": "right",
+          "placement": "bottom",
           "showLegend": true,
           "values": [
             "value",
@@ -1621,9 +1621,9 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
+        "h": 7,
+        "w": 17,
+        "x": 7,
         "y": 45
       },
       "targets": [
@@ -1672,7 +1672,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 52
       },
       "panels": []
     },
@@ -1689,7 +1689,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 52
+        "y": 53
       },
       "targets": [
         {
@@ -1746,7 +1746,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 52
+        "y": 53
       },
       "targets": [
         {
