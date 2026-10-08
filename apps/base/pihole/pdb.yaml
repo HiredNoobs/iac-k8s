@@ -1,5 +1,4 @@
-# Node drains (Talos upgrades) take one replica at a time. With a single replica it doesn't
-# block the drain, DNS is down until the pod is back.
+# Node drains (Talos upgrades) take one replica at a time, the other hosts' replicas keep DNS up.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

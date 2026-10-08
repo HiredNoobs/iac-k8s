@@ -1,5 +1,5 @@
 # One replica per Proxmox host (topology.kubernetes.io/zone), never two on the same one: a
-# replica with nowhere to go stays Pending. Raise replicas as hosts are added (prx-002/003).
+# replica with nowhere to go stays Pending, so there are as many replicas as hosts.
 # A StatefulSet for the stable pod names (pihole-0.pihole.pihole.svc: the per replica web UIs
 # and homepage's widgets), the replicas are independent.
 #
@@ -17,7 +17,7 @@ metadata:
     secret.reloader.stakater.com/reload: pihole,pihole-tls
 spec:
   serviceName: pihole
-  replicas: 1
+  replicas: 3
   podManagementPolicy: Parallel
   selector:
     matchLabels:

@@ -151,8 +151,7 @@ scrape_configs:
   # blackbox_exporter's probes (blackbox-exporter.yaml has the modules). Each target group sets
   # its module, which is kept as a label (the alerts in config/vmalert/blackbox.yml use it);
   # instance is the target. Names resolve like any client's (the router, then Pi-hole), so the
-  # HTTPS probes also depend on Pi-hole. pihole2/3 and proxmox-002/003 are added with Step B's
-  # hosts.
+  # HTTPS probes also depend on Pi-hole.
   - job_name: blackbox
     metrics_path: /probe
     scrape_interval: 60s
@@ -168,8 +167,12 @@ scrape_configs:
           - https://rabbitmq.hirednoobs.com/
           - https://pihole.hirednoobs.com/
           - https://pihole1.hirednoobs.com/
+          - https://pihole2.hirednoobs.com/
+          - https://pihole3.hirednoobs.com/
           - https://proxmox.hirednoobs.com/
           - https://proxmox-001.hirednoobs.com/
+          - https://proxmox-002.hirednoobs.com/
+          - https://proxmox-003.hirednoobs.com/
           - https://proxmox-999.hirednoobs.com/
           - https://nas.hirednoobs.com/
           - https://jellyfin.hirednoobs.com/

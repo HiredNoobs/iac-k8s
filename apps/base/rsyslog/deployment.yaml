@@ -1,6 +1,7 @@
 # rsyslog: receives syslog from the LAN (UDP/TCP 514) and forwards it to VictoriaLogs. Stateless,
-# messages are queued in memory while VictoriaLogs is unreachable. Replicas are spread over the
-# Proxmox hosts (zones), one per host.
+# messages are queued in memory while VictoriaLogs is unreachable. Two replicas on different
+# Proxmox hosts (zones): with externalTrafficPolicy: Local only the pod on the node announcing .104
+# receives, the other is a standby for when that host goes.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,7 +11,7 @@ metadata:
   annotations:
     reloader.stakater.com/auto: "true"
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: rsyslog
