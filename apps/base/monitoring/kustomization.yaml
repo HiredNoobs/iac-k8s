@@ -95,7 +95,9 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
-  # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes).
+  # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes), its
+  # instance variable changed to only the HTTP probes (probe_http_status_code): the DNS and TCP
+  # ones have no HTTP phases or status code, so their rows were empty.
   - name: grafana-dashboards-services
     files:
       - config/grafana/dashboards/Services/rabbitmq-overview.json
