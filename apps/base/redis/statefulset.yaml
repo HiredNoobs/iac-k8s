@@ -1,5 +1,5 @@
-# A single Redis instance, its data (the AOF and users.acl) on a Longhorn volume that follows
-# the pod to any node. No PDB: with one instance there's nothing to keep up during a drain.
+# A single Redis instance, its data (the AOF) on a Longhorn volume that follows the pod to any
+# node. No PDB: with one instance there's nothing to keep up during a drain.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -7,8 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/name: redis
   annotations:
-    # Restart to load a renewed certificate.
-    secret.reloader.stakater.com/reload: redis-tls
+    # Restart to load a renewed certificate or changed ACL users.
+    secret.reloader.stakater.com/reload: redis-tls,redis-acl
 spec:
   serviceName: redis
   # Replication (Sentinel/cluster) isn't set up yet, a second instance would split the data.
@@ -39,13 +39,7 @@ spec:
       containers:
         - name: redis
           image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
-          # Redis won't start if the aclfile is missing.
-          command:
-            - sh
-            - -c
-            - |
-              touch /data/users.acl
-              exec redis-server /usr/local/etc/redis/redis.conf
+          command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
           # Talos warns about anything short of the restricted pod security standard.
           securityContext:
             allowPrivilegeEscalation: false
@@ -93,6 +87,10 @@ spec:
             - name: certs
               mountPath: /etc/redis/secrets
               readOnly: true
+            # A directory, not a subPath, so a changed Secret reaches the file.
+            - name: acl
+              mountPath: /etc/redis/acl
+              readOnly: true
             - name: data
               mountPath: /data
       volumes:
@@ -102,6 +100,10 @@ spec:
         - name: certs
           secret:
             secretName: redis-tls
+            defaultMode: 0440
+        - name: acl
+          secret:
+            secretName: redis-acl
             defaultMode: 0440
   volumeClaimTemplates:
     - metadata:
