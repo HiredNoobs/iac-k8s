@@ -42,6 +42,13 @@ spec:
       createDefaultDiskLabeledNodes: true
       # Copies on different nodes and Proxmox hosts where possible.
       defaultReplicaCount: 2
+      # The zone is the Proxmox host (topology.kubernetes.io/zone): a volume's copies are never
+      # on the same host, so losing one keeps every volume. With 3 hosts and 2 copies a lost
+      # host's copies are rebuilt on the third.
+      replicaZoneSoftAntiAffinity: false
+      # Moves a copy when a volume's copies share a host (e.g. after a host is added), only as
+      # far as needed: best-effort would also even out the copies per node.
+      replicaAutoBalance: least-effort
     # The default StorageClass, longhorn. longhorn-single (one copy) is in
     # infrastructure/configs/longhorn.
     persistence:
