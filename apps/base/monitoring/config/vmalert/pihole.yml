@@ -27,16 +27,16 @@ groups:
           summary: Pi-hole blocking is off ({{ $labels.pod }})
           description: "Blocking has been disabled on {{ $labels.pod }} for 15 minutes (the web UI's disable button, or pihole disable)."
 
-      # 4: the download failed with nothing cached. sync-lists retries hourly, so this only fires
-      # once a retry has failed too.
+      # 4: the download failed with nothing cached. sync-lists retries after 1, 2, 5 and 15
+      # minutes (a fresh pod's first downloads often fail), so this only fires once those have.
       - alert: PiholeBlocklistFailed
         expr: 'pihole_blocklist_status == 4 or pihole_blocklist_domains == 0'
-        for: 90m
+        for: 30m
         labels:
           severity: warning
         annotations:
           summary: Pi-hole block list not loaded ({{ $labels.pod }})
-          description: "{{ $labels.list }} blocks nothing on {{ $labels.pod }}: its download failed and the hourly retry hasn't fixed it."
+          description: "{{ $labels.list }} blocks nothing on {{ $labels.pod }}: its download failed and the retries haven't fixed it."
 
       # The lists come to about 2.1M domains. A fresh pod has none until its first gravity
       # update, which takes a few minutes.

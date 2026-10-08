@@ -12,6 +12,8 @@
 # One entry per line, blank lines and lines starting with # are ignored. Missing files
 # are treated as empty. Pi-hole isn't marked ready until the first sync has finished.
 #
+# A block list that fails to download is retried after 1, 2, 5 and 15 minutes, then hourly.
+#
 # Every CHECK_INTERVAL it also pushes a few metrics to vmagent (METRICS_URL, its Prometheus
 # import endpoint, checked with METRICS_CA): each block list's domains and download status,
 # the domains on the block lists, whether blocking is on, the last 24h's query counts (no
@@ -26,6 +28,8 @@ READY_FILE="${READY_FILE:-/run/pihole-sync/ready}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-60}"
 # Re-sync without changes to the files every so often, e.g. to undo edits made in the web UI.
 RESYNC_INTERVAL="${RESYNC_INTERVAL:-3600}"
+# Seconds before each retry of a block list that failed to download, then RESYNC_INTERVAL.
+RETRY_DELAYS=(60 120 300 900)
 COMMENT="Managed by iac-k8s"
 # Unset: no metrics.
 METRICS_URL="${METRICS_URL:-}"
@@ -35,6 +39,8 @@ SID=""
 LISTS_CHANGED=0
 LAST_SYNC_SUCCESS=0
 PUSH_FAILING=0
+# Set by a sync that leaves a block list blocking nothing.
+LISTS_FAILED=0
 
 # -----------------------------------------------------
 # Helper functions
@@ -170,27 +176,10 @@ function failed_lists {
   list_status | awk '$1 == 4 || $2 == 0 { print $3 }'
 }
 
-# Waits (up to 2 minutes) until Pi-hole resolves the block lists' hosts. In a fresh pod Unbound
-# may not answer yet when the API does, and gravity would fail the first lists' downloads.
-function wait_for_upstream {
-  local host deadline=$(( $(date +%s) + 120 ))
-
-  for host in $(desired adlists.txt | sed -E 's#^[a-z]+://([^/:]+).*#\1#' | sort -u); do
-    until [[ -n "$(dig +short +time=2 +tries=1 @127.0.0.1 "$host" 2> /dev/null)" ]]; do
-      if (( $(date +%s) >= deadline )); then
-        log "WARNING: Pi-hole can't resolve $host yet, updating gravity anyway."
-        return 0
-      fi
-      sleep 2
-    done
-  done
-}
-
 # Runs gravity and logs its failures (its [✗] lines: a list that didn't download, ...).
 function update_gravity {
   local output started
 
-  wait_for_upstream
   log "Updating gravity..."
   started=$(date +%s)
   output=$(API_TIMEOUT=900 api POST /action/gravity) || return 1
@@ -225,7 +214,7 @@ function report_lists {
     [[ -n "$address" ]] || continue
     total=$(( total + number ))
     case "$status" in
-      4) log "WARNING: $address failed to download, it blocks nothing (retried hourly)." ;;
+      4) log "WARNING: $address failed to download, it blocks nothing." ;;
       3) log "WARNING: $address failed to download, using the cached copy ($number domains)." ;;
       *)
         if (( number == 0 )); then
@@ -260,7 +249,7 @@ function sync {
   fi
 
   # Block lists are only downloaded by a gravity update: when they change, on a fresh pod (nothing
-  # blocked yet), and to retry a list whose download failed (each re-sync, hourly).
+  # blocked yet), and to retry a list whose download failed.
   blocked=$(blocked_domains) || blocked=0
   failed=$(failed_lists) || failed=""
   if (( LISTS_CHANGED )) || [[ -n "$failed" ]] ||
@@ -273,6 +262,12 @@ function sync {
       return 1
     fi
     report_lists
+  fi
+
+  if [[ -n "$(failed_lists)" ]]; then
+    LISTS_FAILED=1
+  else
+    LISTS_FAILED=0
   fi
 
   logout
@@ -337,17 +332,29 @@ done
 
 last_checksum=""
 last_sync=0
+retries=0
+next_retry=0
 
 # ConfigMap volumes are updated in place, so changes are picked up without a restart.
 while true; do
   current_checksum=$(checksum)
   now=$(date +%s)
 
-  if [[ "$current_checksum" != "$last_checksum" ]] || (( now - last_sync >= RESYNC_INTERVAL )); then
+  if [[ "$current_checksum" != "$last_checksum" ]] || (( now - last_sync >= RESYNC_INTERVAL )) ||
+     (( LISTS_FAILED && now >= next_retry )); then
     if sync; then
       last_checksum="$current_checksum"
       last_sync="$now"
       LAST_SYNC_SUCCESS="$now"
+
+      if (( LISTS_FAILED )); then
+        delay="${RETRY_DELAYS[retries]:-$RESYNC_INTERVAL}"
+        next_retry=$(( now + delay ))
+        retries=$(( retries + 1 ))
+        log "Retrying the failed block lists in ${delay}s."
+      else
+        retries=0
+      fi
 
       if [[ ! -f "$READY_FILE" ]]; then
         touch "$READY_FILE"
