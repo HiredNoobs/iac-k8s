@@ -7,5 +7,4 @@ resources:
   - certificate.yaml
   - traffic-policy.yaml
   - https-redirect.yaml
-  - authelia.yaml
   - routes

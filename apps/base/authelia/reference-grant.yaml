@@ -1,0 +1,19 @@
+# Lets the SecurityPolicies of apps behind Authelia use its Service for ext-authz, one entry per
+# namespace. A site is put behind Authelia with a SecurityPolicy like
+# apps/base/homepage/security-policy.yaml and an entry here.
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: authelia
+spec:
+  from:
+    - group: gateway.envoyproxy.io
+      kind: SecurityPolicy
+      namespace: homepage
+    - group: gateway.envoyproxy.io
+      kind: SecurityPolicy
+      namespace: monitoring
+  to:
+    - group: ""
+      kind: Service
+      name: authelia

@@ -56,19 +56,22 @@ spec:
             - name: AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
               value: /secrets/ldap-password
           ports:
-            - name: http
+            - name: https
               containerPort: 9091
               protocol: TCP
+          # The kubelet doesn't check the certificate.
           readinessProbe:
             httpGet:
               path: /api/health
-              port: http
+              port: https
+              scheme: HTTPS
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /api/health
-              port: http
+              port: https
+              scheme: HTTPS
             periodSeconds: 30
             failureThreshold: 3
           resources:
@@ -86,6 +89,12 @@ spec:
             - name: secrets
               mountPath: /secrets
               readOnly: true
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: certs
+              mountPath: /certs
+              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -102,6 +111,23 @@ spec:
                 path: storage-encryption-key
               - key: AUTHELIA_LDAP_PASSWORD
                 path: ldap-password
+        # The server certificate (configuration.yml's server.tls).
+        - name: tls
+          secret:
+            secretName: authelia-tls
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        # Only the internal CA, for certificates_directory (it reads every file in it).
+        - name: certs
+          secret:
+            secretName: authelia-tls
+            items:
+              - key: ca.crt
+                path: internal-ca.crt
   # Moved from stack-authelia by re-attaching its volume: the PVC data-authelia-0 was created by
   # hand before the first sync, bound to the old PV.
   volumeClaimTemplates:

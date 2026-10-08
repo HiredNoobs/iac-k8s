@@ -3,13 +3,15 @@
 # chart. SQLite on a Longhorn volume.
 #
 # The base DN is dc=hirednoobs,dc=com: users are uid=<user>,ou=people,dc=hirednoobs,dc=com, groups
-# cn=<group>,ou=groups,dc=hirednoobs,dc=com. LDAP is only reachable inside the cluster.
+# cn=<group>,ou=groups,dc=hirednoobs,dc=com. LDAP is only reachable inside the cluster, over
+# LDAPS; the admin UI/API over HTTPS (certificate.yaml).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: lldap
 resources:
   - namespace.yaml
   - external-secret.yaml
+  - certificate.yaml
   - statefulset.yaml
   - service.yaml
   - httproute.yaml

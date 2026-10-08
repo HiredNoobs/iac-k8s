@@ -1,9 +1,8 @@
 # <component>.hirednoobs.com for each component. A Backend rather than the Service: they're HTTPS,
 # and Envoy verifies their certificate against the monitoring CA (ca.crt in monitoring-tls) and
 # the service name (sni, which has to be one of the certificate's dnsNames). Grafana has its own
-# login, the others are behind Authelia (SecurityPolicy, see
-# infrastructure/configs/gateway/authelia.yaml for the Backend and the ReferenceGrant letting this
-# namespace use it).
+# login, the others are behind Authelia (SecurityPolicy: ext-authz against Authelia's Service,
+# allowed by apps/base/authelia/reference-grant.yaml).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -91,10 +90,11 @@ spec:
     http:
       path: /api/authz/ext-authz/
       backendRefs:
-        - group: gateway.envoyproxy.io
-          kind: Backend
+        - group: ""
+          kind: Service
           name: authelia
-          namespace: gateway
+          namespace: authelia
+          port: 9091
       headersToBackend:
         - Remote-User
         - Remote-Groups
@@ -155,10 +155,11 @@ spec:
     http:
       path: /api/authz/ext-authz/
       backendRefs:
-        - group: gateway.envoyproxy.io
-          kind: Backend
+        - group: ""
+          kind: Service
           name: authelia
-          namespace: gateway
+          namespace: authelia
+          port: 9091
       headersToBackend:
         - Remote-User
         - Remote-Groups
@@ -219,10 +220,11 @@ spec:
     http:
       path: /api/authz/ext-authz/
       backendRefs:
-        - group: gateway.envoyproxy.io
-          kind: Backend
+        - group: ""
+          kind: Service
           name: authelia
-          namespace: gateway
+          namespace: authelia
+          port: 9091
       headersToBackend:
         - Remote-User
         - Remote-Groups
@@ -283,10 +285,11 @@ spec:
     http:
       path: /api/authz/ext-authz/
       backendRefs:
-        - group: gateway.envoyproxy.io
-          kind: Backend
+        - group: ""
+          kind: Service
           name: authelia
-          namespace: gateway
+          namespace: authelia
+          port: 9091
       headersToBackend:
         - Remote-User
         - Remote-Groups
@@ -347,10 +350,11 @@ spec:
     http:
       path: /api/authz/ext-authz/
       backendRefs:
-        - group: gateway.envoyproxy.io
-          kind: Backend
+        - group: ""
+          kind: Service
           name: authelia
-          namespace: gateway
+          namespace: authelia
+          port: 9091
       headersToBackend:
         - Remote-User
         - Remote-Groups

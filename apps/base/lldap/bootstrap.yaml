@@ -51,8 +51,14 @@ spec:
                 capabilities:
                   drop: ["ALL"]
               env:
+                # HTTPS (ghostunnel), checked against the internal CA: curl reads CURL_CA_BUNDLE,
+                # lldap_set_password (rustls with the native roots) SSL_CERT_FILE.
                 - name: LLDAP_URL
-                  value: http://lldap.lldap.svc.cluster.local:17170
+                  value: https://lldap.lldap.svc.cluster.local
+                - name: CURL_CA_BUNDLE
+                  value: /tls/ca.crt
+                - name: SSL_CERT_FILE
+                  value: /tls/ca.crt
                 - name: LLDAP_ADMIN_USERNAME
                   value: admin
                 # Fails the run if LLDAP_ADMIN_PASS in Vault no longer matches the admin's.
@@ -80,6 +86,9 @@ spec:
                 - name: passwords
                   mountPath: /passwords
                   readOnly: true
+                - name: tls
+                  mountPath: /tls
+                  readOnly: true
           volumes:
             - name: users
               configMap:
@@ -90,6 +99,13 @@ spec:
             - name: passwords
               secret:
                 secretName: lldap-bootstrap
+            # Only the CA.
+            - name: tls
+              secret:
+                secretName: lldap-tls
+                items:
+                  - key: ca.crt
+                    path: ca.crt
 ---
 # The passwords the bootstrap uses, its own Secret so a missing key only stops the bootstrap, not
 # LLDAP. authelia's is the one Authelia reads (labv2/production/authelia), so Vault is the only

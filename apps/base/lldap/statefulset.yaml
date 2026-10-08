@@ -1,6 +1,10 @@
 # A single LLDAP. It uses SQLite, so it can't run more than once. The data (users, groups and
 # password hashes) is on a Longhorn volume that follows the pod to any node. No PDB: with one
 # instance there's nothing to keep up during a drain.
+#
+# TLS (certificate.yaml): LLDAP serves LDAPS itself, but its admin UI/API only plain HTTP, so
+# that listens on localhost and ghostunnel serves it as HTTPS. Plain LDAP still listens (LDAPS
+# shares its address), the Service doesn't expose it.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -47,11 +51,22 @@ spec:
               value: admin
             - name: LLDAP_HTTP_URL
               value: https://lldap.hirednoobs.com
-            # The default (::) needs IPv6 in the pod.
+            # The default (::) needs IPv6 in the pod. LDAPS listens on the same address.
             - name: LLDAP_LDAP_HOST
               value: "0.0.0.0"
+            # Only ghostunnel (HTTPS) reaches it.
             - name: LLDAP_HTTP_HOST
-              value: "0.0.0.0"
+              value: "127.0.0.1"
+            - name: LLDAP_HEALTHCHECK_OPTIONS__HTTP_HOST
+              value: "127.0.0.1"
+            - name: LLDAP_LDAPS_OPTIONS__ENABLED
+              value: "true"
+            - name: LLDAP_LDAPS_OPTIONS__PORT
+              value: "6360"
+            - name: LLDAP_LDAPS_OPTIONS__CERT_FILE
+              value: /tls/tls.crt
+            - name: LLDAP_LDAPS_OPTIONS__KEY_FILE
+              value: /tls/tls.key
             - name: LLDAP_JWT_SECRET_FILE
               value: /secrets/jwt-secret
             # Changing it after the first start stops every existing password from working.
@@ -67,10 +82,10 @@ spec:
             - name: ldap
               containerPort: 3890
               protocol: TCP
-            - name: http
-              containerPort: 17170
+            - name: ldaps
+              containerPort: 6360
               protocol: TCP
-          # The image's own healthcheck, it checks both the LDAP and HTTP servers.
+          # The image's own healthcheck, it checks the LDAP, LDAPS and HTTP servers.
           readinessProbe:
             exec:
               command: ["/app/lldap", "healthcheck", "--config-file", "/data/lldap_config.toml"]
@@ -93,6 +108,57 @@ spec:
             - name: secrets
               mountPath: /secrets
               readOnly: true
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+
+        # HTTPS for the admin UI/API, in front of LLDAP's plain HTTP on localhost. No client
+        # certificates (LLDAP has its own login). Reloads the certificate hourly, so a renewal
+        # doesn't need a restart here.
+        - name: ghostunnel
+          image: ghostunnel/ghostunnel:v1.11.3-distroless@sha256:51fa619294acf716e01efcb03ad00dc11229dc1f3829cba984c5b0a4f43f4faf
+          args:
+            - server
+            - --listen=0.0.0.0:17171
+            - --target=127.0.0.1:17170
+            - --cert=/tls/tls.crt
+            - --key=/tls/tls.key
+            - --disable-authentication
+            - --timed-reload=1h
+            # Plain HTTP /_status for the probes, separate from the TLS port.
+            - --status=http://0.0.0.0:17172
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: https
+              containerPort: 17171
+              protocol: TCP
+            - name: status
+              containerPort: 17172
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /_status
+              port: status
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_status
+              port: status
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
       volumes:
         - name: secrets
           secret:
@@ -102,6 +168,10 @@ spec:
                 path: jwt-secret
               - key: LLDAP_ADMIN_PASS
                 path: admin-password
+        - name: tls
+          secret:
+            secretName: lldap-tls
+            defaultMode: 0440
   # Moved from stack-lldap by re-attaching its volume: the PVC data-lldap-0 was created by hand
   # before the first sync, bound to the old PV.
   volumeClaimTemplates:

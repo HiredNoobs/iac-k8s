@@ -1,0 +1,46 @@
+# LLDAP's server certificate, from the internal CA: LDAPS for Authelia's binds (which carry every
+# user's password) and HTTPS for the admin UI and API (ghostunnel in front of LLDAP's plain HTTP,
+# statefulset.yaml). Clients check it with ca.crt from their own internal-ca certificate secret
+# (the same CA), or this one in this namespace (the bootstrap, the Gateway).
+#
+# LLDAP only reads it at start: Reloader restarts it when it's renewed, so it's valid for a year
+# rather than cert-manager's 90 days.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lldap
+spec:
+  secretName: lldap-tls
+  dnsNames:
+    - lldap
+    - lldap.lldap.svc
+    - lldap.lldap.svc.cluster.local
+    - localhost
+  duration: 8760h # 1 year
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: internal-ca
+---
+# The Gateway's route to the admin UI (httproute.yaml) is HTTPS, checked against the internal CA
+# and the service name.
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: lldap
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: lldap
+      sectionName: https
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: lldap-tls
+    hostname: lldap.lldap.svc.cluster.local

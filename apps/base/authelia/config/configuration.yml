@@ -3,8 +3,16 @@
 #
 # https://www.authelia.com/configuration/prologue/introduction/
 
+# The internal CA (ca.crt from authelia-tls, statefulset.yaml), trusted on top of the system's:
+# LLDAP's LDAPS certificate is from it.
+certificates_directory: '/certs'
+
+# HTTPS, the certificate from certificate.yaml. The Gateway checks it.
 server:
   address: 'tcp://:9091/'
+  tls:
+    certificate: '/tls/tls.crt'
+    key: '/tls/tls.key'
 
 log:
   level: 'info'
@@ -25,7 +33,11 @@ authentication_backend:
     disable: true
   ldap:
     implementation: 'lldap'
-    address: 'ldap://lldap.lldap.svc.cluster.local:3890'
+    # LDAPS: every login's bind carries the user's password.
+    address: 'ldaps://lldap.lldap.svc.cluster.local:6360'
+    tls:
+      server_name: 'lldap.lldap.svc.cluster.local'
+      minimum_version: 'TLS1.2'
     base_dn: 'dc=hirednoobs,dc=com'
     user: 'uid=authelia,ou=people,dc=hirednoobs,dc=com'
 

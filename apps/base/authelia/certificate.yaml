@@ -1,0 +1,45 @@
+# Authelia's server certificate, from the internal CA: the portal (logins carry passwords and 2FA
+# codes) and the ext-authz checks are HTTPS from the Gateway. Its ca.crt is also the CA Authelia
+# trusts for LDAPS to LLDAP (same internal CA, configuration.yml's certificates_directory).
+#
+# Authelia only reads it at start and a restart logs everyone out (sessions are in memory), so
+# it's valid for a year rather than cert-manager's 90 days. Reloader restarts it on renewal.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: authelia
+spec:
+  secretName: authelia-tls
+  dnsNames:
+    - authelia
+    - authelia.authelia.svc
+    - authelia.authelia.svc.cluster.local
+  duration: 8760h # 1 year
+  renewBefore: 720h
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: internal-ca
+---
+# Everything the Gateway sends to Authelia's Service is HTTPS, checked against the internal CA
+# and the service name: the portal route (httproute.yaml) and the SecurityPolicies' ext-authz
+# calls (they reference the Service, see reference-grant.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: authelia
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: authelia
+      sectionName: https
+  validation:
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: authelia-tls
+    hostname: authelia.authelia.svc.cluster.local

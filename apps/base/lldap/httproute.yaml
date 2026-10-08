@@ -1,5 +1,5 @@
 # The admin UI. Not behind Authelia: LLDAP has its own login, and Authelia needs LLDAP to log
-# anyone in.
+# anyone in. HTTPS to the pod, verified (BackendTLSPolicy in certificate.yaml).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -14,4 +14,4 @@ spec:
   rules:
     - backendRefs:
         - name: lldap
-          port: 17170
+          port: 443
