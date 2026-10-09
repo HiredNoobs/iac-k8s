@@ -18,7 +18,7 @@
 # import endpoint, checked with METRICS_CA): each block list's domains and download status,
 # the domains on the block lists, whether blocking is on, the last 24h's query counts (no
 # domains or clients) and when a sync last succeeded. The alerts on them are in
-# apps/base/monitoring/config/vmalert/pihole.yml.
+# apps/base/monitoring/vmalert/rules/pihole.yml.
 
 set -uo pipefail
 

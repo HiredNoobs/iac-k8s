@@ -49,6 +49,7 @@ data:
     192.168.111.101 victorialogs.hirednoobs.com;\
     192.168.111.101 victoriametrics.hirednoobs.com;\
     192.168.111.101 vmalert.hirednoobs.com;\
+    192.168.111.101 vmalert-logs.hirednoobs.com;\
     192.168.111.101 vmagent.hirednoobs.com;\
     192.168.111.103 rabbitmq-broker.hirednoobs.com;\
     192.168.111.102 redis.hirednoobs.com;\
@@ -103,6 +104,7 @@ data:
     local=/victorialogs.hirednoobs.com/;\
     local=/victoriametrics.hirednoobs.com/;\
     local=/vmalert.hirednoobs.com/;\
+    local=/vmalert-logs.hirednoobs.com/;\
     local=/vmagent.hirednoobs.com/;\
     local=/rabbitmq-broker.hirednoobs.com/;\
     local=/redis.hirednoobs.com/;\
