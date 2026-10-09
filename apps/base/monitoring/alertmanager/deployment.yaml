@@ -84,7 +84,7 @@ spec:
             name: alertmanager-config
         - name: tls
           secret:
-            secretName: monitoring-tls
+            secretName: alertmanager-tls
         - name: notifiers
           secret:
             secretName: alertmanager-notifiers

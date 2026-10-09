@@ -1,6 +1,6 @@
 # grafana.hirednoobs.com, with Grafana's own login (no Authelia). A Backend rather than the
 # Service: Grafana serves HTTPS, and Envoy verifies its certificate against the monitoring CA
-# (ca.crt in monitoring-tls) and the service name (sni, one of the certificate's dnsNames).
+# (ca.crt in grafana-tls) and the service name (sni, one of the certificate's dnsNames).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -15,7 +15,7 @@ spec:
     caCertificateRefs:
       - group: ""
         kind: Secret
-        name: monitoring-tls
+        name: grafana-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

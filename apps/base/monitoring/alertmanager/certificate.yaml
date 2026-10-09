@@ -1,0 +1,22 @@
+# alertmanager's server certificate, from the monitoring CA
+# (infrastructure/configs/cluster-issuer/monitoring-ca.yaml). Clients check it against ca.crt
+# from their own monitoring-ca certificate secret (the same CA). cert-manager renews it,
+# Reloader restarts the pod to load it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: alertmanager
+spec:
+  secretName: alertmanager-tls
+  commonName: alertmanager.monitoring.svc
+  dnsNames:
+    - alertmanager
+    - alertmanager.monitoring.svc
+    - alertmanager.monitoring.svc.cluster.local
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

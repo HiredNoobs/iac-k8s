@@ -10,7 +10,7 @@ metadata:
   annotations:
     # Not reloader's auto: the dashboards' ConfigMaps change without a restart (see
     # kustomization.yaml).
-    secret.reloader.stakater.com/reload: monitoring-tls,grafana
+    secret.reloader.stakater.com/reload: grafana-tls,grafana
 spec:
   serviceName: grafana
   replicas: 1
@@ -161,7 +161,7 @@ spec:
             name: grafana-dashboards-services
         - name: tls
           secret:
-            secretName: monitoring-tls
+            secretName: grafana-tls
             defaultMode: 0440
   # Moved from stack-grafana by re-attaching its volume: the PVC data-grafana-0 was created by
   # hand before the first sync, bound to the old PV.

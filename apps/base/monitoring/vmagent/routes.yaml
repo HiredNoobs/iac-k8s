@@ -1,7 +1,7 @@
 # vmagent.hirednoobs.com, behind Authelia (SecurityPolicy: ext-authz against Authelia's Service,
 # allowed by apps/base/authelia/reference-grant.yaml). A Backend rather than the Service: vmagent
 # serves HTTPS, and Envoy verifies its certificate against the monitoring CA (ca.crt in
-# monitoring-tls) and the service name (sni, one of the certificate's dnsNames).
+# vmagent-tls) and the service name (sni, one of the certificate's dnsNames).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -16,7 +16,7 @@ spec:
     caCertificateRefs:
       - group: ""
         kind: Secret
-        name: monitoring-tls
+        name: vmagent-tls
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

@@ -86,4 +86,4 @@ spec:
             name: vmalert-rules
         - name: tls
           secret:
-            secretName: monitoring-tls
+            secretName: vmalert-tls

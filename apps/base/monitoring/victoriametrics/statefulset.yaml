@@ -78,7 +78,7 @@ spec:
       volumes:
         - name: tls
           secret:
-            secretName: monitoring-tls
+            secretName: victoriametrics-tls
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -1,0 +1,22 @@
+# victorialogs's server certificate, from the monitoring CA
+# (infrastructure/configs/cluster-issuer/monitoring-ca.yaml). Clients check it against ca.crt
+# from their own monitoring-ca certificate secret (the same CA). cert-manager renews it,
+# Reloader restarts the pod to load it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: victorialogs
+spec:
+  secretName: victorialogs-tls
+  commonName: victorialogs.monitoring.svc
+  dnsNames:
+    - victorialogs
+    - victorialogs.monitoring.svc
+    - victorialogs.monitoring.svc.cluster.local
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

@@ -4,17 +4,17 @@
 # namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
 #
 # One directory per component, with its manifests, its config and its own kustomization (the
-# config's ConfigMaps). Shared here: the namespace, the server certificate and the Helm repository.
+# config's ConfigMaps). Shared here: the namespace and the Helm repository.
 #
 # The components talk to each other over TLS by their service names (<component>.monitoring.svc),
-# with one certificate from the monitoring-ca ClusterIssuer (certificate.yaml).
+# each with its own server certificate from the monitoring-ca ClusterIssuer
+# (<component>/certificate.yaml), and check each other with ca.crt from their own secret.
 # Grafana, VictoriaMetrics and VictoriaLogs keep their data on Longhorn volumes.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: monitoring
 resources:
   - namespace.yaml
-  - certificate.yaml
   - repository.yaml
   - grafana
   - victoriametrics
