@@ -1,5 +1,5 @@
-# vmagent, a single replica so nothing is scraped twice. Scrapes the targets in config/vmagent
-# (found through the Kubernetes API, see the RBAC below) and writes to VictoriaMetrics. Its
+# vmagent, a single replica so nothing is scraped twice. Scrapes the targets in config/vmagent.yml
+# (found through the Kubernetes API, allowed by rbac.yaml) and writes to VictoriaMetrics. Its
 # buffer, for while VictoriaMetrics is down, is in an emptyDir.
 apiVersion: apps/v1
 kind: Deployment
@@ -92,54 +92,3 @@ spec:
         - name: buffer
           emptyDir:
             sizeLimit: 1Gi
----
-# In the cluster for vmalert's remote write.
-apiVersion: v1
-kind: Service
-metadata:
-  name: vmagent
-  labels:
-    app.kubernetes.io/name: vmagent
-spec:
-  selector:
-    app.kubernetes.io/name: vmagent
-  ports:
-    - name: https
-      port: 8429
-      targetPort: https
-      protocol: TCP
----
-# vmagent's Kubernetes service discovery, to find the node-exporter pods, and read access to
-# each kubelet's metrics (nodes/metrics) for the volume stats.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: vmagent
-  labels:
-    app.kubernetes.io/name: vmagent
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: monitoring-vmagent
-  labels:
-    app.kubernetes.io/name: vmagent
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "nodes", "nodes/metrics", "services", "endpoints"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: monitoring-vmagent
-  labels:
-    app.kubernetes.io/name: vmagent
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: monitoring-vmagent
-subjects:
-  - kind: ServiceAccount
-    name: vmagent
-    namespace: monitoring

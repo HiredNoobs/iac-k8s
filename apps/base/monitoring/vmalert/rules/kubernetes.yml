@@ -1,5 +1,5 @@
-# From kube-state-metrics (kube-state-metrics.yaml), a subset of the kubernetes-mixin's rules:
-# https://github.com/kubernetes-monitoring/kubernetes-mixin
+# From kube-state-metrics (kube-state-metrics/release.yaml), a subset of the kubernetes-mixin's
+# rules: https://github.com/kubernetes-monitoring/kubernetes-mixin
 groups:
   - name: Scrape
     interval: 60s

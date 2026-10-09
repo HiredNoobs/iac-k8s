@@ -1,5 +1,5 @@
 # The blackbox probes (vmagent's blackbox job): what a client sees. instance is the probed URL,
-# host or IP, module what was checked (blackbox-exporter.yaml).
+# host or IP, module what was checked (blackbox-exporter/release.yaml).
 groups:
   - name: Probes
     interval: 60s

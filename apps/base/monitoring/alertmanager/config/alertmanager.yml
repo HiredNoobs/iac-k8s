@@ -7,7 +7,7 @@ route:
   group_interval: 5m
   repeat_interval: 12h
   routes:
-    # The always-firing Watchdog (config/vmalert/kubernetes.yml) pings healthchecks.io every 2
+    # The always-firing Watchdog (vmalert/rules/kubernetes.yml) pings healthchecks.io every 2
     # minutes. healthchecks.io notifies when the pings stop: monitoring, the cluster or the
     # network is down. Never notified anywhere else.
     - matchers: ['alertname="Watchdog"']

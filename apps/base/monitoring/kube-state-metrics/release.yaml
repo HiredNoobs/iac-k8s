@@ -1,6 +1,6 @@
 # kube-state-metrics: the state of the cluster's objects as metrics (pods restarting, Deployments
 # short of replicas, failed Jobs, pending PVCs, ...), scraped by vmagent, alerted on by vmalert
-# (config/vmalert/kubernetes.yml). Upstream's chart.
+# (vmalert/rules/kubernetes.yml). Upstream's chart.
 #
 # Also Flux's resources, through its custom resource support: gotk_resource_info, one series per
 # Kustomization, HelmRelease and source with its ready and suspended state (Flux's own metrics no
@@ -8,14 +8,6 @@
 #
 # Bump the chart version and the image together, the image is the chart's appVersion pinned by its
 # digest (the multi-arch index).
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: HelmRepository
-metadata:
-  name: prometheus-community
-spec:
-  interval: 24h
-  url: https://prometheus-community.github.io/helm-charts
----
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:

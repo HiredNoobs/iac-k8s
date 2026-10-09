@@ -1,7 +1,7 @@
 # blackbox_exporter: checks the services from the outside, the way a client sees them (DNS from
 # Pi-hole, HTTPS through the Gateway, the LoadBalancer IPs). vmagent's blackbox job
-# (config/vmagent/vmagent.yml) lists the targets and the module for each, the alerts are in
-# config/vmalert/blackbox.yml. Upstream's chart (the HelmRepository in kube-state-metrics.yaml).
+# (vmagent/config/vmagent.yml) lists the targets and the module for each, the alerts are in
+# vmalert/rules/blackbox.yml. Upstream's chart (the HelmRepository in ../repository.yaml).
 #
 # No ICMP module: it needs NET_RAW, which the restricted pod security standard doesn't allow. Hosts
 # are checked on a TCP or HTTPS port instead.
@@ -31,7 +31,7 @@ spec:
     podSecurityContext:
       seccompProfile:
         type: RuntimeDefault
-    # The client certificate for redis_tls (blackbox-redis-certificate.yaml). cert-manager renews
+    # The client certificate for redis_tls (certificate.yaml). cert-manager renews
     # it in place, blackbox reads the files on each probe.
     extraSecretMounts:
       - name: redis-tls

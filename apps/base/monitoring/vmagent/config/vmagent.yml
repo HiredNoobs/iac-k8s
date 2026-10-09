@@ -138,7 +138,7 @@ scrape_configs:
         regex: '([^.]+)\..*'
         target_label: job
 
-  # kube-state-metrics (kube-state-metrics.yaml): the state of Kubernetes objects (pods,
+  # kube-state-metrics (kube-state-metrics/release.yaml): the state of Kubernetes objects (pods,
   # Deployments, Jobs, PVCs, ...) and Flux's resources (gotk_resource_info).
   - job_name: kube-state-metrics
     metrics_path: /metrics
@@ -148,8 +148,8 @@ scrape_configs:
     # The objects' own namespace/pod labels win over the target's.
     honor_labels: true
 
-  # blackbox_exporter's probes (blackbox-exporter.yaml has the modules). Each target group sets
-  # its module, which is kept as a label (the alerts in config/vmalert/blackbox.yml use it);
+  # blackbox_exporter's probes (blackbox-exporter/release.yaml has the modules). Each target group
+  # sets its module, which is kept as a label (the alerts in vmalert/rules/blackbox.yml use it);
   # instance is the target. Names resolve like any client's (the router, then Pi-hole), so the
   # HTTPS probes also depend on Pi-hole.
   - job_name: blackbox

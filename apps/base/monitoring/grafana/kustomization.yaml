@@ -1,0 +1,91 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - statefulset.yaml
+  - service.yaml
+  - external-secret.yaml
+  - routes.yaml
+# A change rolls the pod (the name gets a hash), except the dashboards'.
+configMapGenerator:
+  - name: grafana-provisioning
+    files:
+      - config/datasources.yml
+      - config/dashboards.yml
+  # Dashboards, one ConfigMap per Grafana folder (dashboards/<Folder>, mounted as
+  # /etc/grafana/dashboards/<Folder>): each stays under a ConfigMap's 1 MiB. Grafana picks up
+  # changes while it runs (every 30s, config/dashboards.yml), so fixed names: the pod isn't
+  # restarted and the mounted files follow the ConfigMaps.
+  #
+  # Upstream's, pinned (below), except Overview. Only their data source references are changed,
+  # for file provisioning: import placeholders (${DS_...}) without a matching variable point at
+  # the prometheus data source, data source variables have no saved selection (so the default).
+  # Overview: ours, the home dashboard (statefulset.yaml). To change it, edit it in Grafana, then
+  # export the JSON (not "for sharing externally") over overview.json.
+  - name: grafana-dashboards-overview
+    files:
+      - dashboards/Overview/overview.json
+    options:
+      disableNameSuffixHash: true
+  # Gateway: Envoy Gateway's own (charts/gateway-addons-helm/dashboards at v1.9.2).
+  - name: grafana-dashboards-gateway
+    files:
+      - dashboards/Gateway/envoy-clusters.json
+      - dashboards/Gateway/envoy-gateway-global.json
+      - dashboards/Gateway/envoy-proxy-global.json
+    options:
+      disableNameSuffixHash: true
+  # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
+  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
+  - name: grafana-dashboards-kubernetes
+    files:
+      - dashboards/Kubernetes/k8s-views-global.json
+      - dashboards/Kubernetes/k8s-views-namespaces.json
+      - dashboards/Kubernetes/k8s-views-nodes.json
+      - dashboards/Kubernetes/k8s-views-pods.json
+      - dashboards/Kubernetes/node-exporter-full.json
+    options:
+      disableNameSuffixHash: true
+  # Monitoring: VictoriaMetrics/VictoriaMetrics v1.136.0 and VictoriaMetrics/VictoriaLogs
+  # v1.46.0 (dashboards/).
+  - name: grafana-dashboards-monitoring
+    files:
+      - dashboards/Monitoring/victorialogs.json
+      - dashboards/Monitoring/victoriametrics.json
+      - dashboards/Monitoring/vmagent.json
+      - dashboards/Monitoring/vmalert.json
+    options:
+      disableNameSuffixHash: true
+  # Storage: grafana.com 13032 rev 6 (Longhorn), its volume robustness/state panels changed for
+  # Longhorn's current metrics (one series per state label, 1 for the current one, where rev 6
+  # expects a numeric code): healthy/degraded/faulted, attached/detached, volumes per node.
+  - name: grafana-dashboards-storage
+    files:
+      - dashboards/Storage/longhorn.json
+    options:
+      disableNameSuffixHash: true
+  # Flux: fluxcd/flux2-monitoring-example@7ab65dc (monitoring/configs/dashboards).
+  - name: grafana-dashboards-flux
+    files:
+      - dashboards/Flux/flux-cluster.json
+      - dashboards/Flux/flux-control-plane.json
+    options:
+      disableNameSuffixHash: true
+  # Platform: grafana.com 20842 rev 3 (cert-manager); External Secrets' chart 2.11.0
+  # (files/monitoring).
+  - name: grafana-dashboards-platform
+    files:
+      - dashboards/Platform/cert-manager.json
+      - dashboards/Platform/external-secrets.json
+    options:
+      disableNameSuffixHash: true
+  # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
+  # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes), its
+  # instance variable changed to only the HTTP probes (probe_http_status_code): the DNS and TCP
+  # ones have no HTTP phases or status code, so their rows were empty.
+  - name: grafana-dashboards-services
+    files:
+      - dashboards/Services/rabbitmq-overview.json
+      - dashboards/Services/vault.json
+      - dashboards/Services/blackbox.json
+    options:
+      disableNameSuffixHash: true

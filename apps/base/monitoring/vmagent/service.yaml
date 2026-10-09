@@ -1,0 +1,15 @@
+# In the cluster for vmalert's remote write.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmagent
+  labels:
+    app.kubernetes.io/name: vmagent
+spec:
+  selector:
+    app.kubernetes.io/name: vmagent
+  ports:
+    - name: https
+      port: 8429
+      targetPort: https
+      protocol: TCP

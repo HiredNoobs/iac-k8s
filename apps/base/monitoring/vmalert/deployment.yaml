@@ -1,4 +1,4 @@
-# vmalert, a single replica so alerts aren't sent twice. Evaluates config/vmalert against
+# vmalert, a single replica so alerts aren't sent twice. Evaluates rules/ against
 # VictoriaMetrics and notifies Alertmanager.
 apiVersion: apps/v1
 kind: Deployment
@@ -87,18 +87,3 @@ spec:
         - name: tls
           secret:
             secretName: monitoring-tls
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vmalert
-  labels:
-    app.kubernetes.io/name: vmalert
-spec:
-  selector:
-    app.kubernetes.io/name: vmalert
-  ports:
-    - name: https
-      port: 8880
-      targetPort: https
-      protocol: TCP

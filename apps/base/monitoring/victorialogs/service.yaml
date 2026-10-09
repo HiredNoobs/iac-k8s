@@ -1,0 +1,23 @@
+# In the cluster for Grafana and rsyslog (syslog on 514).
+apiVersion: v1
+kind: Service
+metadata:
+  name: victorialogs
+  labels:
+    app.kubernetes.io/name: victorialogs
+spec:
+  selector:
+    app.kubernetes.io/name: victorialogs
+  ports:
+    - name: https
+      port: 9428
+      targetPort: https
+      protocol: TCP
+    - name: syslog-udp
+      port: 514
+      targetPort: syslog-udp
+      protocol: UDP
+    - name: syslog-tcp
+      port: 514
+      targetPort: syslog-tcp
+      protocol: TCP

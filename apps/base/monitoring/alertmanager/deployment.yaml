@@ -1,4 +1,4 @@
-# Alertmanager, a single replica, notifying through ntfy.sh (config/alertmanager).
+# Alertmanager, a single replica, notifying through ntfy.sh (config/alertmanager.yml).
 # Silences and notification state are kept in an emptyDir, so they're lost on restart.
 apiVersion: apps/v1
 kind: Deployment
@@ -90,19 +90,3 @@ spec:
             secretName: alertmanager-notifiers
         - name: data
           emptyDir: {}
----
-# In the cluster for vmalert and Grafana.
-apiVersion: v1
-kind: Service
-metadata:
-  name: alertmanager
-  labels:
-    app.kubernetes.io/name: alertmanager
-spec:
-  selector:
-    app.kubernetes.io/name: alertmanager
-  ports:
-    - name: https
-      port: 9093
-      targetPort: https
-      protocol: TCP

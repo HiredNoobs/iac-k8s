@@ -3,6 +3,9 @@
 # blackbox_exporter (upstream's charts). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
 # namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
 #
+# One directory per component, with its manifests, its config and its own kustomization (the
+# config's ConfigMaps). Shared here: the namespace, the server certificate and the Helm repository.
+#
 # The components talk to each other over TLS by their service names (<component>.monitoring.svc),
 # with one certificate from the monitoring-ca ClusterIssuer (certificate.yaml).
 # Grafana, VictoriaMetrics and VictoriaLogs keep their data on Longhorn volumes.
@@ -12,112 +15,12 @@ namespace: monitoring
 resources:
   - namespace.yaml
   - certificate.yaml
-  - external-secret.yaml
-  - grafana.yaml
-  - victoriametrics.yaml
-  - victorialogs.yaml
-  - vmagent.yaml
-  - vmalert.yaml
-  - alertmanager.yaml
-  - kube-state-metrics.yaml
-  - blackbox-exporter.yaml
-  - blackbox-redis-certificate.yaml
-  - routes.yaml
-# A change rolls the pods that use it (the name gets a hash), except the dashboards'.
-configMapGenerator:
-  - name: grafana-provisioning
-    files:
-      - config/grafana/datasources.yml
-      - config/grafana/dashboards.yml
-  # Dashboards, one ConfigMap per Grafana folder (config/grafana/dashboards/<Folder>, mounted as
-  # /etc/grafana/dashboards/<Folder>): each stays under a ConfigMap's 1 MiB. Grafana picks up
-  # changes while it runs (every 30s, config/grafana/dashboards.yml), so fixed names: the pod
-  # isn't restarted and the mounted files follow the ConfigMaps.
-  #
-  # Upstream's, pinned (below), except Overview. Only their data source references are changed,
-  # for file provisioning: import placeholders (${DS_...}) without a matching variable point at
-  # the prometheus data source, data source variables have no saved selection (so the default).
-  # Overview: ours, the home dashboard (grafana.yaml). To change it, edit it in Grafana, then
-  # export the JSON (not "for sharing externally") over overview.json.
-  - name: grafana-dashboards-overview
-    files:
-      - config/grafana/dashboards/Overview/overview.json
-    options:
-      disableNameSuffixHash: true
-  # Gateway: Envoy Gateway's own (charts/gateway-addons-helm/dashboards at v1.9.2).
-  - name: grafana-dashboards-gateway
-    files:
-      - config/grafana/dashboards/Gateway/envoy-clusters.json
-      - config/grafana/dashboards/Gateway/envoy-gateway-global.json
-      - config/grafana/dashboards/Gateway/envoy-proxy-global.json
-    options:
-      disableNameSuffixHash: true
-  # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
-  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
-  - name: grafana-dashboards-kubernetes
-    files:
-      - config/grafana/dashboards/Kubernetes/k8s-views-global.json
-      - config/grafana/dashboards/Kubernetes/k8s-views-namespaces.json
-      - config/grafana/dashboards/Kubernetes/k8s-views-nodes.json
-      - config/grafana/dashboards/Kubernetes/k8s-views-pods.json
-      - config/grafana/dashboards/Kubernetes/node-exporter-full.json
-    options:
-      disableNameSuffixHash: true
-  # Monitoring: VictoriaMetrics/VictoriaMetrics v1.136.0 and VictoriaMetrics/VictoriaLogs
-  # v1.46.0 (dashboards/).
-  - name: grafana-dashboards-monitoring
-    files:
-      - config/grafana/dashboards/Monitoring/victorialogs.json
-      - config/grafana/dashboards/Monitoring/victoriametrics.json
-      - config/grafana/dashboards/Monitoring/vmagent.json
-      - config/grafana/dashboards/Monitoring/vmalert.json
-    options:
-      disableNameSuffixHash: true
-  # Storage: grafana.com 13032 rev 6 (Longhorn), its volume robustness/state panels changed for
-  # Longhorn's current metrics (one series per state label, 1 for the current one, where rev 6
-  # expects a numeric code): healthy/degraded/faulted, attached/detached, volumes per node.
-  - name: grafana-dashboards-storage
-    files:
-      - config/grafana/dashboards/Storage/longhorn.json
-    options:
-      disableNameSuffixHash: true
-  # Flux: fluxcd/flux2-monitoring-example@7ab65dc (monitoring/configs/dashboards).
-  - name: grafana-dashboards-flux
-    files:
-      - config/grafana/dashboards/Flux/flux-cluster.json
-      - config/grafana/dashboards/Flux/flux-control-plane.json
-    options:
-      disableNameSuffixHash: true
-  # Platform: grafana.com 20842 rev 3 (cert-manager); External Secrets' chart 2.11.0
-  # (files/monitoring).
-  - name: grafana-dashboards-platform
-    files:
-      - config/grafana/dashboards/Platform/cert-manager.json
-      - config/grafana/dashboards/Platform/external-secrets.json
-    options:
-      disableNameSuffixHash: true
-  # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
-  # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes), its
-  # instance variable changed to only the HTTP probes (probe_http_status_code): the DNS and TCP
-  # ones have no HTTP phases or status code, so their rows were empty.
-  - name: grafana-dashboards-services
-    files:
-      - config/grafana/dashboards/Services/rabbitmq-overview.json
-      - config/grafana/dashboards/Services/vault.json
-      - config/grafana/dashboards/Services/blackbox.json
-    options:
-      disableNameSuffixHash: true
-  - name: vmagent-config
-    files:
-      - config/vmagent/vmagent.yml
-  - name: vmalert-rules
-    files:
-      - config/vmalert/alerts.yml
-      - config/vmalert/kubernetes.yml
-      - config/vmalert/controllers.yml
-      - config/vmalert/blackbox.yml
-      - config/vmalert/pihole.yml
-  - name: alertmanager-config
-    files:
-      - config/alertmanager/alertmanager.yml
-      - config/alertmanager/alertmanager_web.yml
+  - repository.yaml
+  - grafana
+  - victoriametrics
+  - victorialogs
+  - vmagent
+  - vmalert
+  - alertmanager
+  - kube-state-metrics
+  - blackbox-exporter
