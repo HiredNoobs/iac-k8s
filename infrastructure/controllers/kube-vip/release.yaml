@@ -27,6 +27,7 @@ spec:
         name: kube-vip
   values:
     image:
+      # renovate: image=ghcr.io/kube-vip/kube-vip
       tag: v1.2.4@sha256:dde4c0669d9058c74c69c0bc2f0122e26900e1e4b913c03577cb6e4e28083079
     # Services only, null removes the chart's control plane load balancer defaults. vip_interface
     # is unset, so the interface with the default route is used.

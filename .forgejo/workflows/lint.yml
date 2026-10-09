@@ -1,33 +1,45 @@
 # Validates the manifests on every push, on the general runner (no credentials, nothing reaches
 # the cluster: Flux pulls and applies from the cluster). Tools and schemas are pinned, bump the
-# version and its checksum together.
+# version and its checksum together. Renovate bumps the versions with a `# renovate:` comment and
+# its postUpgradeTask (.forgejo/scripts/update-pins.sh) the checksums of the downloads using them.
 name: Lint
 
 on:
   push:
 
 env:
+  # renovate: datasource=github-releases depName=kubernetes-sigs/kustomize extractVersion=^kustomize/v(?<version>.+)$
   KUSTOMIZE_VERSION: "5.8.2"
   KUSTOMIZE_SHA256: "06af0a202c2b831207d0173f9c9cdb1b30abceca0747cb3fbb72792d26055c95"
+  # renovate: datasource=github-releases depName=yannh/kubeconform extractVersion=^v(?<version>.+)$
   KUBECONFORM_VERSION: "0.8.0"
   KUBECONFORM_SHA256: "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
-  # The Flux CRDs' schemas, same version as FLUX_VERSION in tools-bin's context-setup.
+  # The Flux CRDs' schemas, same version as gotk-components.yaml and FLUX_VERSION in tools-bin's
+  # context-setup.
+  # renovate: datasource=github-releases depName=fluxcd/flux2 extractVersion=^v(?<version>.+)$
   FLUX_VERSION: "2.9.6"
   FLUX_CRD_SCHEMAS_SHA256: "380b713bd28a2c27cfc7710219aae79e1c9ceff9bee50197c023047190532987"
-  # Kubernetes' schemas at a fixed commit (kubeconform's default follows master).
+  # Kubernetes' schemas at a fixed commit (kubeconform's default follows master). By hand, with
+  # kubernetes_version in iac-homelab.
   KUBERNETES_VERSION: "1.37.0"
   KUBERNETES_SCHEMAS_COMMIT: "8df8a883b68a24a104b4a9e43c1288090ae60b3b"
-  # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers).
+  # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers),
+  # looked up from the same chart so Renovate groups them.
+  # renovate: datasource=helm depName=external-secrets registryUrl=https://charts.external-secrets.io
   ESO_VERSION: "2.11.0"
   ESO_CRDS_SHA256: "2b2aa2e85a4c081a11688f0b31ebdb33153c0885d4c2e3604d11058995a11b75"
+  # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io extractVersion=^v(?<version>.+)$
   CERT_MANAGER_VERSION: "1.21.2"
   CERT_MANAGER_CRDS_SHA256: "262fef78478492cd35b73a1b227106b7802f9c056361d1f561d04b32d751337f"
+  # renovate: datasource=docker depName=docker.io/envoyproxy/gateway-helm extractVersion=^v(?<version>.+)$
   ENVOY_GATEWAY_VERSION: "1.9.2"
   ENVOY_GATEWAY_CRDS_SHA256: "b339119f8f3a4046688fc96837b4129553f42c9998976913ef9dff25694d85cc"
-  # The Gateway API version Envoy Gateway's chart installs (experimental channel).
+  # The Gateway API version Envoy Gateway's chart installs (experimental channel). By hand, with
+  # Envoy Gateway's PR.
   GATEWAY_API_VERSION: "1.6.1"
   GATEWAY_API_CRDS_SHA256: "d7fa77650e4ef28fca0411536fcb5e237deb4d50301cfded3be49d9a1b7bbd02"
   # The release manifest, for its CRDs (the chart renders them as templates).
+  # renovate: datasource=helm depName=longhorn registryUrl=https://charts.longhorn.io
   LONGHORN_VERSION: "1.12.1"
   LONGHORN_MANIFEST_SHA256: "41648963af867ac1d0c85755fb53cf61cacd57c9bb22e1942e3fb0439eeb04fd"
 

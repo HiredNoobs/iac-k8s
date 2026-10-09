@@ -1,0 +1,137 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Run by the renovate repo's workflow (the global config, and default.json for the shared settings). Every update is a PR, nothing automerges: a merge is a deploy.",
+  "extends": ["local>hirednoobs/renovate"],
+  "ignorePaths": [
+    "infrastructure/controllers/kubelet-serving-cert-approver/standalone-install.yaml",
+    "infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml",
+    "infrastructure/operators/rabbitmq-topology-operator/rabbitmqclusters-crd.yaml"
+  ],
+  "flux": {
+    "managerFilePatterns": ["/\\.ya?ml$/"]
+  },
+  "kubernetes": {
+    "managerFilePatterns": ["/^(apps|infrastructure)/.+\\.ya?ml$/"]
+  },
+  "postUpgradeTasks": {
+    "commands": ["bash .forgejo/scripts/update-pins.sh"],
+    "fileFilters": ["**/*"],
+    "executionMode": "branch"
+  },
+  "customManagers": [
+    {
+      "description": "Versions with a `# renovate: datasource=... depName=...` comment on the line above (lint.yml)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.forgejo/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\n\\s*\\w+: \"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    },
+    {
+      "description": "Images in chart values whose repository is the chart's default: `# renovate: image=<name>` above `tag: <tag>@<digest>` (charts without a digest value) or `tag: <tag>` and a `digest:`/`sha:` line",
+      "customType": "regex",
+      "managerFilePatterns": ["/^(apps|infrastructure)/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: image=(?<depName>\\S+)\\n\\s*tag: \"?(?<currentValue>[^@\"\\s]+)@(?<currentDigest>sha256:[a-f0-9]{64})",
+        "# renovate: image=(?<depName>\\S+)\\n\\s*tag: \"?(?<currentValue>[^@\"\\s]+)\"?\\n\\s*(?:digest|sha): (?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Grafana's plugins (GF_PLUGINS_PREINSTALL)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^apps/base/monitoring/grafana\\.yaml$/"],
+      "matchStrings": ["(?<depName>victoriametrics-logs-datasource)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "VictoriaMetrics/victorialogs-datasource",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "description": "Grafana's plugins (GF_PLUGINS_PREINSTALL)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^apps/base/monitoring/grafana\\.yaml$/"],
+      "matchStrings": ["(?<depName>victoriametrics-metrics-datasource)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "VictoriaMetrics/victoriametrics-datasource",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "apiVersions are changed by hand, with the controller upgrade that needs it",
+      "matchDatasources": ["kubernetes-api"],
+      "enabled": false
+    },
+    {
+      "description": "The flux manager already finds Envoy Gateway's image (a string in its values)",
+      "matchManagers": ["kubernetes"],
+      "matchFileNames": ["infrastructure/controllers/envoy-gateway/release.yaml"],
+      "enabled": false
+    },
+    {
+      "description": "A chart, the image it runs (its appVersion, pinned by digest) and lint.yml's CRD schemas move together",
+      "matchPackageNames": ["cert-manager", "quay.io/jetstack/cert-manager-*"],
+      "groupName": "cert-manager"
+    },
+    {
+      "matchPackageNames": ["external-secrets", "ghcr.io/external-secrets/external-secrets"],
+      "groupName": "external-secrets"
+    },
+    {
+      "matchPackageNames": ["/envoyproxy/gateway/"],
+      "groupName": "envoy-gateway",
+      "prBodyNotes": ["Also check the Gateway API version the chart installs and bump `GATEWAY_API_VERSION` and its checksum in lint.yml by hand."]
+    },
+    {
+      "matchPackageNames": ["kube-vip", "ghcr.io/kube-vip/kube-vip"],
+      "groupName": "kube-vip"
+    },
+    {
+      "matchPackageNames": ["metrics-server", "registry.k8s.io/metrics-server/metrics-server"],
+      "groupName": "metrics-server"
+    },
+    {
+      "matchPackageNames": ["reloader", "ghcr.io/stakater/reloader"],
+      "groupName": "reloader"
+    },
+    {
+      "matchPackageNames": ["kube-state-metrics", "registry.k8s.io/kube-state-metrics/kube-state-metrics"],
+      "groupName": "kube-state-metrics"
+    },
+    {
+      "matchPackageNames": ["prometheus-blackbox-exporter", "quay.io/prometheus/blackbox-exporter"],
+      "groupName": "blackbox-exporter"
+    },
+    {
+      "description": "vlagent is kept at VictoriaLogs' version",
+      "matchPackageNames": ["victoria-logs-collector", "victoriametrics/vlagent", "victoriametrics/victoria-logs"],
+      "groupName": "victorialogs"
+    },
+    {
+      "matchPackageNames": ["victoriametrics/victoria-metrics", "victoriametrics/vmagent", "victoriametrics/vmalert"],
+      "groupName": "victoriametrics"
+    },
+    {
+      "matchPackageNames": ["fluxcd/flux2"],
+      "groupName": "flux",
+      "prBodyNotes": ["Bump `FLUX_VERSION` in tools-bin's `context-setup` to the same version."]
+    },
+    {
+      "description": "Longhorn only upgrades one minor version at a time",
+      "matchPackageNames": ["longhorn"],
+      "groupName": "longhorn",
+      "separateMultipleMinor": true,
+      "prBodyNotes": ["Read the upgrade notes first: https://longhorn.io/docs/latest/deploy/upgrade/. Longhorn can't be downgraded."]
+    },
+    {
+      "description": "Vendored manifests: update-pins.sh re-vendors them when the image changes",
+      "matchPackageNames": ["ghcr.io/alex1989hu/kubelet-serving-cert-approver", "ghcr.io/rabbitmq/messaging-topology-operator"],
+      "prBodyNotes": ["The vendored release manifest was replaced with the new version's: review its diff."]
+    },
+    {
+      "description": "Monthly tags (YYYY-MM)",
+      "matchPackageNames": ["rsyslog/rsyslog"],
+      "versioning": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})$"
+    }
+  ]
+}

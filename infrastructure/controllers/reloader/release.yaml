@@ -17,6 +17,7 @@ spec:
   values:
     image:
       # Only the digest is used once it's set, the tag says which version it is.
+      # renovate: image=ghcr.io/stakater/reloader
       tag: v1.4.22
       digest: sha256:def2480040adc164b3a57340e77674eadfd88fb7f0593df25e93297f29c7fd7c
     reloader:

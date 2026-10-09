@@ -7,8 +7,9 @@
 #
 # Upstream ships plain manifests (no chart), vendored unmodified:
 # https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/v0.12.1/deploy/standalone-install.yaml
-# sha256 25e1a4310f03c022882d23debe31ec7bdd99c46d797f51b9d2912e6ef23c8327. To upgrade, replace the
-# file with the new tag's (check the checksum), and bump the image in the patch below.
+# sha256 25e1a4310f03c022882d23debe31ec7bdd99c46d797f51b9d2912e6ef23c8327. Renovate bumps the image
+# in the patch below and .forgejo/scripts/update-pins.sh replaces the file, URL and checksum with
+# the new tag's (by hand: bump the image, then run the script).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

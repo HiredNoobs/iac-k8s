@@ -5,8 +5,9 @@
 #
 # Upstream only ships release manifests (no chart), vendored unmodified:
 # https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.3/messaging-topology-operator-with-certmanager.yaml
-# sha256 73a45a423b3abb9dddfa84248e60699f69a4dbcf3456830b9af62ef496e1e549. To upgrade, replace
-# the file with the new release's (check the checksum), and bump the image in the patch below.
+# sha256 73a45a423b3abb9dddfa84248e60699f69a4dbcf3456830b9af62ef496e1e549. Renovate bumps the
+# image in the patch below and .forgejo/scripts/update-pins.sh replaces the file, URL and checksum
+# with the new release's (by hand: bump the image, then run the script).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

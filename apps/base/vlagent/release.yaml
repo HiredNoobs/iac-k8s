@@ -29,6 +29,7 @@ spec:
   values:
     fullnameOverride: vlagent
     image:
+      # renovate: image=victoriametrics/vlagent
       tag: v1.46.0@sha256:849cb9c23eb8426bcfd2c1825af905e67e6435fd4804ea19cd4188960cffc643
     remoteWrite:
       - url: https://victorialogs.monitoring.svc:9428
