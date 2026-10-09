@@ -76,6 +76,9 @@
   - VMAlert:
       href: https://vmalert.hirednoobs.com
       icon: victoriametrics
+  - VMAlert (logs):
+      href: https://vmalert-logs.hirednoobs.com
+      icon: victoriametrics
   - VMAgent:
       href: https://vmagent.hirednoobs.com
       icon: victoriametrics

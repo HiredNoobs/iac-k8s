@@ -1,6 +1,6 @@
 # Monitoring, from stack-grafana: Grafana, VictoriaMetrics, VictoriaLogs, vmagent, vmalert and
-# Alertmanager, each a single instance. Plain manifests, the stack's. Plus kube-state-metrics and
-# blackbox_exporter (upstream's charts). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
+# Alertmanager, each a single instance. Plain manifests, the stack's. Plus vmalert-logs (a second
+# vmalert, for the log rules), kube-state-metrics and blackbox_exporter (upstream's charts). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
 # namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
 #
 # One directory per component, with its manifests, its config and its own kustomization (the
@@ -21,6 +21,7 @@ resources:
   - victorialogs
   - vmagent
   - vmalert
+  - vmalert-logs
   - alertmanager
   - kube-state-metrics
   - blackbox-exporter

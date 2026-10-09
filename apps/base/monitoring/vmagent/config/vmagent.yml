@@ -132,6 +132,7 @@ scrape_configs:
           - victorialogs.monitoring.svc:9428
           - vmagent.monitoring.svc:8429
           - vmalert.monitoring.svc:8880
+          - vmalert-logs.monitoring.svc:8880
           - alertmanager.monitoring.svc:9093
     relabel_configs:
       - source_labels: [__address__]

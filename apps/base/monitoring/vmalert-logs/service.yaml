@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmalert-logs
+  labels:
+    app.kubernetes.io/name: vmalert-logs
+spec:
+  selector:
+    app.kubernetes.io/name: vmalert-logs
+  ports:
+    - name: https
+      port: 8880
+      targetPort: https
+      protocol: TCP

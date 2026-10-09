@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - certificate.yaml
+  - deployment.yaml
+  - service.yaml
+  - routes.yaml
+# One file per log source. A change rolls the pod.
+#
+# Detections are labelled severity, source (the log source), mitre_tactic and mitre_technique
+# (e.g. credential-access, T1110.001), and annotated summary, description and runbook (what to
+# look at, and how to trigger the rule on purpose: every rule is tested before it counts).
+configMapGenerator:
+  - name: vmalert-logs-rules
+    files:
+      - rules/test.yml

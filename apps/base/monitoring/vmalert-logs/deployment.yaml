@@ -1,0 +1,97 @@
+# vmalert-logs, a second vmalert for the log rules: evaluates rules/ (LogsQL) against
+# VictoriaLogs and notifies the same Alertmanager. Separate from vmalert because a vmalert has one
+# datasource, and so a slow or broken log query can't hold up the metric alerts. A single replica
+# so alerts aren't sent twice.
+#
+# Its ALERTS series and alert state go to VictoriaMetrics like vmalert's (remote write through
+# vmagent, remote read to restore the state after a restart). Each alert links to Grafana Explore
+# on VictoriaLogs with the rule's query, its stats and filter pipes cut off so it lists the
+# matching lines, from 10 minutes before the alert went active.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert-logs
+  labels:
+    app.kubernetes.io/name: vmalert-logs
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmalert-logs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vmalert-logs
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vmalert
+          image: victoriametrics/vmalert:v1.136.0@sha256:e756ea8839f295b4e789a739c3ac80d70404e11b918973506a6182aacca2b11e
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          args:
+            - --httpListenAddr=:8880
+            - --tls
+            - --tlsCertFile=/etc/vmalert/tls/tls.crt
+            - --tlsKeyFile=/etc/vmalert/tls/tls.key
+            - --rule.defaultRuleType=vlogs
+            - --datasource.url=https://victorialogs.monitoring.svc:9428
+            - --datasource.tlsCAFile=/etc/vmalert/tls/ca.crt
+            - --remoteRead.url=https://victoriametrics.monitoring.svc:8428
+            - --remoteRead.tlsCAFile=/etc/vmalert/tls/ca.crt
+            - --remoteWrite.url=https://vmagent.monitoring.svc:8429
+            - --remoteWrite.tlsCAFile=/etc/vmalert/tls/ca.crt
+            - --notifier.url=https://alertmanager.monitoring.svc:9093
+            - --notifier.tlsCAFile=/etc/vmalert/tls/ca.crt
+            - --rule=/etc/alerts/*.yml
+            - --external.url=https://grafana.hirednoobs.com
+            - '--external.alert.source=explore?orgId=1&left={"datasource":"victorialogs","queries":[{"refId":"A","datasource":{"type":"victoriametrics-logs-datasource","uid":"victorialogs"},"expr":{{ reReplaceAll "(?s) *[|] *stats .*" "" .Expr | jsonEscape | queryEscape }}}],"range":{"from":"{{ (.ActiveAt.Add -600000000000).UnixMilli }}","to":"now"}}'
+          ports:
+            - name: https
+              containerPort: 8880
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: https
+              scheme: HTTPS
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: rules
+              mountPath: /etc/alerts
+              readOnly: true
+            - name: tls
+              mountPath: /etc/vmalert/tls
+              readOnly: true
+      volumes:
+        - name: rules
+          configMap:
+            name: vmalert-logs-rules
+        - name: tls
+          secret:
+            secretName: vmalert-logs-tls

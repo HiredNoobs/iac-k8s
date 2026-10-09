@@ -1,0 +1,68 @@
+# vmalert-logs.hirednoobs.com, behind Authelia (SecurityPolicy: ext-authz against Authelia's
+# Service, allowed by apps/base/authelia/reference-grant.yaml). A Backend rather than the
+# Service: vmalert-logs serves HTTPS, and Envoy verifies its certificate against the monitoring
+# CA (ca.crt in vmalert-logs-tls) and the service name (sni, one of the certificate's dnsNames).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: vmalert-logs
+spec:
+  endpoints:
+    - fqdn:
+        hostname: vmalert-logs.monitoring.svc.cluster.local
+        port: 8880
+  tls:
+    sni: vmalert-logs.monitoring.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: vmalert-logs-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vmalert-logs
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - vmalert-logs.hirednoobs.com
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: vmalert-logs
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: vmalert-logs
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vmalert-logs
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: authelia
+          namespace: authelia
+          port: 9091
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
