@@ -1,0 +1,63 @@
+# Changes to lldap's users and groups (apps/base/lldap) made outside git. lldap itself logs no
+# changes at log level info, so these read the hourly lldap-bootstrap job: users and groups are
+# declared in git and, with DO_CLEANUP, the job reverts anything else and logs what it reverted.
+# A change is seen at the next run (:17), and one undone before then isn't seen at all. Every run
+# resets declared users' attributes and passwords without saying whether they had changed, so
+# those aren't covered.
+#
+# A change to the declared users or groups in git logs the same lines on its first run.
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: lldap
+    type: vlogs
+    interval: 5m
+    rules:
+      - alert: LldapAdminGroupGranted
+        expr: >-
+          {kubernetes.pod_namespace="lldap",kubernetes.container_name="bootstrap"}
+          "successfully removed from the group"
+          | extract 'User "<user>" successfully removed from the group "<group>"'
+          | filter group:in("lldap_admin", "lldap_password_manager", "admins")
+          | stats by (user, group) count() as removals
+        labels:
+          severity: critical
+          source: lldap
+          mitre_tactic: persistence
+          mitre_technique: T1098.007
+        annotations:
+          summary: "{{ $labels.user }} had been added to lldap's {{ $labels.group }} group outside git (now removed)"
+          description: >-
+            A user was given admin rights (lldap_admin, lldap_password_manager, or admins, which
+            Authelia lets through) by someone other than lldap-bootstrap, which has removed it.
+            Only an lldap admin can do that, so an admin login or the admin password is in
+            someone else's hands, unless it was you.
+          runbook: >-
+            Find who used lldap's admin UI in the last hour: POST /api/graphql to
+            lldap.hirednoobs.com in the Envoy access logs, and the client's lldap logins. If it
+            wasn't you, change LLDAP_ADMIN_PASS and HIREDNOOBS_PASSWORD in Vault. Trigger: add
+            yourself to lldap_password_manager in the lldap UI and wait for the next run at :17.
+
+      - alert: LldapDirectoryDrift
+        expr: >-
+          {kubernetes.pod_namespace="lldap",kubernetes.container_name="bootstrap"}
+          ("successfully created" or "successfully deleted" or "successfully added to the group"
+          or "successfully removed from the group" or "[WARNING]")
+          -~'removed from the group "(lldap_admin|lldap_password_manager|admins)"'
+          | copy _msg as change
+          | stats by (change) count() as changes
+        labels:
+          severity: warning
+          source: lldap
+          mitre_tactic: persistence
+          mitre_technique: T1098
+        annotations:
+          summary: "lldap-bootstrap reverted a change: {{ $labels.change }}"
+          description: >-
+            lldap's users or groups differed from git: an undeclared user or group (deleted),
+            a declared one missing (recreated), or a membership changed (reverted). Expected
+            once after a change to apps/base/lldap/bootstrap in git.
+          runbook: >-
+            Check git log for apps/base/lldap/bootstrap first. Otherwise find who used lldap's
+            admin UI in the last hour (POST /api/graphql in the Envoy access logs). Trigger:
+            create a group in the lldap UI and wait for the next run at :17.
