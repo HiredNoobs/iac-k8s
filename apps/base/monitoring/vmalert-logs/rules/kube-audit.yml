@@ -1,0 +1,203 @@
+# kube-apiserver's audit log (iac-homelab's audit policy, shipped by apps/base/vector). Each
+# event is one log line with the event's fields (user.username, verb, objectRef.resource,
+# objectRef.namespace, objectRef.name, objectRef.subresource, responseStatus.code, requestURI,
+# auditID, requestObject.* for RBAC changes and directly created pods) plus remote_ip, the client.
+#
+# The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
+# deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
+# kube-vip, kubelet-serving-cert-approver, longhorn-system, metrics-server, rabbitmq-system,
+# reloader, monitoring, vlagent), so a read that is logged is a person's or an app's. Writes are
+# always logged. "admin" is the Talos-generated kubeconfig's user (mgmt, 192.168.111.254).
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: kube-audit
+    type: vlogs
+    interval: 5m
+    rules:
+      # A session logs ResponseStarted and ResponseComplete under one auditID.
+      - alert: KubeExecIntoPod
+        expr: >-
+          {source="kube-audit"} objectRef.resource:=pods
+          objectRef.subresource:in("exec", "attach", "portforward")
+          | copy user.username as user, objectRef.namespace as namespace, objectRef.name as pod,
+          objectRef.subresource as action
+          | stats by (user, remote_ip, namespace, pod, action) count_uniq(auditID) as sessions
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: execution
+          mitre_technique: T1609
+        annotations:
+          summary: "{{ $labels.user }} ran {{ $labels.action }} on {{ $labels.namespace }}/{{ $labels.pod }} from {{ $labels.remote_ip }}"
+          description: >-
+            kubectl exec, attach or port-forward into a pod: a shell or a tunnel inside a
+            workload. Normal for debugging, so this asks "was this you?".
+          runbook: >-
+            The command is in the event's requestURI (?command=...). If it wasn't you, look at
+            the user's other requests in the audit log and the client in Investigation.
+            Trigger: kubectl -n homepage exec deploy/homepage -- true
+
+      # Reads by the controllers are left out by the policy, so any logged Secret read is a
+      # person's or an app's.
+      - alert: KubeSecretRead
+        expr: >-
+          {source="kube-audit"} objectRef.resource:=secrets verb:in("get", "list", "watch")
+          responseStatus.code:=200
+          | copy user.username as user, objectRef.namespace as namespace
+          | stats by (user, remote_ip, namespace) count() as reads
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: credential-access
+          mitre_technique: T1552.007
+        annotations:
+          summary: "{{ $labels.user }} read Secrets in {{ $labels.namespace }} from {{ $labels.remote_ip }} ({{ $value }} requests)"
+          description: >-
+            Secrets read through the API by someone other than the controllers deployed from git:
+            a person with kubectl, or a service account looking for credentials.
+          runbook: >-
+            Which Secrets: objectRef.name in the events (a list has none). A service account
+            reading Secrets it doesn't use means its pod is compromised or over-privileged.
+            Trigger: kubectl -n homepage get secrets
+
+      - alert: KubeRBACChange
+        expr: >-
+          {source="kube-audit"} objectRef.apiGroup:="rbac.authorization.k8s.io"
+          verb:in("create", "update", "patch", "delete", "deletecollection")
+          -user.username:~"^system:serviceaccount:(flux-system|kube-system):" -requestURI:~"dryRun="
+          | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace,
+          objectRef.name as name
+          | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: persistence
+          mitre_technique: T1098
+        annotations:
+          summary: "{{ $labels.user }} {{ $labels.verb }} {{ $labels.resource }} {{ $labels.namespace }}/{{ $labels.name }} outside Flux"
+          description: >-
+            A Role, ClusterRole or binding changed by something other than Flux (or the control
+            plane): permissions granted by hand stay until someone notices.
+          runbook: >-
+            The event's requestObject has what was granted to whom (roleRef, subjects, rules).
+            Flux doesn't remove objects it didn't create, so delete it by hand if it isn't
+            wanted. Trigger: kubectl create rolebinding siem-test --clusterrole=view
+            --user=nobody -n homepage, then delete it.
+
+      # Anything but the control plane and the controllers that manage workloads (Reloader
+      # restarts them, Envoy Gateway runs its proxies, Longhorn its managers).
+      - alert: KubeWorkloadChangeOutsideFlux
+        expr: >-
+          {source="kube-audit"}
+          objectRef.resource:in("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs")
+          verb:in("create", "update", "patch", "delete", "deletecollection") objectRef.subresource:=""
+          -user.username:~"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$"
+          -requestURI:~"dryRun="
+          | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace,
+          objectRef.name as name
+          | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: execution
+          mitre_technique: T1610
+        annotations:
+          summary: "{{ $labels.user }} {{ $labels.verb }} {{ $labels.resource }} {{ $labels.namespace }}/{{ $labels.name }} outside Flux"
+          description: >-
+            A workload created, changed or deleted by a person or an unexpected service account
+            rather than Flux: a restart by hand, or something deploying its own containers.
+          runbook: >-
+            A service account doing this is the worrying case: check its pod. Flux reverts
+            changes to objects it manages at the next reconcile, not ones it doesn't know.
+            Trigger: kubectl -n homepage rollout restart deploy/homepage
+
+      - alert: KubePrivilegedPodCreated
+        expr: >-
+          {source="kube-audit"} objectRef.resource:=pods verb:=create objectRef.subresource:=""
+          responseStatus.code:<300
+          (requestObject.spec.hostNetwork:=true or requestObject.spec.hostPID:=true
+          or requestObject.spec.hostIPC:=true or requestObject.spec.volumes:~"hostPath"
+          or requestObject.spec.containers:~"\"privileged\":true")
+          -objectRef.namespace:in("kube-system", "longhorn-system", "kube-vip", "vlagent", "node-exporter", "vector", "falco")
+          | copy user.username as user, objectRef.namespace as namespace, objectRef.name as pod
+          | stats by (user, remote_ip, namespace, pod) count() as pods
+        labels:
+          severity: critical
+          source: kube-audit
+          mitre_tactic: privilege-escalation
+          mitre_technique: T1611
+        annotations:
+          summary: "{{ $labels.user }} created a privileged or host-access pod {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: >-
+            A pod with host access (privileged, host network/PID/IPC or a hostPath volume) in a
+            namespace that has no reason for one: a way out of the container onto the node.
+          runbook: >-
+            Delete the pod, then find how it was made (the user's other requests). Only pods
+            created directly have their spec logged; ones from a Deployment are caught by Pod
+            Security instead (KubePodSecurityViolation). Trigger: none safe on purpose; test
+            locally with a sample event.
+
+      - alert: KubePodSecurityViolation
+        expr: >-
+          {source="kube-audit"} responseStatus.code:=403 responseStatus.message:~"violates PodSecurity"
+          | copy user.username as user, objectRef.namespace as namespace
+          | stats by (user, remote_ip, namespace) count() as rejected
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: privilege-escalation
+          mitre_technique: T1611
+        annotations:
+          summary: "Pod Security rejected {{ $value }} pods from {{ $labels.user }} in {{ $labels.namespace }}"
+          description: >-
+            A pod the namespace's Pod Security level doesn't allow (privileged, host access, root)
+            was refused: an attempt to get onto the node, or a workload changed without its
+            namespace's level.
+          runbook: >-
+            responseStatus.message has what was refused. Trigger: kubectl -n homepage run
+            siem-test --image=busybox:1.37 --privileged (refused, nothing runs).
+
+      - alert: KubeForbiddenBurst
+        expr: >-
+          {source="kube-audit"} responseStatus.code:=403
+          | copy user.username as user
+          | stats by (user, remote_ip) count() as forbidden
+          | filter forbidden:>=10
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: discovery
+          mitre_technique: T1613
+        annotations:
+          summary: "{{ $value }} forbidden API requests from {{ $labels.user }} at {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            One identity refused again and again: something probing what its credentials can
+            reach (often a stolen service account token), or a misconfigured app.
+          runbook: >-
+            The resources it tried are in its events (objectRef). Trigger: kubectl auth
+            can-i --list --as=system:serviceaccount:homepage:default, then a loop of kubectl
+            get secrets -A --as=system:serviceaccount:homepage:default.
+
+      # The nodes and mgmt (192.168.111.0/24) and pods (10.244.0.0/16) are the only clients.
+      - alert: KubeAPIUnexpectedSource
+        expr: >-
+          {source="kube-audit"}
+          -remote_ip:ipv4_range("192.168.111.0/24") -remote_ip:ipv4_range("10.244.0.0/16")
+          -remote_ip:ipv4_range("127.0.0.0/8")
+          | copy user.username as user
+          | stats by (user, remote_ip) count() as requests
+        labels:
+          severity: warning
+          source: kube-audit
+          mitre_tactic: initial-access
+          mitre_technique: T1078
+        annotations:
+          summary: "{{ $value }} API requests by {{ $labels.user }} from {{ $labels.remote_ip }}, outside the nodes and pods"
+          description: >-
+            The Kubernetes API used from somewhere other than mgmt, the nodes and the pods: a
+            kubeconfig copied elsewhere, or a device on the LAN with stolen credentials.
+          runbook: >-
+            Find the device, and which credentials it used (user). Talos' admin kubeconfig can't
+            be revoked on its own: rotate the cluster's client CA if it leaked. Trigger: run
+            kubectl from another LAN machine with a copy of the kubeconfig.

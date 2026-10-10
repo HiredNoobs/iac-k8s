@@ -15,5 +15,6 @@ configMapGenerator:
     files:
       - rules/authelia.yml
       - rules/envoy.yml
+      - rules/kube-audit.yml
       - rules/lldap.yml
       - rules/vaultwarden.yml
