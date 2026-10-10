@@ -1,0 +1,209 @@
+# The Gateway's access logs (Envoy, infrastructure/configs/gateway/envoy-proxy.yaml), JSON fields.
+# The client is downstream_remote_address (the TCP peer, kept by externalTrafficPolicy: Local), not
+# x-forwarded-for, which the client can set. The site is :authority, not requested_server_name:
+# browsers reuse one HTTP/2 connection for every site the wildcard certificate covers. Lines are
+# written in batches, so _time can be ~10 s after start_time.
+#
+# A completed Authelia login is POST /api/secondfactor/totp -> 200 (a wrong code is 403).
+# Vaultwarden's POST /identity/connect/token -> 200 is a login or a token refresh (clients
+# refresh about hourly), which the access log can't tell apart.
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: envoy
+    type: vlogs
+    interval: 5m
+    rules:
+      # Pod addresses (10.244.0.0/16) stay untrusted on purpose: no pod logs in through the
+      # Gateway (blackbox only sends GETs), so one that does is a compromised container.
+      - alert: LoginFromUntrustedNetwork
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          method:=POST response_code:=200
+          ((":authority":="auth.hirednoobs.com" "x-envoy-origin-path":="/api/secondfactor/totp")
+          or (":authority":="vaultwarden.hirednoobs.com" "x-envoy-origin-path":="/identity/connect/token"))
+          | extract "<remote_ip>:" from downstream_remote_address
+          | filter -remote_ip:ipv4_range("192.168.50.0/24") -remote_ip:ipv4_range("192.168.111.0/24")
+          | copy ":authority" as host
+          | stats by (host, remote_ip) count() as logins
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: initial-access
+          mitre_technique: T1078
+        annotations:
+          summary: "{{ $value }} successful logins to {{ $labels.host }} from {{ $labels.remote_ip }}, outside the trusted networks"
+          description: >-
+            A completed Authelia login, or a Vaultwarden login or token refresh, from an address
+            outside 192.168.50.0/24 and 192.168.111.0/24. Logins normally come only from those.
+          runbook: >-
+            Who is it: the address in the router's DHCP leases, the user-agent in the access
+            logs, and for Authelia the user in its logs at the same time. If unknown, log the
+            user out everywhere (Authelia: change the password in Vault; Vaultwarden: Account
+            settings -> Deauthorize sessions). Trigger: log in from another network, or a
+            client in a VLAN outside the trusted ranges.
+
+      # 01:00-06:00 UK time: day_range is in VictoriaLogs' time zone (TZ=Europe/London in its
+      # StatefulSet). Authelia only: Vaultwarden clients refresh at any hour.
+      - alert: LoginOutsideHours
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          _time:day_range[01:00, 06:00)
+          method:=POST response_code:=200
+          ":authority":="auth.hirednoobs.com" "x-envoy-origin-path":="/api/secondfactor/totp"
+          | extract "<remote_ip>:" from downstream_remote_address
+          | stats by (remote_ip) count() as logins
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: initial-access
+          mitre_technique: T1078
+        annotations:
+          summary: "{{ $value }} Authelia logins from {{ $labels.remote_ip }} during quiet hours"
+          description: >-
+            A completed Authelia login (password and TOTP) between 01:00 and 06:00 UK time,
+            when nobody normally logs in.
+          runbook: >-
+            Check the user in Authelia's logs at the same time and the client's other requests.
+            If it wasn't you, change the password in Vault. Trigger: log in to Authelia in the
+            window (or test locally with a shifted window).
+
+      # Blackbox probes are excluded: a failing probe isn't scanning.
+      - alert: HttpErrorBurst
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          response_code:in("401", "403", "404")
+          -"user-agent":"Blackbox-Exporter"*
+          | extract "<remote_ip>:" from downstream_remote_address
+          | stats by (remote_ip) count() as errors
+          | filter errors:>=20
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: reconnaissance
+          mitre_technique: T1595.003
+        annotations:
+          summary: "{{ $value }} 401/403/404 responses to {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Many refused or missing paths for one client: directory or wordlist scanning, or a
+            misconfigured client retrying.
+          runbook: >-
+            The paths and user-agent are in the client's access logs (x-envoy-origin-path).
+            Trigger: for i in $(seq 25); do curl -so /dev/null https://homepage.hirednoobs.com/nope-$i; done
+
+      # A short, fixed list of what scanners try first and no site here serves, so one request is
+      # enough. Wordlists are HttpErrorBurst's job; requests to paths that do exist are below.
+      - alert: ScannerPathRequest
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          "x-envoy-origin-path":~"(?i)(/\\.env|/\\.git/|/\\.aws/|wp-login\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\.\\./|%2e%2e)"
+          | extract "<remote_ip>:" from downstream_remote_address
+          | copy "x-envoy-origin-path" as path
+          | stats by (remote_ip, path) count() as requests
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: reconnaissance
+          mitre_technique: T1595.003
+        annotations:
+          summary: "{{ $labels.remote_ip }} requested {{ $labels.path }}"
+          description: >-
+            A path no site here serves, but which scanners and exploit kits try first (secrets
+            files, WordPress, path traversal): a scanner on the LAN or in a container.
+          runbook: >-
+            Look at the client's other requests and user-agent, and find the device. Trigger:
+            curl -so /dev/null https://homepage.hirednoobs.com/.env
+
+      # Sensitive actions on the sites that exist. All are behind Authelia (Grafana has its own
+      # login), so a logged-out request gets a 302 and only signed-in ones match. Your own
+      # actions fire these too: they ask "was this you?". Requests made inside the cluster, not
+      # through the Gateway, aren't seen here.
+      - alert: AlertSilenced
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          ":authority":="alertmanager.hirednoobs.com" method:=POST
+          "x-envoy-origin-path":="/api/v2/silences" response_code:=200
+          | extract "<remote_ip>:" from downstream_remote_address
+          | stats by (remote_ip) count() as silences
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: defense-evasion
+          mitre_technique: T1562.006
+        annotations:
+          summary: "{{ $value }} Alertmanager silences created from {{ $labels.remote_ip }}"
+          description: >-
+            A silence stops matching alerts reaching ntfy, which is how detections are quietly
+            switched off.
+          runbook: >-
+            Check what the silence matches at https://alertmanager.hirednoobs.com/#/silences and
+            expire it if it isn't yours. Trigger: create a short silence in the Alertmanager UI.
+
+      # VictoriaLogs' delete API is off (no -delete.enable), so any request to it is an attempt.
+      - alert: MonitoringDataDeletion
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          ((":authority":="victoriametrics.hirednoobs.com" "x-envoy-origin-path":~"^/api/v1/admin/tsdb/delete_series")
+          or (":authority":="victorialogs.hirednoobs.com" "x-envoy-origin-path":~"^/delete/"))
+          -response_code:=302
+          | extract "<remote_ip>:" from downstream_remote_address
+          | copy ":authority" as host
+          | stats by (host, remote_ip, response_code) count() as requests
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: defense-evasion
+          mitre_technique: T1070
+        annotations:
+          summary: "{{ $labels.remote_ip }} called the delete API on {{ $labels.host }} ({{ $labels.response_code }})"
+          description: >-
+            Deleting metrics or logs is how tracks are covered. VictoriaMetrics' delete_series
+            works; VictoriaLogs' delete API is disabled, so there it's an attempt.
+          runbook: >-
+            The request's path has the series or log filter. Check what's missing around that
+            time, and who the client is. Trigger: curl -s
+            'https://victoriametrics.hirednoobs.com/api/v1/admin/tsdb/delete_series?match[]=siem_test_nonexistent'
+            with an Authelia session cookie, or from a browser.
+
+      - alert: GrafanaUserChange
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          ":authority":="grafana.hirednoobs.com" method:in("POST", "PUT", "PATCH", "DELETE")
+          "x-envoy-origin-path":~"^/api/(admin/users|org/users)" response_code:~"^2"
+          | extract "<remote_ip>:" from downstream_remote_address
+          | copy "x-envoy-origin-path" as path
+          | stats by (remote_ip, method, path) count() as requests
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: persistence
+          mitre_technique: T1098
+        annotations:
+          summary: "Grafana user change from {{ $labels.remote_ip }}: {{ $labels.method }} {{ $labels.path }}"
+          description: >-
+            A Grafana user was created, deleted, or had its role or admin flag changed. Grafana
+            users aren't provisioned from git, so this is a change by hand.
+          runbook: >-
+            Check Administration -> Users in Grafana. Trigger: change a user's role (e.g.
+            homepage's, Viewer -> Editor -> back) in Grafana.
+
+      # The admin panel is disabled (no ADMIN_TOKEN), so any request is probing.
+      - alert: VaultwardenAdminRequest
+        expr: >-
+          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          ":authority":="vaultwarden.hirednoobs.com" "x-envoy-origin-path":~"^/admin"
+          | extract "<remote_ip>:" from downstream_remote_address
+          | stats by (remote_ip) count() as requests
+        labels:
+          severity: warning
+          source: envoy
+          mitre_tactic: initial-access
+          mitre_technique: T1190
+        annotations:
+          summary: "{{ $value }} requests for Vaultwarden's admin panel from {{ $labels.remote_ip }}"
+          description: >-
+            Vaultwarden's admin panel is disabled; requests for it are someone looking for a way
+            in to the password vaults.
+          runbook: >-
+            Look at the client's other requests and user-agent. Trigger: curl -so /dev/null
+            https://vaultwarden.hirednoobs.com/admin
