@@ -126,6 +126,9 @@ spec:
             - name: dashboards-services
               mountPath: /etc/grafana/dashboards/Services
               readOnly: true
+            - name: dashboards-security
+              mountPath: /etc/grafana/dashboards/Security
+              readOnly: true
             - name: tls
               mountPath: /etc/grafana/tls
               readOnly: true
@@ -159,6 +162,9 @@ spec:
         - name: dashboards-services
           configMap:
             name: grafana-dashboards-services
+        - name: dashboards-security
+          configMap:
+            name: grafana-dashboards-security
         - name: tls
           secret:
             secretName: grafana-tls

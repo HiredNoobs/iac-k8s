@@ -32,6 +32,7 @@ groups:
             Authelia lets through) by someone other than lldap-bootstrap, which has removed it.
             Only an lldap admin can do that, so an admin login or the admin password is in
             someone else's hands, unless it was you.
+          tested: "2026-10-10"
           runbook: >-
             Find who used lldap's admin UI in the last hour: POST /api/graphql to
             lldap.hirednoobs.com in the Envoy access logs, and the client's lldap logins. If it
@@ -57,6 +58,7 @@ groups:
             lldap's users or groups differed from git: an undeclared user or group (deleted),
             a declared one missing (recreated), or a membership changed (reverted). Expected
             once after a change to apps/base/lldap/bootstrap in git.
+          tested: "2026-10-10"
           runbook: >-
             Check git log for apps/base/lldap/bootstrap first. Otherwise find who used lldap's
             admin UI in the last hour (POST /api/graphql in the Envoy access logs). Trigger:

@@ -28,6 +28,7 @@ groups:
           description: >-
             Repeated wrong master passwords (or a made-up account) from one client: password
             guessing, or a client with a stale password.
+          tested: "2026-10-10"
           runbook: >-
             Look at the client's other requests (remote_ip in the Envoy access logs). Trigger:
             log out of the web vault fully (locking isn't enough), then five wrong master
@@ -50,6 +51,7 @@ groups:
           description: >-
             Failed logins for several accounts from one client: guessing or spraying usernames.
             Vaultwarden doesn't say whether an account exists, so this covers both.
+          tested: "2026-10-10"
           runbook: >-
             The usernames tried are in the matching lines ("Username: ..."). Trigger: log out
             fully, then log in with three made-up email addresses within 5 minutes.

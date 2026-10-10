@@ -29,6 +29,7 @@ groups:
           description: >-
             Repeated wrong passwords for an existing user, including attempts while regulation
             has the user banned: password guessing, or a client with a stale password.
+          tested: "2026-10-10"
           runbook: >-
             Look at the client's other requests (remote_ip in the Envoy access logs) and whether a
             TOTP failure followed (the password worked). Trigger: six wrong passwords for a real
@@ -50,6 +51,7 @@ groups:
           description: >-
             Logins with usernames that don't exist, which regulation never bans: guessing or
             spraying usernames.
+          tested: "2026-10-10"
           runbook: >-
             The usernames tried are in the matching lines ("username input '...'"). Trigger:
             three logins with made-up usernames within 5 minutes.
@@ -72,6 +74,7 @@ groups:
             A TOTP code is only asked for after the right password, so the user's password is
             known to whoever is at this client (T1078 Valid Accounts), and they're guessing the
             second factor.
+          tested: "2026-10-10"
           runbook: >-
             If it isn't you, change the user's password in Vault (lldap-bootstrap resets it
             hourly) and look at what the client did (Envoy access logs). Trigger: the right

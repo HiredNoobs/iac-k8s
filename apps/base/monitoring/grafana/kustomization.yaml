@@ -90,3 +90,12 @@ configMapGenerator:
       - dashboards/Services/blackbox.json
     options:
       disableNameSuffixHash: true
+  # ATT&CK coverage is generated from the alert rules' labels by
+  # .forgejo/scripts/attack-coverage.py (lint checks it's up to date): don't edit it in Grafana.
+  - name: grafana-dashboards-security
+    files:
+      - dashboards/Security/security-overview.json
+      - dashboards/Security/investigation.json
+      - dashboards/Security/attack-coverage.json
+    options:
+      disableNameSuffixHash: true

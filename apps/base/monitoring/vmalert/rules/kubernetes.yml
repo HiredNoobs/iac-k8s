@@ -122,12 +122,15 @@ groups:
           summary: Flux {{ $labels.customresource_kind }} not ready ({{ $labels.exported_namespace }}/{{ $labels.name }})
           description: "{{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} has been failing for 15 minutes: flux get {{ $labels.customresource_kind | toLower }} -n {{ $labels.exported_namespace }} {{ $labels.name }}"
 
-      # Suspending is for maintenance (e.g. a cutover), forgetting to resume stops every change.
+      # Suspending is for maintenance, forgetting to resume stops every change.
       - alert: FluxResourceSuspended
         expr: 'gotk_resource_info{suspended="true"} == 1'
         for: 2h
         labels:
           severity: warning
+          source: flux
+          mitre_tactic: defense-evasion
+          mitre_technique: T1562.001
         annotations:
           summary: Flux {{ $labels.customresource_kind }} suspended ({{ $labels.exported_namespace }}/{{ $labels.name }})
           description: "{{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} has been suspended for 2 hours: flux resume ..."
