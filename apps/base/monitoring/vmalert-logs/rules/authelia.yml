@@ -1,0 +1,78 @@
+# Authelia's logins (apps/base/authelia), from its pod logs. remote_ip is the client (the Gateway
+# passes it through); the username is only in _msg, so it's extracted. Authelia logs failures, not
+# successes (at log level info).
+#
+# Regulation (Authelia's defaults: 3 failed first factors in 2 minutes ban the user for 5) doesn't
+# log the ban itself, only the attempts made during it ("... and they are banned until ..."), and
+# never bans usernames that don't exist.
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: authelia
+    type: vlogs
+    interval: 5m
+    rules:
+      - alert: AutheliaLoginFailures
+        expr: >-
+          {kubernetes.pod_namespace="authelia",kubernetes.container_name="authelia"}
+          "Unsuccessful 1FA authentication attempt by user" -"by user ''"
+          | extract "by user '<user>'"
+          | stats by (user, remote_ip) count() as failures
+          | filter failures:>=5
+        labels:
+          severity: warning
+          source: authelia
+          mitre_tactic: credential-access
+          mitre_technique: T1110.001
+        annotations:
+          summary: "{{ $value }} failed Authelia logins for {{ $labels.user }} from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Repeated wrong passwords for an existing user, including attempts while regulation
+            has the user banned: password guessing, or a client with a stale password.
+          runbook: >-
+            Look at the client's other requests (remote_ip in the Envoy access logs) and whether a
+            TOTP failure followed (the password worked). Trigger: six wrong passwords for a real
+            user within 5 minutes; the user is then banned for 5 minutes.
+
+      - alert: AutheliaUnknownUsers
+        expr: >-
+          {kubernetes.pod_namespace="authelia",kubernetes.container_name="authelia"}
+          "which usually indicates they do not exist"
+          | stats by (remote_ip) count() as attempts
+          | filter attempts:>=3
+        labels:
+          severity: warning
+          source: authelia
+          mitre_tactic: credential-access
+          mitre_technique: T1110.003
+        annotations:
+          summary: "{{ $value }} Authelia logins with unknown usernames from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Logins with usernames that don't exist, which regulation never bans: guessing or
+            spraying usernames.
+          runbook: >-
+            The usernames tried are in the matching lines ("username input '...'"). Trigger:
+            three logins with made-up usernames within 5 minutes.
+
+      - alert: AutheliaSecondFactorFailures
+        expr: >-
+          {kubernetes.pod_namespace="authelia",kubernetes.container_name="authelia"}
+          "Unsuccessful TOTP authentication attempt by user"
+          | extract "by user '<user>'"
+          | stats by (user, remote_ip) count() as failures
+          | filter failures:>=3
+        labels:
+          severity: critical
+          source: authelia
+          mitre_tactic: credential-access
+          mitre_technique: T1110
+        annotations:
+          summary: "{{ $value }} failed TOTP codes for {{ $labels.user }} from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            A TOTP code is only asked for after the right password, so the user's password is
+            known to whoever is at this client (T1078 Valid Accounts), and they're guessing the
+            second factor.
+          runbook: >-
+            If it isn't you, change the user's password in Vault (lldap-bootstrap resets it
+            hourly) and look at what the client did (Envoy access logs). Trigger: the right
+            password, then three wrong TOTP codes within 5 minutes.

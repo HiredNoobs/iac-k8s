@@ -13,4 +13,4 @@ resources:
 configMapGenerator:
   - name: vmalert-logs-rules
     files:
-      - rules/test.yml
+      - rules/authelia.yml
