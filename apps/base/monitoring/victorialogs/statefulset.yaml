@@ -50,6 +50,9 @@ spec:
             - --retentionPeriod=30d
             # Drops the oldest days early when the volume passes 85%.
             - --retention.maxDiskUsagePercent=85
+          env:
+            - name: TZ
+              value: Europe/London
           ports:
             - name: https
               containerPort: 9428
