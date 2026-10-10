@@ -1,0 +1,8 @@
+# The collector reads kube-apiserver's audit log on the control planes (hostPath), which Talos'
+# default pod security standard (baseline) refuses.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vector
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

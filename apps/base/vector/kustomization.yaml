@@ -1,0 +1,15 @@
+# kube-apiserver's audit log into VictoriaLogs (source="kube-audit"), for the security detections
+# (apps/base/monitoring/vmalert-logs/rules/kube-audit.yml). What gets logged is the audit policy
+# in iac-homelab (terraform/modules/talos-cluster/audit-policy.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vector
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - daemonset.yaml
+# A change rolls the pods (the name gets a hash).
+configMapGenerator:
+  - name: vector
+    files:
+      - vector.yaml

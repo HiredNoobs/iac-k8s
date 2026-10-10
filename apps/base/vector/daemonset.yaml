@@ -1,0 +1,87 @@
+# Vector (vector.yaml) on each control plane, where kube-apiserver writes its audit log
+# (/var/log/audit/kube, as its own user, 65534). Root with only CAP_DAC_READ_SEARCH: it can read
+# those files and write its read positions and buffer to the node (/var/lib/vector), nothing
+# else. vlagent can't do this: it only collects containers' logs.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector
+  labels:
+    app.kubernetes.io/name: vector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vector
+      annotations:
+        # Scraped by vmagent's pods job: lines read and sent, errors (TargetDown if it's gone).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9598"
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vector
+          image: timberio/vector:0.59.0-distroless-static@sha256:2138c72ef15477d3a60126da851407a198ec61d2ff4cd600a4e69db5f6a29ff7
+          args: ["--config", "/etc/vector/vector.yaml"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: http-metrics
+              containerPort: 9598
+              protocol: TCP
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_READ_SEARCH"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vector
+              readOnly: true
+            - name: audit
+              mountPath: /var/log/audit/kube
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/vector
+            - name: tls
+              mountPath: /etc/vector/tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: vector
+        - name: audit
+          hostPath:
+            path: /var/log/audit/kube
+            type: Directory
+        - name: data
+          hostPath:
+            path: /var/lib/vector
+            type: DirectoryOrCreate
+        - name: tls
+          secret:
+            secretName: vector-tls

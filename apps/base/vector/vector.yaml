@@ -1,0 +1,67 @@
+# Vector on each control plane: tails kube-apiserver's audit log and sends each event to
+# VictoriaLogs as one JSON line. The event's fields stay as they are (nested ones become
+# user.username, objectRef.resource, responseStatus.code, ... in VictoriaLogs), plus:
+#   _msg       "<verb> <requestURI> <code> by <user>", a summary to read in lists
+#   _time      when the response completed (stageTimestamp)
+#   remote_ip  the client, sourceIPs[0] (sourceIPs itself is an array, stored as JSON text), named
+#              like the other sources' client field
+#   source     "kube-audit", and node: the stream fields
+data_dir: /var/lib/vector
+
+sources:
+  audit:
+    type: file
+    include:
+      - /var/log/audit/kube/*.log
+    # Without a checkpoint (first start), from now: the files hold up to 30 days of the old,
+    # untrimmed policy. Files rotated in later are read from their start.
+    read_from: end
+    ignore_older_secs: 86400
+  # Vector's own metrics (lines read, sent, errors), scraped by vmagent's pods job.
+  internal:
+    type: internal_metrics
+
+transforms:
+  events:
+    type: remap
+    inputs: [audit]
+    # A line that isn't JSON is dropped (logged by Vector) rather than sent half-parsed.
+    drop_on_error: true
+    source: |
+      . = object!(parse_json!(.message))
+      ._time = .stageTimestamp || .requestReceivedTimestamp
+      .source = "kube-audit"
+      .node = get_env_var!("NODE_NAME")
+      .remote_ip = .sourceIPs[0]
+      code = ""
+      if .responseStatus.code != null { code = to_string!(.responseStatus.code) }
+      ._msg = join!(compact([
+        string(.verb) ?? "",
+        string(.requestURI) ?? "",
+        code,
+        "by",
+        string(.user.username) ?? "",
+      ]), " ")
+
+sinks:
+  victorialogs:
+    type: http
+    inputs: [events]
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=source,node&_msg_field=_msg&_time_field=_time
+    method: post
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    compression: gzip
+    tls:
+      ca_file: /etc/vector/tls/ca.crt
+    # On the node's disk while VictoriaLogs is down (256 MiB is Vector's minimum).
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: block
+  metrics:
+    type: prometheus_exporter
+    inputs: [internal]
+    address: 0.0.0.0:9598
