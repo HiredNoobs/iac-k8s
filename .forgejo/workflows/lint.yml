@@ -26,8 +26,8 @@ env:
   # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers),
   # looked up from the same chart so Renovate groups them.
   # renovate: datasource=helm depName=external-secrets registryUrl=https://charts.external-secrets.io
-  ESO_VERSION: "2.11.0"
-  ESO_CRDS_SHA256: "2b2aa2e85a4c081a11688f0b31ebdb33153c0885d4c2e3604d11058995a11b75"
+  ESO_VERSION: "2.12.0"
+  ESO_CRDS_SHA256: "d4da9492a6906a3834bb1f5b7367575a29b5c43411017babc7a30728f465d1ba"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io extractVersion=^v(?<version>.+)$
   CERT_MANAGER_VERSION: "1.21.2"
   CERT_MANAGER_CRDS_SHA256: "262fef78478492cd35b73a1b227106b7802f9c056361d1f561d04b32d751337f"
