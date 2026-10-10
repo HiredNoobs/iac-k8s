@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: grafana
-          image: grafana/grafana:12.4.0@sha256:b0ae311af06228bcfd4a620504b653db80f5b91e94dc3dc2a5b7dab202bcde20
+          image: grafana/grafana:12.4.12@sha256:83be3e511ede559bee80e2215bb1987cb1246075461cb961beb515b0341e7aea
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
