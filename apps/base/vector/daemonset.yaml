@@ -74,10 +74,11 @@ spec:
         - name: config
           configMap:
             name: vector
+        # No type check: Talos' kubelet runs in its own container without /var/log/audit, so it
+        # would report the directory missing; containerd mounts it from the host.
         - name: audit
           hostPath:
             path: /var/log/audit/kube
-            type: Directory
         - name: data
           hostPath:
             path: /var/lib/vector
