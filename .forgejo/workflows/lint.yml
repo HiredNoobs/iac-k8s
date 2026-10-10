@@ -40,8 +40,8 @@ env:
   GATEWAY_API_CRDS_SHA256: "d7fa77650e4ef28fca0411536fcb5e237deb4d50301cfded3be49d9a1b7bbd02"
   # The release manifest, for its CRDs (the chart renders them as templates).
   # renovate: datasource=helm depName=longhorn registryUrl=https://charts.longhorn.io
-  LONGHORN_VERSION: "1.12.1"
-  LONGHORN_MANIFEST_SHA256: "41648963af867ac1d0c85755fb53cf61cacd57c9bb22e1942e3fb0439eeb04fd"
+  LONGHORN_VERSION: "1.13.0"
+  LONGHORN_MANIFEST_SHA256: "d0f99488e7b2789312d45b0127ce7388df71a971e6fca2085e88635303cc0a1f"
 
 jobs:
   lint:
