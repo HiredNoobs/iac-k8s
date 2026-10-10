@@ -1,0 +1,55 @@
+# Vaultwarden's logins (apps/base/vaultwarden), from its pod logs. The client's IP and the
+# username are only in _msg, so they're extracted (as remote_ip, like Authelia's). The IP is the
+# client's because IP_HEADER is X-Forwarded-For.
+#
+# Vaultwarden logs the same line for a wrong password and for an account that doesn't exist, and
+# nothing for a successful login or a failed unlock (a locked client checks the password itself).
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: vaultwarden
+    type: vlogs
+    interval: 5m
+    rules:
+      - alert: VaultwardenLoginFailures
+        expr: >-
+          {kubernetes.pod_namespace="vaultwarden",kubernetes.container_name="vaultwarden"}
+          "Username or password is incorrect"
+          | extract_regexp "IP: (?P<remote_ip>\\S+)\\. Username: (?P<user>.*)\\.$"
+          | stats by (user, remote_ip) count() as failures
+          | filter failures:>=5
+        labels:
+          severity: warning
+          source: vaultwarden
+          mitre_tactic: credential-access
+          mitre_technique: T1110.001
+        annotations:
+          summary: "{{ $value }} failed Vaultwarden logins for {{ $labels.user }} from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Repeated wrong master passwords (or a made-up account) from one client: password
+            guessing, or a client with a stale password.
+          runbook: >-
+            Look at the client's other requests (remote_ip in the Envoy access logs). Trigger:
+            log out of the web vault fully (locking isn't enough), then five wrong master
+            passwords within 5 minutes.
+
+      - alert: VaultwardenManyUsernames
+        expr: >-
+          {kubernetes.pod_namespace="vaultwarden",kubernetes.container_name="vaultwarden"}
+          "Username or password is incorrect"
+          | extract_regexp "IP: (?P<remote_ip>\\S+)\\. Username: (?P<user>.*)\\.$"
+          | stats by (remote_ip) count_uniq(user) as users
+          | filter users:>=3
+        labels:
+          severity: warning
+          source: vaultwarden
+          mitre_tactic: credential-access
+          mitre_technique: T1110.003
+        annotations:
+          summary: "{{ $value }} different usernames failed Vaultwarden logins from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Failed logins for several accounts from one client: guessing or spraying usernames.
+            Vaultwarden doesn't say whether an account exists, so this covers both.
+          runbook: >-
+            The usernames tried are in the matching lines ("Username: ..."). Trigger: log out
+            fully, then log in with three made-up email addresses within 5 minutes.

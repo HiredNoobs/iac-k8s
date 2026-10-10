@@ -14,3 +14,4 @@ configMapGenerator:
   - name: vmalert-logs-rules
     files:
       - rules/authelia.yml
+      - rules/vaultwarden.yml
