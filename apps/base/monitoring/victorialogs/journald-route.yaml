@@ -11,9 +11,10 @@ metadata:
   name: victorialogs-journald
 spec:
   parentRefs:
+    # Its own listener, HTTP/1.1 only (infrastructure/configs/gateway/traffic-policy.yaml).
     - name: public
       namespace: gateway
-      sectionName: https
+      sectionName: journald
   hostnames:
     - journald.hirednoobs.com
   rules:
