@@ -157,6 +157,7 @@ groups:
         annotations:
           summary: Deprecated API in use ({{ $labels.group }}/{{ $labels.version }} {{ $labels.resource }})
           description: "{{ $labels.resource }} in {{ $labels.group }}/{{ $labels.version }} was requested and goes in Kubernetes {{ $labels.removed_release }}. The audit log has who asked (objectRef.apiVersion)."
+          tested: "2026-10-11"
 
       - alert: CoreDNSErrors
         expr: 'sum(rate(coredns_dns_responses_total{job="coredns",rcode="SERVFAIL"}[5m])) / sum(rate(coredns_dns_responses_total{job="coredns"}[5m])) > 0.05'
@@ -175,6 +176,77 @@ groups:
         annotations:
           summary: CoreDNS slow
           description: "1% of the cluster's DNS lookups take longer than {{ $value | humanizeDuration }}: usually the upstream (the router, then Pi-hole)."
+
+  # etcd (vmagent's etcd job), from etcd's own mixin (etcd-io/etcd contrib/mixin), thresholds
+  # as upstream. Three members: one can be down, two is no quorum and no API.
+  - name: etcd
+    interval: 60s
+    rules:
+      - alert: EtcdNoLeader
+        expr: 'etcd_server_has_leader{job="etcd"} == 0'
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: etcd member without a leader ({{ $labels.instance }})
+          description: "etcd on {{ $labels.instance }} has no leader: it can't serve writes. If it's all of them, the cluster has lost quorum (talosctl etcd status)."
+
+      - alert: EtcdFrequentLeaderChanges
+        expr: 'increase(etcd_server_leader_changes_seen_total{job="etcd"}[15m]) >= 4'
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: etcd changing leader often ({{ $labels.instance }})
+          description: "{{ $value | printf \"%.0f\" }} leader changes in 15 minutes: members missing heartbeats, usually slow disks or a starved control plane."
+
+      - alert: EtcdPeerSendFailures
+        expr: 'sum by (instance) (rate(etcd_network_peer_sent_failures_total{job="etcd"}[2m])) > 0.01'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: etcd can't reach a peer ({{ $labels.instance }})
+          description: "etcd on {{ $labels.instance }} keeps failing to send to another member: a member down or the network between the Proxmox hosts."
+
+      # The write-ahead log's fsync: etcd waits for it on every write.
+      - alert: EtcdSlowFsync
+        expr: 'histogram_quantile(0.99, sum by (instance, le) (rate(etcd_disk_wal_fsync_duration_seconds_bucket{job="etcd"}[5m]))) > 0.5'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: etcd disk slow ({{ $labels.instance }})
+          description: "1% of etcd's WAL fsyncs on {{ $labels.instance }} take over {{ $value | humanizeDuration }}: the VM's disk (local-lvm on its Proxmox host) is too slow or contended."
+
+      - alert: EtcdSlowCommit
+        expr: 'histogram_quantile(0.99, sum by (instance, le) (rate(etcd_disk_backend_commit_duration_seconds_bucket{job="etcd"}[5m]))) > 0.25'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: etcd commits slow ({{ $labels.instance }})
+          description: "1% of etcd's backend commits on {{ $labels.instance }} take over {{ $value | humanizeDuration }}: disk too slow or contended."
+
+      # At the quota etcd stops taking writes (alarm NOSPACE) until it's defragmented or raised.
+      - alert: EtcdDatabaseNearQuota
+        expr: 'last_over_time(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[5m]) / last_over_time(etcd_server_quota_backend_bytes{job="etcd"}[5m]) > 0.8'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: etcd database at {{ $value | humanizePercentage }} of its quota ({{ $labels.instance }})
+          description: "At the quota etcd refuses writes. Defragment (talosctl -n <node> etcd defrag, one member at a time) if much of it is free (the dashboard's DB size vs in use), else something is writing a lot."
+
+      # Space freed by compaction is only returned by a defrag; Talos doesn't defragment by itself.
+      - alert: EtcdDatabaseFragmented
+        expr: 'last_over_time(etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd"}[5m]) / last_over_time(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[5m]) < 0.5 and etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd"} > 104857600'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: etcd database mostly free space ({{ $labels.instance }})
+          description: "Under half of etcd's database file on {{ $labels.instance }} is in use: talosctl -n <node> etcd defrag, one member at a time (it blocks that member while it runs)."
 
   - name: Flux
     interval: 60s
