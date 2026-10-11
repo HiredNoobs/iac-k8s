@@ -127,6 +127,55 @@ groups:
           summary: PVC pending ({{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }})
           description: "{{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has been Pending for 15 minutes."
 
+  # kube-apiserver and CoreDNS (vmagent's apiserver and coredns jobs). Down is TargetDown's.
+  - name: Control plane
+    interval: 60s
+    rules:
+      - alert: KubeAPIServerErrors
+        expr: 'sum by (instance) (rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m])) / sum by (instance) (rate(apiserver_request_total{job="apiserver"}[5m])) > 0.05'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API server returning errors ({{ $labels.instance }})
+          description: "{{ $value | humanizePercentage }} of the requests to the API server on {{ $labels.instance }} fail with a 5xx: see its resource and verb on the API server dashboard (often etcd)."
+
+      # Mean time of the ordinary requests (WATCH and CONNECT stay open on purpose).
+      - alert: KubeAPIServerSlow
+        expr: 'sum by (instance) (rate(apiserver_request_duration_seconds_sum{job="apiserver",verb!~"WATCH|CONNECT"}[5m])) / sum by (instance) (rate(apiserver_request_duration_seconds_count{job="apiserver",verb!~"WATCH|CONNECT"}[5m])) > 1'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API server slow ({{ $labels.instance }})
+          description: "Requests to the API server on {{ $labels.instance }} take {{ $value | humanizeDuration }} on average: a busy or starved control plane, or a slow etcd."
+
+      - alert: KubeDeprecatedAPIUsed
+        expr: 'max by (group, version, resource, removed_release) (apiserver_requested_deprecated_apis{job="apiserver"}) == 1'
+        labels:
+          severity: info
+        annotations:
+          summary: Deprecated API in use ({{ $labels.group }}/{{ $labels.version }} {{ $labels.resource }})
+          description: "{{ $labels.resource }} in {{ $labels.group }}/{{ $labels.version }} was requested and goes in Kubernetes {{ $labels.removed_release }}. The audit log has who asked (objectRef.apiVersion)."
+
+      - alert: CoreDNSErrors
+        expr: 'sum(rate(coredns_dns_responses_total{job="coredns",rcode="SERVFAIL"}[5m])) / sum(rate(coredns_dns_responses_total{job="coredns"}[5m])) > 0.05'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: CoreDNS failing lookups
+          description: "{{ $value | humanizePercentage }} of the cluster's DNS answers are SERVFAIL: CoreDNS can't reach its upstream (the router, then Pi-hole)."
+
+      - alert: CoreDNSSlow
+        expr: 'histogram_quantile(0.99, sum by (le) (rate(coredns_dns_request_duration_seconds_bucket{job="coredns"}[5m]))) > 1'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: CoreDNS slow
+          description: "1% of the cluster's DNS lookups take longer than {{ $value | humanizeDuration }}: usually the upstream (the router, then Pi-hole)."
+
   - name: Flux
     interval: 60s
     rules:
