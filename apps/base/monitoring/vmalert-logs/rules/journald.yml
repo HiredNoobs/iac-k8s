@@ -1,0 +1,245 @@
+# The prx-999 VMs' journals (iac-homelab's journal_upload role, through
+# apps/base/monitoring/victorialogs/journald-route.yaml): prx-999-srv-{mgmt,git,runner,vault}-001.
+# Stream fields _HOSTNAME, _SYSTEMD_UNIT (and _MACHINE_ID), the message is _msg. mgmt
+# (192.168.111.254) is where Ansible and Terraform run, and the user's way in from the LAN.
+#
+# Vault's audit log is in vault.service's journal (the stdout audit device, terraform/vault): one
+# JSON object per request and per response. Only the responses are read (they repeat the
+# request, plus the result), with secrets and tokens HMAC'd. build.sh vault uses the root token,
+# so a Vault apply fires VaultRootTokenUsed and VaultConfigChange: they ask "was this you?".
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: journald
+    type: vlogs
+    interval: 5m
+    rules:
+      # From mgmt is expected (Ansible, you); so is git over SSH to Forgejo (pushes, and Flux's
+      # pulls from the nodes), and you logging in to mgmt from the LAN.
+      - alert: SshLoginUnexpected
+        expr: >-
+          {_SYSTEMD_UNIT="ssh.service"} "Accepted "
+          | extract_regexp "Accepted (?P<method>\\S+) for (?P<user>\\S+) from (?P<remote_ip>\\S+) port"
+          | filter -remote_ip:=192.168.111.254 -(user:=git _HOSTNAME:="prx-999-srv-git-001")
+          -(_HOSTNAME:="prx-999-srv-mgmt-001" remote_ip:ipv4_range("192.168.50.0/24"))
+          | copy _HOSTNAME as host
+          | stats by (host, user, remote_ip, method) count() as logins
+        labels:
+          severity: warning
+          source: ssh
+          mitre_tactic: lateral-movement
+          mitre_technique: T1021.004
+        annotations:
+          summary: "SSH login to {{ $labels.host }} as {{ $labels.user }} from {{ $labels.remote_ip }}"
+          description: >-
+            An SSH login to a prx-999 VM that didn't come from mgmt (nor git over SSH, nor you
+            into mgmt from the LAN): someone moving between machines with a key they found.
+          runbook: >-
+            Who: the key's fingerprint is in the same journal line. Check ~/.ssh/authorized_keys
+            on that VM and what the session did (sudo lines, the user's shell history).
+            Trigger: ssh from your workstation straight to the Vault or Forgejo VM.
+
+      # fail2ban bans after 3 failures in 10 minutes (1 hour); each attempt can log two lines.
+      - alert: SshAuthFailures
+        expr: >-
+          {_SYSTEMD_UNIT="ssh.service"}
+          ("Invalid user" or "Failed password" or "Failed publickey"
+          or "Connection closed by authenticating user" or "authentication failure")
+          | extract_regexp "(?:from |user \\S+ )(?P<remote_ip>\\d+\\.\\d+\\.\\d+\\.\\d+) port"
+          | copy _HOSTNAME as host
+          | stats by (host, remote_ip) count() as failures
+          | filter failures:>=4
+        labels:
+          severity: warning
+          source: ssh
+          mitre_tactic: credential-access
+          mitre_technique: T1110
+        annotations:
+          summary: "{{ $value }} failed SSH logins to {{ $labels.host }} from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Repeated failed SSH logins (unknown users, wrong keys): guessing, usually stopped by
+            fail2ban after three.
+          runbook: >-
+            The users tried are in the lines. fail2ban-client status sshd on the VM shows bans.
+            Trigger: ssh -o PubkeyAuthentication=no nobody@<vm> a few times.
+
+      # Ansible becomes root with sudo as the admin user (hirednoobs) on every run. sudo logs
+      # COMMAND= for refused attempts too: those are SudoFailures'.
+      - alert: SudoUnexpectedUser
+        expr: >-
+          {_HOSTNAME=~"prx-999-.*"} SYSLOG_IDENTIFIER:=sudo "COMMAND="
+          -"NOT in sudoers" -"incorrect password attempt" -"a password is required"
+          | extract_regexp "^\\s*(?P<user>\\S+) : "
+          | filter -user:=hirednoobs
+          | copy _HOSTNAME as host
+          | stats by (host, user) count() as commands
+        labels:
+          severity: warning
+          source: sudo
+          mitre_tactic: privilege-escalation
+          mitre_technique: T1548.003
+        annotations:
+          summary: "{{ $labels.user }} ran {{ $value }} commands with sudo on {{ $labels.host }}"
+          description: >-
+            sudo used by someone other than the admin user: a new or service account given sudo,
+            or a way to root that shouldn't exist.
+          runbook: >-
+            The commands are in the lines (COMMAND=). Check /etc/sudoers.d on the VM.
+            Trigger: none safe; test locally with a sample line.
+
+      - alert: SudoFailures
+        expr: >-
+          {_HOSTNAME=~"prx-999-.*"} SYSLOG_IDENTIFIER:=sudo
+          ("incorrect password attempt" or "NOT in sudoers" or "authentication failure"
+          or "a password is required")
+          | extract_regexp "^\\s*(?P<user>\\S+) : "
+          | copy _HOSTNAME as host
+          | stats by (host, user) count() as failures
+        labels:
+          severity: warning
+          source: sudo
+          mitre_tactic: privilege-escalation
+          mitre_technique: T1548.003
+        annotations:
+          summary: "{{ $labels.user }} failed to use sudo on {{ $labels.host }} ({{ $value }} lines)"
+          description: >-
+            sudo refused (not allowed, or a wrong password): someone on the VM trying to become
+            root.
+          runbook: >-
+            Who was logged in then (ssh.service lines). Trigger: sudo -k; sudo -u nobody true
+            as a user without sudo, or a wrong password where one is asked.
+
+      - alert: VaultRootTokenUsed
+        expr: >-
+          {_SYSTEMD_UNIT="vault.service"} "\"type\":\"response\""
+          | unpack_json fields (auth.policies, auth.display_name, request.path, request.remote_address)
+          | filter auth.policies:~"\"root\""
+          | copy request.remote_address as remote_ip, auth.display_name as user
+          | stats by (remote_ip, user) count() as requests
+        labels:
+          severity: warning
+          source: vault
+          mitre_tactic: privilege-escalation
+          mitre_technique: T1078.001
+        annotations:
+          summary: "Vault's root token used for {{ $value }} requests from {{ $labels.remote_ip }}"
+          description: >-
+            Requests made with a root token: build.sh vault does this; anything else means the
+            root token (or keys.json) is out.
+          runbook: >-
+            The paths are in the entries (request.path). If it wasn't an apply of terraform/vault,
+            revoke root tokens (vault token revoke) and rotate keys.json. Trigger: a plan of the
+            Vault root (build.sh vault, then cancel at the prompt).
+
+      # sys/audit is the audit devices: removing one hides what follows.
+      - alert: VaultAuditDeviceChange
+        expr: >-
+          {_SYSTEMD_UNIT="vault.service"} "\"type\":\"response\""
+          | unpack_json fields (request.path, request.operation, request.remote_address, auth.display_name)
+          | filter request.path:~"^sys/audit(/|$)" request.operation:in("create", "update", "delete")
+          | copy request.remote_address as remote_ip, auth.display_name as user, request.path as path,
+          request.operation as operation
+          | stats by (remote_ip, user, path, operation) count() as requests
+        labels:
+          severity: critical
+          source: vault
+          mitre_tactic: defense-evasion
+          mitre_technique: T1562.008
+        annotations:
+          summary: "Vault audit device {{ $labels.operation }} {{ $labels.path }} by {{ $labels.user }} from {{ $labels.remote_ip }}"
+          description: >-
+            An audit device enabled or disabled. Disabling one is how Vault's trail is cut; only
+            terraform/vault should touch them.
+          runbook: >-
+            vault audit list on the VM; both devices (stdout, file) should be there. If not,
+            re-apply terraform/vault and treat the root token as compromised. Trigger: the first
+            apply of the audit devices fires it.
+
+      - alert: VaultConfigChange
+        expr: >-
+          {_SYSTEMD_UNIT="vault.service"} "\"type\":\"response\""
+          | unpack_json fields (request.path, request.operation, request.remote_address, auth.display_name)
+          | filter request.operation:in("create", "update", "delete")
+          request.path:~"^(sys/(policies/acl|policy|auth|mounts)/|auth/[^/]+/(role|users|config)(/|$))"
+          | copy request.remote_address as remote_ip, auth.display_name as user, request.path as path,
+          request.operation as operation
+          | stats by (remote_ip, user, path, operation) count() as requests
+        labels:
+          severity: warning
+          source: vault
+          mitre_tactic: persistence
+          mitre_technique: T1098
+        annotations:
+          summary: "Vault {{ $labels.operation }} {{ $labels.path }} by {{ $labels.user }} from {{ $labels.remote_ip }}"
+          description: >-
+            A policy, auth method, role or user changed: who can read which secrets. Only
+            terraform/vault (and you adding userpass users by hand) should do this.
+          runbook: >-
+            Compare with terraform/vault (a plan shows drift). Trigger: an apply of
+            terraform/vault that changes something.
+
+      - alert: VaultLoginFailures
+        expr: >-
+          {_SYSTEMD_UNIT="vault.service"} "\"type\":\"response\""
+          | unpack_json fields (request.path, request.remote_address, error)
+          | filter request.path:~"^auth/[^/]+/login" error:~"."
+          | copy request.remote_address as remote_ip, request.path as path
+          | stats by (remote_ip, path) count() as failures
+          | filter failures:>=3
+        labels:
+          severity: warning
+          source: vault
+          mitre_tactic: credential-access
+          mitre_technique: T1110
+        annotations:
+          summary: "{{ $value }} failed Vault logins ({{ $labels.path }}) from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Failed logins (userpass passwords, Kubernetes service account tokens): guessing, or
+            ESO with a token Vault no longer accepts.
+          runbook: >-
+            The error is in the entries. From a node address with auth/kubernetes: check ESO's
+            ClusterSecretStore. Trigger: vault login -method=userpass username=nobody three
+            times.
+
+      - alert: VaultPermissionDenied
+        expr: >-
+          {_SYSTEMD_UNIT="vault.service"} "\"type\":\"response\""
+          | unpack_json fields (request.path, request.remote_address, auth.display_name, error)
+          | filter error:~"permission denied"
+          | copy request.remote_address as remote_ip, auth.display_name as user
+          | stats by (remote_ip, user) count() as denied
+          | filter denied:>=5
+        labels:
+          severity: warning
+          source: vault
+          mitre_tactic: credential-access
+          mitre_technique: T1555
+        annotations:
+          summary: "{{ $value }} Vault requests denied for {{ $labels.user }} from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            A token trying paths its policy doesn't allow: looking for secrets it shouldn't have,
+            or an app configured with the wrong path.
+          runbook: >-
+            The paths are in the entries (request.path). Trigger: with ESO's role, read a path
+            outside labv2/data/production/* five times.
+
+      - alert: ForgejoLoginFailures
+        expr: >-
+          {_SYSTEMD_UNIT="forgejo.service"} "Failed authentication attempt for"
+          | extract "Failed authentication attempt for <user> from <remote_ip>: "
+          | extract_regexp "^(?P<remote_ip>[^:]+)" from remote_ip
+          | stats by (remote_ip) count() as failures
+          | filter failures:>=5
+        labels:
+          severity: warning
+          source: forgejo
+          mitre_tactic: credential-access
+          mitre_technique: T1110
+        annotations:
+          summary: "{{ $value }} failed Forgejo logins from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Repeated wrong passwords on git.hirednoobs.com: guessing, or a client with an old
+            password or token.
+          runbook: >-
+            The usernames tried are in the lines. Trigger: five wrong passwords at
+            https://git.hirednoobs.com/user/login.
