@@ -36,17 +36,24 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
-  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*, k8s-system-api-server,
-  # k8s-system-coredns).
+  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
   - name: grafana-dashboards-kubernetes
     files:
-      - dashboards/Kubernetes/k8s-system-api-server.json
-      - dashboards/Kubernetes/k8s-system-coredns.json
       - dashboards/Kubernetes/k8s-views-global.json
       - dashboards/Kubernetes/k8s-views-namespaces.json
       - dashboards/Kubernetes/k8s-views-nodes.json
       - dashboards/Kubernetes/k8s-views-pods.json
       - dashboards/Kubernetes/node-exporter-full.json
+    options:
+      disableNameSuffixHash: true
+  # Control plane: dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-system-api-server,
+  # k8s-system-coredns); grafana.com 21473 rev 3 (Etcd Cluster Overview), four row panels'
+  # hard-coded data source changed to ${datasource}.
+  - name: grafana-dashboards-control-plane
+    files:
+      - dashboards/Control plane/k8s-system-api-server.json
+      - dashboards/Control plane/k8s-system-coredns.json
+      - dashboards/Control plane/etcd-cluster-overview.json
     options:
       disableNameSuffixHash: true
   # Monitoring: VictoriaMetrics/VictoriaMetrics v1.136.0 and VictoriaMetrics/VictoriaLogs

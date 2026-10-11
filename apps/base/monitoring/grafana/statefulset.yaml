@@ -111,6 +111,9 @@ spec:
             - name: dashboards-kubernetes
               mountPath: /etc/grafana/dashboards/Kubernetes
               readOnly: true
+            - name: dashboards-control-plane
+              mountPath: /etc/grafana/dashboards/Control plane
+              readOnly: true
             - name: dashboards-monitoring
               mountPath: /etc/grafana/dashboards/Monitoring
               readOnly: true
@@ -147,6 +150,9 @@ spec:
         - name: dashboards-kubernetes
           configMap:
             name: grafana-dashboards-kubernetes
+        - name: dashboards-control-plane
+          configMap:
+            name: grafana-dashboards-control-plane
         - name: dashboards-monitoring
           configMap:
             name: grafana-dashboards-monitoring
