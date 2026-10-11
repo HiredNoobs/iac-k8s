@@ -1,0 +1,9 @@
+# Falco watches every syscall on the node through eBPF (capabilities BPF, PERFMON, SYS_PTRACE,
+# SYS_RESOURCE, host /proc and /etc read-only, the CRI socket), which Talos' default pod security
+# standard (baseline) refuses.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: falco
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

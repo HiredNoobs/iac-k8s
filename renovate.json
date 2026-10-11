@@ -103,6 +103,10 @@
       "groupName": "blackbox-exporter"
     },
     {
+      "matchPackageNames": ["falco", "falcosecurity/falco"],
+      "groupName": "falco"
+    },
+    {
       "description": "vlagent is kept at VictoriaLogs' version",
       "matchPackageNames": ["victoria-logs-collector", "victoriametrics/vlagent", "victoriametrics/victoria-logs"],
       "groupName": "victorialogs"

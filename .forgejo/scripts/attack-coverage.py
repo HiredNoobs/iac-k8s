@@ -3,7 +3,8 @@
 # Writes the Security folder's ATT&CK coverage dashboard from the alert rules' labels: every rule
 # with mitre_tactic/mitre_technique labels, in both vmalerts, as one table per tactic in ATT&CK's
 # order (tactics without a rule listed as gaps). A rule's `tested` annotation (the date it was
-# triggered on purpose and reached ntfy) is what makes it count as coverage.
+# triggered on purpose and reached ntfy) is what makes it count as coverage. Rules whose labels are
+# templates (Falco's: the tactic and technique come from each event's tags) are listed apart.
 #
 # Lint runs it with --check, which fails when the dashboard is out of date with the rules.
 #
@@ -51,7 +52,8 @@ def detections() -> list[dict]:
                 labels = rule.get("labels", {})
                 if "alert" not in rule or "mitre_tactic" not in labels:
                     continue
-                if labels["mitre_tactic"] not in TACTICS:
+                dynamic = "{{" in labels["mitre_tactic"]
+                if not dynamic and labels["mitre_tactic"] not in TACTICS:
                     sys.exit(
                         f"{path}: {rule['alert']}: unknown mitre_tactic {labels['mitre_tactic']!r}"
                     )
@@ -64,12 +66,15 @@ def detections() -> list[dict]:
                         "severity": labels.get("severity", ""),
                         "tested": str(rule.get("annotations", {}).get("tested", "")),
                         "file": path.relative_to(ROOT).as_posix(),
+                        "dynamic": dynamic,
                     }
                 )
     return found
 
 
-def markdown(rules: list[dict]) -> str:
+def markdown(all_rules: list[dict]) -> str:
+    rules = [r for r in all_rules if not r["dynamic"]]
+    dynamic = [r for r in all_rules if r["dynamic"]]
     tested = [r for r in rules if r["tested"]]
     covered = {r["tactic"] for r in tested}
     lines = [
@@ -92,6 +97,18 @@ def markdown(rules: list[dict]) -> str:
                 f"| {tactic} | {technique_link(r['technique'])} | {r['alert']} | {r['source']} | "
                 f"{r['severity']} | {r['tested'] or '**no**'} |"
             )
+    if dynamic:
+        lines += [
+            "",
+            "**Detections that take their ATT&CK labels from each event** (not counted above): "
+            "they cover whatever their source's own rules are tagged with, and show under "
+            "*Fired in range* as they fire.",
+            "",
+            "| Detection | Source | Tested |",
+            "| --- | --- | --- |",
+        ]
+        for r in sorted(dynamic, key=lambda r: r["alert"]):
+            lines.append(f"| {r['alert']} | {r['source']} | {r['tested'] or '**no**'} |")
     return "\n".join(lines) + "\n"
 
 

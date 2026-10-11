@@ -1,0 +1,138 @@
+# Falco with the modern eBPF probe (CO-RE, built into the binary: no kernel module, no driver
+# download, so nothing to build for Talos' kernel). Upstream's chart; chart 9.2.0 is Falco 0.45.0,
+# the image pinned by its digest (the multi-arch index).
+#
+# Pinned like everything else: falcoctl is off (it downloads rules and plugins from ghcr.io at
+# every start and follows falco-rules:5, a moving tag). The image ships the rules
+# (/etc/falco/falco_rules.yaml, Falco's stable set) and the container plugin, so both change
+# only with the image. Our own exceptions and rules would go in customRules.
+#
+# 0.45.0's probe doesn't load on kernels from 6.18.54 (Talos v1.14.2): the verifier rejects
+# signal_deliver and Falco crash-loops (falcosecurity/falco#4017). 0.45.1 has the fix; Talos is
+# held below v1.14.2 until it's here (iac-homelab terraform/clusters/variables.tf).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: falcosecurity
+spec:
+  interval: 24h
+  url: https://falcosecurity.github.io/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: falco
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: falco
+      version: "9.2.0"
+      sourceRef:
+        kind: HelmRepository
+        name: falcosecurity
+  values:
+    image:
+      # renovate: image=falcosecurity/falco
+      tag: 0.45.0@sha256:788f1129c542171813083d4afc61b16730a47dde8c23d9c39370acef996349b6
+    driver:
+      kind: modern_ebpf
+      modernEbpf:
+        # Capabilities instead of a privileged container. containerd's default seccomp profile
+        # allows bpf() and perf_event_open() to a container holding CAP_BPF and CAP_PERFMON.
+        leastPrivileged: true
+      # Only for kernel modules and the legacy probe.
+      loader:
+        enabled: false
+    # Replaces the chart's (the same capabilities), adding drop ALL and the seccomp profile.
+    containerSecurityContext:
+      capabilities:
+        drop: ["ALL"]
+        add: ["BPF", "SYS_RESOURCE", "PERFMON", "SYS_PTRACE"]
+      seccompProfile:
+        type: RuntimeDefault
+    falcoctl:
+      artifact:
+        install:
+          enabled: false
+        follow:
+          enabled: false
+    collectors:
+      # Container and pod names (k8s.ns.name, k8s.pod.name) from the CRI. Only Talos' CRI
+      # containerd: every other engine's socket directory would be mounted from the host
+      # (Docker's is all of /var/run).
+      containerEngine:
+        enabled: true
+        engines:
+          docker:
+            enabled: false
+          podman:
+            enabled: false
+          containerd:
+            enabled: false
+          cri:
+            enabled: true
+            sockets: ["/run/containerd/containerd.sock"]
+          lxc:
+            enabled: false
+          libvirt_lxc:
+            enabled: false
+          bpm:
+            enabled: false
+      # The k8s-metacollector (another Deployment watching the API) isn't needed for the
+      # namespace and pod name, which the CRI has.
+      kubernetes:
+        enabled: false
+    # Prometheus metrics on the webserver (:8765/metrics), scraped by vmagent's pods job: events,
+    # drops (syscalls Falco missed), rule matches, memory.
+    metrics:
+      enabled: true
+      interval: 1h
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8765"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 192Mi
+      limits:
+        memory: 512Mi
+    falco:
+      # Notice and above: Info and Debug rules are too chatty to keep.
+      priority: notice
+      # One JSON object per alert on stdout. "message" (the alert's text) instead of "output"
+      # (the same, prefixed with the time and priority): vlagent takes message as _msg.
+      json_output: true
+      json_include_output_property: false
+      json_include_message_property: true
+      syslog_output:
+        enabled: false
+      log_syslog: false
+  # The chart mounts the host's /boot and /lib/modules (read-write) for kernel modules, which
+  # the modern probe doesn't use; /boot may not even exist on Talos' read-only root.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: DaemonSet
+              name: falco
+            patch: |
+              apiVersion: apps/v1
+              kind: DaemonSet
+              metadata:
+                name: falco
+              spec:
+                template:
+                  spec:
+                    containers:
+                      - name: falco
+                        volumeMounts:
+                          - mountPath: /host/boot
+                            $patch: delete
+                          - mountPath: /host/lib/modules
+                            $patch: delete
+                    volumes:
+                      - name: boot-fs
+                        $patch: delete
+                      - name: lib-modules
+                        $patch: delete
