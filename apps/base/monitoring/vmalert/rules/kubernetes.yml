@@ -21,6 +21,24 @@ groups:
         annotations:
           summary: Target down ({{ $labels.job }} {{ $labels.instance }})
           description: "vmagent can't scrape {{ $labels.instance }} (job {{ $labels.job }}).\n  LABELS = {{ $labels }}"
+      # Alerts that fired but were never delivered: ntfy refusing a notification (it doesn't
+      # retry a 400), or ntfy.sh unreachable. This one is a single short alert, so it gets
+      # through whatever was too big; if ntfy itself is down, Grafana still shows it.
+      - alert: AlertmanagerNotificationsFailing
+        expr: 'sum by (integration, reason) (increase(alertmanager_notifications_failed_total[10m])) > 0'
+        labels:
+          severity: critical
+        annotations:
+          summary: Alertmanager failed to send {{ $value | printf "%.0f" }} notifications ({{ $labels.integration }}, {{ $labels.reason }})
+          description: "{{ $labels.integration }} notifications failed ({{ $labels.reason }}): Alertmanager's log has the receiver and the error.\n  LABELS = {{ $labels }}"
+      # Both vmalerts (metrics and logs) failing to hand alerts to Alertmanager.
+      - alert: VmalertSendErrors
+        expr: 'sum by (job, instance) (increase(vmalert_alerts_send_errors_total[10m])) > 0'
+        labels:
+          severity: critical
+        annotations:
+          summary: vmalert can't send alerts to Alertmanager ({{ $labels.instance }})
+          description: "{{ $labels.instance }} failed to send alerts to Alertmanager: vmalert's log has the error.\n  LABELS = {{ $labels }}"
 
   - name: Kubernetes
     interval: 60s
