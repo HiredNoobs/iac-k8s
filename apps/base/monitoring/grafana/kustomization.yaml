@@ -36,9 +36,12 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
-  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
+  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*, k8s-system-api-server,
+  # k8s-system-coredns).
   - name: grafana-dashboards-kubernetes
     files:
+      - dashboards/Kubernetes/k8s-system-api-server.json
+      - dashboards/Kubernetes/k8s-system-coredns.json
       - dashboards/Kubernetes/k8s-views-global.json
       - dashboards/Kubernetes/k8s-views-namespaces.json
       - dashboards/Kubernetes/k8s-views-nodes.json
