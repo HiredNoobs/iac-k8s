@@ -173,21 +173,55 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" | copy \":authority\" as host | stats by (host, response_code) count() as requests | sort by (requests desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" | copy \":authority\" as host | stats by (host, response_code) count() as requests, uniq_values(\"x-envoy-origin-path\") limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "requests",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "host": 0,
+              "response_code": 1,
+              "requests": 2,
+              "examples": 3,
+              "Time": 4
             },
             "renameByName": {
               "host": "Site",
               "response_code": "Status",
-              "requests": "Requests"
+              "requests": "Requests",
+              "examples": "Example paths",
+              "Time": "Last seen"
             }
           }
         },
@@ -240,20 +274,52 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" | stats by (\"user-agent\") count() as requests | sort by (requests desc) | limit 20"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" | stats by (\"user-agent\") count() as requests, max(_time) as _time | sort by (requests desc) | limit 20"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "requests",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "user-agent": 0,
+              "requests": 1,
+              "Time": 2,
+              "examples": 3
             },
             "renameByName": {
               "user-agent": "User agent",
-              "requests": "Requests"
+              "requests": "Requests",
+              "Time": "Last seen"
             }
           }
         },

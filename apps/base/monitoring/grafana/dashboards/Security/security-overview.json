@@ -807,22 +807,56 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"authelia\",kubernetes.container_name=\"authelia\"} (\"Unsuccessful 1FA\" or \"Unsuccessful TOTP\") | extract \"Unsuccessful <factor> authentication attempt by user '<user>'\" | stats by (user, remote_ip, factor) count() as failures | sort by (failures desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"authelia\",kubernetes.container_name=\"authelia\"} (\"Unsuccessful 1FA\" or \"Unsuccessful TOTP\") | extract \"Unsuccessful <factor> authentication attempt by user '<user>'\" | stats by (user, remote_ip, factor) count() as failures, max(_time) as _time | sort by (failures desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "failures",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "user": 0,
+              "remote_ip": 1,
+              "factor": 2,
+              "failures": 3,
+              "Time": 4,
+              "examples": 5
             },
             "renameByName": {
               "user": "User",
               "remote_ip": "Client",
               "factor": "Factor",
-              "failures": "Failures"
+              "failures": "Failures",
+              "Time": "Last seen"
             }
           }
         },
@@ -893,21 +927,54 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"vaultwarden\",kubernetes.container_name=\"vaultwarden\"} \"Username or password is incorrect\" | extract_regexp \"IP: (?P<remote_ip>\\\\S+)\\\\. Username: (?P<user>.*)\\\\.$\" | stats by (user, remote_ip) count() as failures | sort by (failures desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"vaultwarden\",kubernetes.container_name=\"vaultwarden\"} \"Username or password is incorrect\" | extract_regexp \"IP: (?P<remote_ip>\\\\S+)\\\\. Username: (?P<user>.*)\\\\.$\" | stats by (user, remote_ip) count() as failures, max(_time) as _time | sort by (failures desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "failures",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "user": 0,
+              "remote_ip": 1,
+              "failures": 2,
+              "Time": 3,
+              "examples": 4
             },
             "renameByName": {
               "user": "User",
               "remote_ip": "Client",
-              "failures": "Failures"
+              "failures": "Failures",
+              "Time": "Last seen"
             }
           }
         },
@@ -978,21 +1045,54 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} method:=POST response_code:=200 ((\":authority\":=\"auth.hirednoobs.com\" \"x-envoy-origin-path\":=\"/api/secondfactor/totp\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":=\"/identity/connect/token\")) | extract \"<remote_ip>:\" from downstream_remote_address | copy \":authority\" as host | stats by (host, remote_ip) count() as logins | sort by (logins desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} method:=POST response_code:=200 ((\":authority\":=\"auth.hirednoobs.com\" \"x-envoy-origin-path\":=\"/api/secondfactor/totp\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":=\"/identity/connect/token\")) | extract \"<remote_ip>:\" from downstream_remote_address | copy \":authority\" as host | stats by (host, remote_ip) count() as logins, max(_time) as _time | sort by (logins desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "logins",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "host": 0,
+              "remote_ip": 1,
+              "logins": 2,
+              "Time": 3,
+              "examples": 4
             },
             "renameByName": {
               "host": "Site",
               "remote_ip": "Client",
-              "logins": "Logins"
+              "logins": "Logins",
+              "Time": "Last seen"
             }
           }
         },
@@ -1076,21 +1176,59 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} response_code:in(\"401\", \"403\", \"404\") -\"user-agent\":\"Blackbox-Exporter\"* | extract \"<remote_ip>:\" from downstream_remote_address | stats by (remote_ip) count() as refused, count_uniq(\"x-envoy-origin-path\") as paths | sort by (refused desc) | limit 20"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} response_code:in(\"401\", \"403\", \"404\") -\"user-agent\":\"Blackbox-Exporter\"* | extract \"<remote_ip>:\" from downstream_remote_address | stats by (remote_ip) count() as refused, count_uniq(\"x-envoy-origin-path\") as paths, uniq_values(\"x-envoy-origin-path\") limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (refused desc) | limit 20"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "refused",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "paths",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "remote_ip": 0,
+              "refused": 1,
+              "paths": 2,
+              "examples": 3,
+              "Time": 4
             },
             "renameByName": {
               "remote_ip": "Client",
               "refused": "Refused",
-              "paths": "Paths"
+              "paths": "Paths",
+              "examples": "Example paths",
+              "Time": "Last seen"
             }
           }
         },
@@ -1161,16 +1299,51 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} (\"x-envoy-origin-path\":~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\" or (\":authority\":=\"alertmanager.hirednoobs.com\" method:=POST \"x-envoy-origin-path\":=\"/api/v2/silences\") or (\":authority\":=\"victoriametrics.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/api/v1/admin/tsdb/delete_series\") or (\":authority\":=\"victorialogs.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/delete/\") or (\":authority\":=\"grafana.hirednoobs.com\" method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") \"x-envoy-origin-path\":~\"^/api/(admin/users|org/users)\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/admin\")) -response_code:=302 | extract \"<remote_ip>:\" from downstream_remote_address | copy \":authority\" as host, \"x-envoy-origin-path\" as path | stats by (remote_ip, method, host, path, response_code) count() as requests | sort by (requests desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} (\"x-envoy-origin-path\":~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\" or (\":authority\":=\"alertmanager.hirednoobs.com\" method:=POST \"x-envoy-origin-path\":=\"/api/v2/silences\") or (\":authority\":=\"victoriametrics.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/api/v1/admin/tsdb/delete_series\") or (\":authority\":=\"victorialogs.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/delete/\") or (\":authority\":=\"grafana.hirednoobs.com\" method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") \"x-envoy-origin-path\":~\"^/api/(admin/users|org/users)\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/admin\")) -response_code:=302 | extract \"<remote_ip>:\" from downstream_remote_address | copy \":authority\" as host, \"x-envoy-origin-path\" as path | stats by (remote_ip, method, host, path, response_code) count() as requests, max(_time) as _time | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "requests",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "remote_ip": 0,
+              "method": 1,
+              "host": 2,
+              "path": 3,
+              "response_code": 4,
+              "requests": 5,
+              "Time": 6,
+              "examples": 7
             },
             "renameByName": {
               "remote_ip": "Client",
@@ -1178,7 +1351,8 @@
               "host": "Site",
               "path": "Path",
               "response_code": "Status",
-              "requests": "Requests"
+              "requests": "Requests",
+              "Time": "Last seen"
             }
           }
         },
@@ -1353,16 +1527,51 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {source=\"kube-audit\"} verb:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.username:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager|external-secrets):.*)$\" -requestURI:~\"dryRun=\" -objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace | stats by (user, remote_ip, verb, resource, namespace) count() as requests | sort by (requests desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {source=\"kube-audit\"} verb:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.username:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager|external-secrets):.*)$\" -requestURI:~\"dryRun=\" -objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace | stats by (user, remote_ip, verb, resource, namespace) count() as requests, uniq_values(objectRef.name) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "requests",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "user": 0,
+              "remote_ip": 1,
+              "verb": 2,
+              "resource": 3,
+              "namespace": 4,
+              "requests": 5,
+              "examples": 6,
+              "Time": 7
             },
             "renameByName": {
               "user": "User",
@@ -1370,7 +1579,9 @@
               "verb": "Verb",
               "resource": "Resource",
               "namespace": "Namespace",
-              "requests": "Requests"
+              "requests": "Requests",
+              "examples": "Example objects",
+              "Time": "Last seen"
             }
           }
         },
@@ -1441,23 +1652,59 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {source=\"kube-audit\"} (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") or (objectRef.resource:=secrets verb:in(\"get\", \"list\", \"watch\")) or responseStatus.code:=403) | format if (objectRef.resource:=secrets) \"secret read\" as kind | format if (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\")) \"<objectRef.subresource>\" as kind | format if (responseStatus.code:=403) \"forbidden\" as kind | copy user.username as user, objectRef.namespace as namespace | stats by (user, remote_ip, kind, namespace) count() as requests | sort by (requests desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {source=\"kube-audit\"} (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") or (objectRef.resource:=secrets verb:in(\"get\", \"list\", \"watch\")) or responseStatus.code:=403) | format if (objectRef.resource:=secrets) \"secret read\" as kind | format if (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\")) \"<objectRef.subresource>\" as kind | format if (responseStatus.code:=403) \"forbidden\" as kind | copy user.username as user, objectRef.namespace as namespace | stats by (user, remote_ip, kind, namespace) count() as requests, uniq_values(objectRef.name) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "requests",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "user": 0,
+              "remote_ip": 1,
+              "kind": 2,
+              "namespace": 3,
+              "requests": 4,
+              "examples": 5,
+              "Time": 6
             },
             "renameByName": {
               "user": "User",
               "remote_ip": "Client",
               "kind": "What",
               "namespace": "Namespace",
-              "requests": "Requests"
+              "requests": "Requests",
+              "examples": "Example objects",
+              "Time": "Last seen"
             }
           }
         },
@@ -1598,23 +1845,160 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | copy output_fields.k8s.ns.name as namespace, output_fields.k8s.pod.name as pod | stats by (rule, priority, namespace, pod) count() as events | sort by (events desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | copy output_fields.k8s.ns.name as namespace, output_fields.k8s.pod.name as pod | stats by (rule, priority, namespace, pod) count() as events, uniq_values(output_fields.proc.cmdline) limit 3 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (events desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "events",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "rule": 0,
+              "priority": 1,
+              "namespace": 2,
+              "pod": 3,
+              "events": 4,
+              "examples": 5,
+              "Time": 6
             },
             "renameByName": {
               "rule": "Rule",
               "priority": "Priority",
               "namespace": "Namespace",
               "pod": "Pod",
-              "events": "Events"
+              "events": "Events",
+              "examples": "Example commands",
+              "Time": "Last seen"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Events",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Falco messages (repeated lines counted)",
+      "id": 33,
+      "description": "Falco's messages with numbers, IPs and dates collapsed (collapse_nums), so the same event repeated is one row with its count.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | collapse_nums prettify | stats by (priority, rule, _msg) count() as events, max(_time) as _time | sort by (events desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "events",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "priority": 0,
+              "rule": 1,
+              "Line": 2,
+              "events": 3,
+              "Time": 4,
+              "examples": 5
+            },
+            "renameByName": {
+              "priority": "Priority",
+              "rule": "Rule",
+              "Line": "Message",
+              "events": "Events",
+              "Time": "Last seen"
             }
           }
         },
@@ -1654,7 +2038,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 82
       }
     },
     {
@@ -1670,7 +2054,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 75
+        "y": 83
       },
       "targets": [
         {
@@ -1680,22 +2064,56 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {_SYSTEMD_UNIT=\"ssh.service\"} \"Accepted \" | extract_regexp \"Accepted (?P<method>\\\\S+) for (?P<user>\\\\S+) from (?P<remote_ip>\\\\S+) port\" | copy _HOSTNAME as host | stats by (host, user, remote_ip) count() as logins | sort by (logins desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {_SYSTEMD_UNIT=\"ssh.service\"} \"Accepted \" | extract_regexp \"Accepted (?P<method>\\\\S+) for (?P<user>\\\\S+) from (?P<remote_ip>\\\\S+) port\" | copy _HOSTNAME as host | stats by (host, user, remote_ip) count() as logins, max(_time) as _time | sort by (logins desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "logins",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "host": 0,
+              "user": 1,
+              "remote_ip": 2,
+              "logins": 3,
+              "Time": 4,
+              "examples": 5
             },
             "renameByName": {
               "host": "Host",
               "user": "User",
               "remote_ip": "Client",
-              "logins": "Logins"
+              "logins": "Logins",
+              "Time": "Last seen"
             }
           }
         },
@@ -1756,7 +2174,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 75
+        "y": 83
       },
       "targets": [
         {
@@ -1766,21 +2184,55 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {_HOSTNAME=~\"prx-999-.*\"} SYSLOG_IDENTIFIER:=sudo \"COMMAND=\" -\"NOT in sudoers\" -\"incorrect password attempt\" -\"a password is required\" | extract_regexp \"^\\\\s*(?P<user>\\\\S+) : \" | copy _HOSTNAME as host | stats by (host, user) count() as commands | sort by (commands desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {_HOSTNAME=~\"prx-999-.*\"} SYSLOG_IDENTIFIER:=sudo \"COMMAND=\" -\"NOT in sudoers\" -\"incorrect password attempt\" -\"a password is required\" | extract_regexp \"^\\\\s*(?P<user>\\\\S+) : \" | extract \"COMMAND=<command>\" | copy _HOSTNAME as host | stats by (host, user) count() as commands, uniq_values(command) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (commands desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "commands",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "host": 0,
+              "user": 1,
+              "commands": 2,
+              "examples": 3,
+              "Time": 4
             },
             "renameByName": {
               "host": "Host",
               "user": "User",
-              "commands": "Commands"
+              "commands": "Commands",
+              "examples": "Example commands",
+              "Time": "Last seen"
             }
           }
         },
@@ -1823,7 +2275,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 75
+        "y": 83
       },
       "targets": [
         {
@@ -1833,22 +2285,61 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {_SYSTEMD_UNIT=\"vault.service\"} \"\\\"type\\\":\\\"response\\\"\" | unpack_json fields (auth.display_name, request.remote_address, error, response.data.error) | copy auth.display_name as identity, request.remote_address as remote_ip | stats by (identity, remote_ip) count() as requests, count() if (error:~\".\" or response.data.error:~\".\") as errors | sort by (requests desc) | limit 50"
+          "queryType": "instant",
+          "expr": "_time:$__range {_SYSTEMD_UNIT=\"vault.service\"} \"\\\"type\\\":\\\"response\\\"\" | unpack_json fields (request.path, auth.display_name, request.remote_address, error, response.data.error) | copy auth.display_name as identity, request.remote_address as remote_ip | stats by (identity, remote_ip) count() as requests, count() if (error:~\".\" or response.data.error:~\".\") as errors, uniq_values(request.path) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "requests",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "errors",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "identity": 0,
+              "remote_ip": 1,
+              "requests": 2,
+              "errors": 3,
+              "examples": 4,
+              "Time": 5
             },
             "renameByName": {
               "identity": "Identity",
               "remote_ip": "Client",
               "requests": "Requests",
-              "errors": "Errors"
+              "errors": "Errors",
+              "examples": "Example paths",
+              "Time": "Last seen"
             }
           }
         },
@@ -1887,6 +2378,107 @@
             ]
           }
         ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "prx-999 journal warnings and errors (repeated lines counted)",
+      "id": 34,
+      "description": "The VMs' journal lines at warning or worse (Vault's audit log excluded), with numbers, IPs and dates collapsed (collapse_nums), so the same line repeated is one row with its count.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 91
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {_HOSTNAME=~\"prx-999-.*\"} PRIORITY:<=4 -_SYSTEMD_UNIT:=\"vault.service\" | collapse_nums prettify | copy _HOSTNAME as host, SYSLOG_IDENTIFIER as program | stats by (host, program, _msg) count() as lines, max(_time) as _time | sort by (lines desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "lines",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "host": 0,
+              "program": 1,
+              "Line": 2,
+              "lines": 3,
+              "Time": 4,
+              "examples": 5
+            },
+            "renameByName": {
+              "host": "Host",
+              "program": "Program",
+              "Line": "Message",
+              "lines": "Lines",
+              "Time": "Last seen"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Lines",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": []
       },
       "options": {
         "showHeader": true,
