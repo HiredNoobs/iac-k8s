@@ -26,3 +26,4 @@ configMapGenerator:
   - name: lldap-bootstrap-groups
     files:
       - bootstrap/groups/admins.json
+      - bootstrap/groups/mealie.json

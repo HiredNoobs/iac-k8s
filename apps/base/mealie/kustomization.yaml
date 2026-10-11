@@ -1,0 +1,18 @@
+# Mealie (https://mealie.io), recipes and meal plans at mealie.hirednoobs.com. Plain manifests
+# (there's no official chart). SQLite and recipe images on a Longhorn volume (nightly backups,
+# infrastructure/configs/longhorn).
+#
+# Logins only through Authelia (OIDC, client `mealie` in apps/base/authelia): members of `admins`
+# are Mealie admins, members of `mealie` users (apps/base/lldap/bootstrap/groups). Accounts are
+# created on first login. Password login is off, which also disables the default admin
+# (changeme@example.com) Mealie creates on its first start.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mealie
+resources:
+  - namespace.yaml
+  - external-secret.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - httproute.yaml

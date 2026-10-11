@@ -1,0 +1,17 @@
+# Not behind Authelia's forward auth: Mealie's own login sends you to Authelia (OIDC), and recipe
+# share links have to open without an account.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mealie
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - mealie.hirednoobs.com
+  rules:
+    - backendRefs:
+        - name: mealie
+          port: 80

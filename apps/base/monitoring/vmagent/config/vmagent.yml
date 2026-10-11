@@ -224,6 +224,7 @@ scrape_configs:
           - https://auth.hirednoobs.com/
           - https://grafana.hirednoobs.com/
           - https://lldap.hirednoobs.com/
+          - https://mealie.hirednoobs.com/
           - https://vaultwarden.hirednoobs.com/
           - https://rabbitmq.hirednoobs.com/
           - https://pihole.hirednoobs.com/

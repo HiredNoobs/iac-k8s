@@ -1,0 +1,14 @@
+# The SQLite database and the recipe images (/app/data). Its own PVC rather than a StatefulSet's
+# template, so removing the Deployment from git leaves the data.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mealie-data
+  labels:
+    app.kubernetes.io/name: mealie
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi

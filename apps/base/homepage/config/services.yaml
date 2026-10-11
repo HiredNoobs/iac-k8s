@@ -87,6 +87,9 @@
       icon: alertmanager
 
 - Services:
+  - Mealie:
+      href: https://mealie.hirednoobs.com
+      icon: mealie
   - Vaultwarden:
       href: https://vaultwarden.hirednoobs.com
       icon: vaultwarden
