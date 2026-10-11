@@ -87,9 +87,11 @@ groups:
           description: >-
             Many refused or missing paths for one client: directory or wordlist scanning, or a
             misconfigured client retrying.
+          tested: "2026-10-11"
           runbook: >-
             The paths and user-agent are in the client's access logs (x-envoy-origin-path).
-            Trigger: for i in $(seq 25); do curl -so /dev/null https://homepage.hirednoobs.com/nope-$i; done
+            Trigger (a site not behind Authelia, which answers 302 instead of 404): for i in
+            $(seq 25); do curl -so /dev/null https://vaultwarden.hirednoobs.com/nope-$i; done
 
       # A short, fixed list of what scanners try first and no site here serves, so one request is
       # enough. Wordlists are HttpErrorBurst's job; requests to paths that do exist are below.
@@ -110,6 +112,7 @@ groups:
           description: >-
             A path no site here serves, but which scanners and exploit kits try first (secrets
             files, WordPress, path traversal): a scanner on the LAN or in a container.
+          tested: "2026-10-11"
           runbook: >-
             Look at the client's other requests and user-agent, and find the device. Trigger:
             curl -so /dev/null https://homepage.hirednoobs.com/.env
@@ -135,6 +138,7 @@ groups:
           description: >-
             A silence stops matching alerts reaching ntfy, which is how detections are quietly
             switched off.
+          tested: "2026-10-11"
           runbook: >-
             Check what the silence matches at https://alertmanager.hirednoobs.com/#/silences and
             expire it if it isn't yours. Trigger: create a short silence in the Alertmanager UI.
@@ -159,6 +163,7 @@ groups:
           description: >-
             Deleting metrics or logs is how tracks are covered. VictoriaMetrics' delete_series
             works; VictoriaLogs' delete API is disabled, so there it's an attempt.
+          tested: "2026-10-11"
           runbook: >-
             The request's path has the series or log filter. Check what's missing around that
             time, and who the client is. Trigger: curl -s
@@ -183,6 +188,7 @@ groups:
           description: >-
             A Grafana user was created, deleted, or had its role or admin flag changed. Grafana
             users aren't provisioned from git, so this is a change by hand.
+          tested: "2026-10-11"
           runbook: >-
             Check Administration -> Users in Grafana. Trigger: change a user's role (e.g.
             homepage's, Viewer -> Editor -> back) in Grafana.
@@ -204,6 +210,7 @@ groups:
           description: >-
             Vaultwarden's admin panel is disabled; requests for it are someone looking for a way
             in to the password vaults.
+          tested: "2026-10-11"
           runbook: >-
             Look at the client's other requests and user-agent. Trigger: curl -so /dev/null
             https://vaultwarden.hirednoobs.com/admin
