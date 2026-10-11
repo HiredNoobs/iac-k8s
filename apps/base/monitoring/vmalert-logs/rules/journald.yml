@@ -39,7 +39,8 @@ groups:
             on that VM and what the session did (sudo lines, the user's shell history).
             Trigger: ssh from your workstation straight to the Vault or Forgejo VM.
 
-      # fail2ban bans after 3 failures in 10 minutes (1 hour); each attempt can log two lines.
+      # fail2ban bans after 3 failures in 10 minutes (1 hour), so a 4th is rarely logged: with
+      # passwords off each attempt logs one of these lines. 3 is the burst fail2ban acts on.
       - alert: SshAuthFailures
         expr: >-
           {_SYSTEMD_UNIT="ssh.service"}
@@ -48,7 +49,7 @@ groups:
           | extract_regexp "(?:from |user \\S+ )(?P<remote_ip>\\d+\\.\\d+\\.\\d+\\.\\d+) port"
           | copy _HOSTNAME as host
           | stats by (host, remote_ip) count() as failures
-          | filter failures:>=4
+          | filter failures:>=3
         labels:
           severity: warning
           source: ssh
