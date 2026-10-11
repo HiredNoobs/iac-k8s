@@ -204,6 +204,7 @@ groups:
           description: >-
             The Kubernetes API used from somewhere other than mgmt, the nodes and the pods: a
             kubeconfig copied elsewhere, or a device on the LAN with stolen credentials.
+          tested: "2026-10-10"
           runbook: >-
             Find the device, and which credentials it used (user). Talos' admin kubeconfig can't
             be revoked on its own: rotate the cluster's client CA if it leaked. Trigger: run

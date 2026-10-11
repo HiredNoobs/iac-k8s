@@ -209,6 +209,7 @@ groups:
           description: >-
             Failed logins (userpass passwords, Kubernetes service account tokens): guessing, or
             ESO with a token Vault no longer accepts.
+          tested: "2026-10-11"
           runbook: >-
             The username is in request.path (userpass), the error is HMAC'd (compare with vault
             write sys/audit-hash/stdout input=...). From a node address with auth/kubernetes:
