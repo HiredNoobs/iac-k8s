@@ -59,7 +59,7 @@
     {
       "type": "row",
       "title": "Detections",
-      "id": 23,
+      "id": 33,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -72,7 +72,7 @@
     {
       "type": "table",
       "title": "Detections",
-      "id": 24,
+      "id": 34,
       "description": "Alert instances in the time range whose rule extracted this client or user.",
       "datasource": {
         "type": "prometheus",
@@ -140,7 +140,7 @@
     {
       "type": "row",
       "title": "Gateway (client)",
-      "id": 25,
+      "id": 35,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -153,7 +153,7 @@
     {
       "type": "table",
       "title": "Requests by site and status",
-      "id": 26,
+      "id": 36,
       "description": "This client's requests through the Gateway.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -220,7 +220,7 @@
     {
       "type": "table",
       "title": "User agents",
-      "id": 27,
+      "id": 37,
       "description": "The clients' user agents: a browser, curl, a scanner, an app.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -286,7 +286,7 @@
     {
       "type": "logs",
       "title": "Gateway requests",
-      "id": 28,
+      "id": 38,
       "description": "This client's requests, newest first (/static/ files left out).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -325,7 +325,7 @@
     {
       "type": "row",
       "title": "Logins (client and user)",
-      "id": 29,
+      "id": 39,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -338,7 +338,7 @@
     {
       "type": "logs",
       "title": "Authelia",
-      "id": 30,
+      "id": 40,
       "description": "Authelia's lines for this client and user (failed logins, bans, unknown usernames).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -377,7 +377,7 @@
     {
       "type": "logs",
       "title": "Vaultwarden",
-      "id": 31,
+      "id": 41,
       "description": "Vaultwarden's failed logins for this client and user (it logs nothing for a success).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -416,7 +416,7 @@
     {
       "type": "row",
       "title": "Directory (user)",
-      "id": 32,
+      "id": 42,
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -429,7 +429,7 @@
     {
       "type": "logs",
       "title": "lldap-bootstrap changes",
-      "id": 33,
+      "id": 43,
       "description": "Reverted changes that mention this user.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -451,6 +451,149 @@
           "editorMode": "code",
           "queryType": "instant",
           "expr": "{kubernetes.pod_namespace=\"lldap\",kubernetes.container_name=\"bootstrap\"} (\"successfully created\" or \"successfully deleted\" or \"successfully added to the group\" or \"successfully removed from the group\" or \"[WARNING]\") _msg:~\"\\\"${user}\\\"\"",
+          "maxLines": 500
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "Kubernetes API (client and user)",
+      "id": 44,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Audit log",
+      "id": 45,
+      "description": "This client's and user's Kubernetes API requests (what the audit policy keeps).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "{source=\"kube-audit\"} remote_ip:~\"^${ip}$\" user.username:~\"^${user}$\"",
+          "maxLines": 500
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "prx-999 hosts (client and user)",
+      "id": 46,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Vault",
+      "id": 47,
+      "description": "Vault's audit log (responses) for this client and identity.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "{_SYSTEMD_UNIT=\"vault.service\"} \"\\\"type\\\":\\\"response\\\"\" | unpack_json fields (request.remote_address, auth.display_name) | filter request.remote_address:~\"^${ip}$\" auth.display_name:~\"${user}\"",
+          "maxLines": 500
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Journals",
+      "id": 48,
+      "description": "The VMs' journal lines mentioning this client and user (SSH, sudo, Forgejo).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "{_HOSTNAME=~\"prx-999-.*\"} -_SYSTEMD_UNIT:=\"vault.service\" _msg:~\"${ip}\" _msg:~\"${user}\"",
           "maxLines": 500
         }
       ],

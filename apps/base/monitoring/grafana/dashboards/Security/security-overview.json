@@ -1316,6 +1316,585 @@
         "showCommonLabels": false,
         "showLabels": false
       }
+    },
+    {
+      "type": "row",
+      "title": "Kubernetes API (audit log)",
+      "id": 23,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      }
+    },
+    {
+      "type": "table",
+      "title": "Changes outside Flux",
+      "id": 24,
+      "description": "Writes to any object by someone other than the control plane and the controllers deployed from git (dry runs left out): people with kubectl, or a service account that shouldn't be writing.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {source=\"kube-audit\"} verb:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.username:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager|external-secrets):.*)$\" -requestURI:~\"dryRun=\" -objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace | stats by (user, remote_ip, verb, resource, namespace) count() as requests | sort by (requests desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "user": "User",
+              "remote_ip": "Client",
+              "verb": "Verb",
+              "resource": "Resource",
+              "namespace": "Namespace",
+              "requests": "Requests"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Requests",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "remote_ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this client",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Sensitive API activity",
+      "id": 25,
+      "description": "exec/attach/port-forward, Secret reads (the controllers' reads aren't logged) and refused (403) requests, by user.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {source=\"kube-audit\"} (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") or (objectRef.resource:=secrets verb:in(\"get\", \"list\", \"watch\")) or responseStatus.code:=403) | format if (objectRef.resource:=secrets) \"secret read\" as kind | format if (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\")) \"<objectRef.subresource>\" as kind | format if (responseStatus.code:=403) \"forbidden\" as kind | copy user.username as user, objectRef.namespace as namespace | stats by (user, remote_ip, kind, namespace) count() as requests | sort by (requests desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "user": "User",
+              "remote_ip": "Client",
+              "kind": "What",
+              "namespace": "Namespace",
+              "requests": "Requests"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Requests",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "remote_ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this client",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Runtime (Falco)",
+      "id": 26,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 65
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Falco events by priority",
+      "id": 27,
+      "description": "Every Falco event (Notice and above). Warning and above are alerted (FalcoRuntimeAlert), Notice only shows here.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "statsRange",
+          "expr": "{kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | stats by (priority) count() as events",
+          "legendFormat": "{{priority}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Falco events by rule",
+      "id": 28,
+      "description": "Which Falco rules fired, where. The events themselves: {kubernetes.pod_namespace=\"falco\"} rule:=\"<rule>\" in VictoriaLogs.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | copy output_fields.k8s.ns.name as namespace, output_fields.k8s.pod.name as pod | stats by (rule, priority, namespace, pod) count() as events | sort by (events desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "rule": "Rule",
+              "priority": "Priority",
+              "namespace": "Namespace",
+              "pod": "Pod",
+              "events": "Events"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Events",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "prx-999 hosts",
+      "id": 29,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      }
+    },
+    {
+      "type": "table",
+      "title": "SSH logins",
+      "id": 30,
+      "description": "Accepted SSH logins on the prx-999 VMs.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {_SYSTEMD_UNIT=\"ssh.service\"} \"Accepted \" | extract_regexp \"Accepted (?P<method>\\\\S+) for (?P<user>\\\\S+) from (?P<remote_ip>\\\\S+) port\" | copy _HOSTNAME as host | stats by (host, user, remote_ip) count() as logins | sort by (logins desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "host": "Host",
+              "user": "User",
+              "remote_ip": "Client",
+              "logins": "Logins"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Logins",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "remote_ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this client",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "sudo",
+      "id": 31,
+      "description": "Commands run with sudo, by host and user (Ansible runs as hirednoobs).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {_HOSTNAME=~\"prx-999-.*\"} SYSLOG_IDENTIFIER:=sudo \"COMMAND=\" -\"NOT in sudoers\" -\"incorrect password attempt\" -\"a password is required\" | extract_regexp \"^\\\\s*(?P<user>\\\\S+) : \" | copy _HOSTNAME as host | stats by (host, user) count() as commands | sort by (commands desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "host": "Host",
+              "user": "User",
+              "commands": "Commands"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Commands",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Vault requests",
+      "id": 32,
+      "description": "Vault's audit log (responses) by identity and client, with how many failed.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {_SYSTEMD_UNIT=\"vault.service\"} \"\\\"type\\\":\\\"response\\\"\" | unpack_json fields (auth.display_name, request.remote_address, error, response.data.error) | copy auth.display_name as identity, request.remote_address as remote_ip | stats by (identity, remote_ip) count() as requests, count() if (error:~\".\" or response.data.error:~\".\") as errors | sort by (requests desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "identity": "Identity",
+              "remote_ip": "Client",
+              "requests": "Requests",
+              "errors": "Errors"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Requests",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "remote_ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this client",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
     }
   ],
   "id": null
