@@ -5,3 +5,4 @@ resources:
   - statefulset.yaml
   - service.yaml
   - routes.yaml
+  - journald-route.yaml

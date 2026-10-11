@@ -1,0 +1,49 @@
+# journald.hirednoobs.com: the prx-999 VMs' systemd-journal-upload (iac-homelab's journal_upload
+# role) sends their journals to VictoriaLogs' journald endpoint through the Gateway. Machines
+# can't log in to Authelia, so instead of it only the VMs' addresses are let through (the
+# client's own address: externalTrafficPolicy keeps it, and the Gateway trusts no
+# X-Forwarded-For), and only the journald upload path is routed. Anything on those VMs can
+# write logs here, a CI job on the runner included, so these logs say what a host sent, not
+# proof of what happened on it.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: victorialogs-journald
+spec:
+  parentRefs:
+    - name: public
+      namespace: gateway
+      sectionName: https
+  hostnames:
+    - journald.hirednoobs.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /insert/journald/
+      backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: victorialogs
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: victorialogs-journald
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: victorialogs-journald
+  authorization:
+    defaultAction: Deny
+    rules:
+      # mgmt, Forgejo, the runner and Vault (iac-homelab's gitops root).
+      - name: prx-999
+        action: Allow
+        principal:
+          clientCIDRs:
+            - 192.168.111.254/32
+            - 192.168.111.200/32
+            - 192.168.111.201/32
+            - 192.168.111.202/32
