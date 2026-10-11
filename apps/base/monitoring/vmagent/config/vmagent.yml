@@ -116,6 +116,23 @@ scrape_configs:
         regex: "apiserver_request_total|apiserver_request_duration_seconds_(sum|count)|apiserver_requested_deprecated_apis|workqueue_depth|process_(cpu_seconds_total|resident_memory_bytes)"
         action: keep
 
+  # etcd on each control plane: its metrics-only port (iac-homelab's etcd_metrics, plain HTTP;
+  # the client port needs a certificate).
+  - job_name: etcd
+    metrics_path: /metrics
+    scheme: http
+    kubernetes_sd_configs:
+      - role: node
+        selectors:
+          - role: node
+            label: "node-role.kubernetes.io/control-plane"
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_address_InternalIP]
+        target_label: __address__
+        replacement: "$1:2381"
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: instance
+
   # CoreDNS (Talos' Deployment in kube-system), its metrics port on each pod.
   - job_name: coredns
     kubernetes_sd_configs:
