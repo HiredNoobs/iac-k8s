@@ -1,5 +1,5 @@
-# vmagent's Kubernetes service discovery, to find the node-exporter pods, and read access to
-# each kubelet's metrics (nodes/metrics) for the volume stats.
+# vmagent's Kubernetes service discovery, to find the node-exporter pods, read access to each
+# kubelet's metrics (nodes/metrics) for the volume stats, and kube-apiserver's own /metrics.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -17,6 +17,8 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "nodes", "nodes/metrics", "services", "endpoints"]
     verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

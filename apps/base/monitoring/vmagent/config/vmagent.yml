@@ -89,6 +89,49 @@ scrape_configs:
         regex: "container_network_.+;|container_(cpu|memory|oom)_.+;.+"
         action: keep
 
+  # kube-apiserver on each control plane (port 6443 on the node's address), as vmagent's service
+  # account (rbac.yaml: get on /metrics). Verified with the cluster CA against the name every API
+  # server certificate has. Only what the API server dashboard and the alerts use: the full set
+  # is thousands of histogram series. Talos' audit policy doesn't log /metrics.
+  - job_name: apiserver
+    metrics_path: /metrics
+    scheme: https
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      server_name: kubernetes.default.svc
+    kubernetes_sd_configs:
+      - role: node
+        selectors:
+          - role: node
+            label: "node-role.kubernetes.io/control-plane"
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_address_InternalIP]
+        target_label: __address__
+        replacement: "$1:6443"
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: instance
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "apiserver_request_total|apiserver_request_duration_seconds_(sum|count)|apiserver_requested_deprecated_apis|workqueue_depth|process_(cpu_seconds_total|resident_memory_bytes)"
+        action: keep
+
+  # CoreDNS (Talos' Deployment in kube-system), its metrics port on each pod.
+  - job_name: coredns
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ["kube-system"]
+        selectors:
+          - role: pod
+            label: "k8s-app=kube-dns"
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: "metrics"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+
   # Vault on prx-999 (iac-homelab), metrics are unauthenticated and a sealed Vault is scraped
   # too. Let's Encrypt certificate, so it's verified.
   - job_name: "vault"
