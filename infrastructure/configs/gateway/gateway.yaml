@@ -39,3 +39,20 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    # VictoriaLogs' journald endpoint on its own listener, HTTP/1.1 only (traffic-policy.yaml):
+    # systemd-journal-upload aborts over HTTP/2 (systemd/systemd#39166). Clients pick the
+    # listener by SNI, the more specific hostname wins over the wildcard.
+    - name: journald
+      protocol: HTTPS
+      port: 443
+      hostname: journald.hirednoobs.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring

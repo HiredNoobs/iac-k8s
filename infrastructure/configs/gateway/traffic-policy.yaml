@@ -14,3 +14,22 @@ spec:
   timeout:
     http:
       requestTimeout: 0s
+---
+# systemd-journal-upload fails over HTTP/2: libcurl sometimes offers it a buffer too small for
+# the next entry's first line and it aborts the upload ("Buffer space is too small to write
+# entry", systemd/systemd#39166, open). It has no setting for the HTTP version, so its listener
+# only offers HTTP/1.1.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: journald
+  namespace: gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: public
+      sectionName: journald
+  tls:
+    alpnProtocols:
+      - http/1.1
