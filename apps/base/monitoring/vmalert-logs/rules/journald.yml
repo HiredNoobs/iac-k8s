@@ -34,6 +34,7 @@ groups:
           description: >-
             An SSH login to a prx-999 VM that didn't come from mgmt (nor git over SSH, nor you
             into mgmt from the LAN): someone moving between machines with a key they found.
+          tested: "2026-10-11"
           runbook: >-
             Who: the key's fingerprint is in the same journal line. Check ~/.ssh/authorized_keys
             on that VM and what the session did (sudo lines, the user's shell history).
@@ -60,9 +61,11 @@ groups:
           description: >-
             Repeated failed SSH logins (unknown users, wrong keys): guessing, usually stopped by
             fail2ban after three.
+          tested: "2026-10-11"
           runbook: >-
             The users tried are in the lines. fail2ban-client status sshd on the VM shows bans.
-            Trigger: ssh -o PubkeyAuthentication=no nobody@<vm> a few times.
+            Trigger: for i in 1 2 3; do ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new
+            nobody@<vm> true; done (fail2ban then blocks you from that VM for an hour).
 
       # Ansible becomes root with sudo as the admin user (hirednoobs) on every run. sudo logs
       # COMMAND= for refused attempts too: those are SudoFailures'.
@@ -84,6 +87,7 @@ groups:
           description: >-
             sudo used by someone other than the admin user: a new or service account given sudo,
             or a way to root that shouldn't exist.
+          tested: "2026-10-11"
           runbook: >-
             The commands are in the lines (COMMAND=). Check /etc/sudoers.d on the VM.
             Trigger: none safe; test locally with a sample line.
@@ -106,9 +110,10 @@ groups:
           description: >-
             sudo refused (not allowed, or a wrong password): someone on the VM trying to become
             root.
+          tested: "2026-10-11"
           runbook: >-
-            Who was logged in then (ssh.service lines). Trigger: sudo -k; sudo -u nobody true
-            as a user without sudo, or a wrong password where one is asked.
+            Who was logged in then (ssh.service lines). Trigger: sudo -u nobody sudo true, and
+            Enter at the three password prompts (with -n sudo stops before logging anything).
 
       - alert: VaultRootTokenUsed
         expr: >-
@@ -127,6 +132,7 @@ groups:
           description: >-
             Requests made with a root token: build.sh vault does this; anything else means the
             root token (or keys.json) is out.
+          tested: "2026-10-11"
           runbook: >-
             The paths are in the entries (request.path). If it wasn't an apply of terraform/vault,
             revoke root tokens (vault token revoke) and rotate keys.json. Trigger: a plan of the
@@ -151,10 +157,13 @@ groups:
           description: >-
             An audit device enabled or disabled. Disabling one is how Vault's trail is cut; only
             terraform/vault should touch them.
+          tested: "2026-10-11"
           runbook: >-
             vault audit list on the VM; both devices (stdout, file) should be there. If not,
-            re-apply terraform/vault and treat the root token as compromised. Trigger: the first
-            apply of the audit devices fires it.
+            re-apply terraform/vault and treat the root token as compromised. Trigger (as root):
+            vault audit enable -path=siem-test file file_path=discard, then vault audit disable
+            siem-test. Enabling the first devices didn't fire it: a request is only audited by
+            the devices that existed before it.
 
       - alert: VaultConfigChange
         expr: >-
@@ -175,15 +184,18 @@ groups:
           description: >-
             A policy, auth method, role or user changed: who can read which secrets. Only
             terraform/vault (and you adding userpass users by hand) should do this.
+          tested: "2026-10-11"
           runbook: >-
             Compare with terraform/vault (a plan shows drift). Trigger: an apply of
             terraform/vault that changes something.
 
+      # A wrong userpass password is an error response, not a failed request: no top-level
+      # error, only response.data.error (HMAC'd). Refused requests have the top-level one.
       - alert: VaultLoginFailures
         expr: >-
           {_SYSTEMD_UNIT="vault.service"} "\"type\":\"response\""
-          | unpack_json fields (request.path, request.remote_address, error)
-          | filter request.path:~"^auth/[^/]+/login" error:~"."
+          | unpack_json fields (request.path, request.remote_address, error, response.data.error)
+          | filter request.path:~"^auth/[^/]+/login" (error:~"." or response.data.error:~".")
           | copy request.remote_address as remote_ip, request.path as path
           | stats by (remote_ip, path) count() as failures
           | filter failures:>=3
@@ -198,9 +210,10 @@ groups:
             Failed logins (userpass passwords, Kubernetes service account tokens): guessing, or
             ESO with a token Vault no longer accepts.
           runbook: >-
-            The error is in the entries. From a node address with auth/kubernetes: check ESO's
-            ClusterSecretStore. Trigger: vault login -method=userpass username=nobody three
-            times.
+            The username is in request.path (userpass), the error is HMAC'd (compare with vault
+            write sys/audit-hash/stdout input=...). From a node address with auth/kubernetes:
+            check ESO's ClusterSecretStore. Trigger: vault login -no-store -method=userpass
+            username=siem-test password=wrong, three times.
 
       - alert: VaultPermissionDenied
         expr: >-
@@ -220,6 +233,7 @@ groups:
           description: >-
             A token trying paths its policy doesn't allow: looking for secrets it shouldn't have,
             or an app configured with the wrong path.
+          tested: "2026-10-11"
           runbook: >-
             The paths are in the entries (request.path). Trigger: with ESO's role, read a path
             outside labv2/data/production/* five times.
@@ -241,6 +255,7 @@ groups:
           description: >-
             Repeated wrong passwords on git.hirednoobs.com: guessing, or a client with an old
             password or token.
+          tested: "2026-10-11"
           runbook: >-
             The usernames tried are in the lines. Trigger: five wrong passwords at
             https://git.hirednoobs.com/user/login.
