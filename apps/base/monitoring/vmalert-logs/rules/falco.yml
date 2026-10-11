@@ -35,6 +35,7 @@ groups:
             Falco saw something in a running container or on the node that its rule
             "{{ $labels.rule }}" ({{ $labels.priority }}) flags: what it did is in the event
             (process, file, connection).
+          tested: "2026-10-11"
           runbook: >-
             The events: {kubernetes.pod_namespace="falco"} rule:="{{ $labels.rule }}" in
             VictoriaLogs (output_fields.proc.cmdline, .proc.pname, .fd.name, .user.name). If it's
