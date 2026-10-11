@@ -55,6 +55,12 @@ spec:
               value: /secrets/storage-encryption-key
             - name: AUTHELIA_AUTHENTICATION_BACKEND_LDAP_PASSWORD_FILE
               value: /secrets/ldap-password
+            - name: AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
+              value: /secrets/oidc-hmac-secret
+            # configuration.yml reads the OIDC signing key and client secret digests from
+            # /secrets with {{ secret "..." }}.
+            - name: X_AUTHELIA_CONFIG_FILTERS
+              value: template
           ports:
             - name: https
               containerPort: 9091
@@ -111,6 +117,12 @@ spec:
                 path: storage-encryption-key
               - key: AUTHELIA_LDAP_PASSWORD
                 path: ldap-password
+              - key: AUTHELIA_OIDC_HMAC_SECRET
+                path: oidc-hmac-secret
+              - key: AUTHELIA_OIDC_JWKS_KEY
+                path: oidc-jwks-key
+              - key: AUTHELIA_OIDC_MEALIE_CLIENT_SECRET_DIGEST
+                path: oidc-mealie-client-secret-digest
         # The server certificate (configuration.yml's server.tls).
         - name: tls
           secret:

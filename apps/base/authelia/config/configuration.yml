@@ -1,5 +1,6 @@
 # Authelia's config. Secrets aren't in here, they're mounted from the authelia Secret and passed
-# with the AUTHELIA_*_FILE env vars (statefulset.yaml).
+# with the AUTHELIA_*_FILE env vars (statefulset.yaml), or read from those files by the template
+# filter (X_AUTHELIA_CONFIG_FILTERS: the OIDC signing key and client secret digests below).
 #
 # https://www.authelia.com/configuration/prologue/introduction/
 
@@ -64,3 +65,41 @@ access_control:
     - domain: '*.hirednoobs.com'
       subject: 'group:admins'
       policy: 'two_factor'
+
+# OpenID Connect provider, for apps with their own login (Mealie). Its HMAC secret comes from
+# AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE. A client gets in with its secret, its users
+# with the client's authorization_policy (password and 2FA); which users an app accepts is up to
+# the app (e.g. Mealie's group settings). Consent is implicit: these are our own apps.
+#
+# https://www.authelia.com/configuration/identity-providers/openid-connect/provider/
+identity_providers:
+  oidc:
+    jwks:
+      - key_id: 'main'
+        algorithm: 'RS256'
+        use: 'sig'
+        key: {{ secret "/secrets/oidc-jwks-key" | mindent 10 "|" | msquote }}
+    clients:
+      # https://www.authelia.com/integration/openid-connect/clients/mealie/
+      - client_id: 'mealie'
+        client_name: 'Mealie'
+        client_secret: '{{ secret "/secrets/oidc-mealie-client-secret-digest" }}'
+        public: false
+        authorization_policy: 'two_factor'
+        consent_mode: 'implicit'
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        redirect_uris:
+          - 'https://mealie.hirednoobs.com/login'
+        scopes:
+          - 'openid'
+          - 'email'
+          - 'profile'
+          - 'groups'
+        response_types:
+          - 'code'
+        grant_types:
+          - 'authorization_code'
+        access_token_signed_response_alg: 'none'
+        userinfo_signed_response_alg: 'none'
+        token_endpoint_auth_method: 'client_secret_basic'
