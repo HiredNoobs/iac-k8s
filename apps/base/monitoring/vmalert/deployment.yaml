@@ -48,7 +48,7 @@ spec:
             - --notifier.tlsCAFile=/etc/vmalert/tls/ca.crt
             - --rule=/etc/alerts/*.yml
             - --external.url=https://grafana.hirednoobs.com
-            - '--external.alert.source=explore?orgId=1&left={"datasource":"VictoriaMetrics","queries":[{"expr":{{.Expr|jsonEscape|queryEscape}},"refId":"A"}],"range":{"from":"{{ .ActiveAt.UnixMilli }}","to":"now"}}'
+            - '--external.alert.source=explore?orgId=1&left={"datasource":"prometheus","queries":[{"refId":"A","datasource":{"type":"prometheus","uid":"prometheus"},"expr":{{ .Expr | jsonEscape | queryEscape }}}],"range":{"from":"{{ (.ActiveAt.Add -3600000000000).UnixMilli }}","to":"now"}}'
           ports:
             - name: https
               containerPort: 8880
