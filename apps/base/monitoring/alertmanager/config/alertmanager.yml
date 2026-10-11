@@ -27,11 +27,15 @@ receivers:
     webhook_configs:
       - url_file: /etc/alertmanager/notifiers/healthchecks-url
         send_resolved: false
+  # One summary line per alert (external-secret.yaml), ntfy takes up to 4 KB: at most 20 alerts
+  # per notification, the rest are counted in it ("+N more").
   - name: ntfy
     webhook_configs:
       - url_file: /etc/alertmanager/notifiers/url
         send_resolved: true
+        max_alerts: 20
   - name: ntfy-critical
     webhook_configs:
       - url_file: /etc/alertmanager/notifiers/url-critical
         send_resolved: true
+        max_alerts: 20
