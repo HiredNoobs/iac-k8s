@@ -123,6 +123,8 @@ spec:
                 path: oidc-jwks-key
               - key: AUTHELIA_OIDC_MEALIE_CLIENT_SECRET_DIGEST
                 path: oidc-mealie-client-secret-digest
+              - key: AUTHELIA_OIDC_GRAFANA_CLIENT_SECRET_DIGEST
+                path: oidc-grafana-client-secret-digest
         # The server certificate (configuration.yml's server.tls).
         - name: tls
           secret:
