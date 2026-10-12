@@ -1,6 +1,7 @@
 # Grafana. SQLite, so a single instance, with its data (users, preferences, anything made in the
 # UI) on a Longhorn volume. The data sources and dashboards are provisioned from config/ and dashboards/.
-# grafana.hirednoobs.com has Grafana's own login, not Authelia.
+# grafana.hirednoobs.com isn't behind Authelia's forward auth: Grafana's login sends you to
+# Authelia (OIDC, below).
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -65,6 +66,61 @@ spec:
             # Installed on start (into the data volume) when missing, pinned like everything else.
             - name: GF_PLUGINS_PREINSTALL
               value: victoriametrics-logs-datasource@0.32.0,victoriametrics-metrics-datasource@0.26.1
+            # Logins through Authelia (OIDC, client `grafana` in apps/base/authelia). Only members
+            # of `admins`, as Grafana server admins; the role is set again at every login, so a
+            # change in LLDAP applies at the next one. Anyone else is refused.
+            - name: GF_AUTH_GENERIC_OAUTH_ENABLED
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_NAME
+              value: Authelia
+            - name: GF_AUTH_GENERIC_OAUTH_ICON
+              value: signin
+            - name: GF_AUTH_GENERIC_OAUTH_CLIENT_ID
+              value: grafana
+            - name: GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: grafana
+                  key: GRAFANA_OIDC_CLIENT_SECRET
+            - name: GF_AUTH_GENERIC_OAUTH_SCOPES
+              value: openid profile email groups offline_access
+            - name: GF_AUTH_GENERIC_OAUTH_AUTH_URL
+              value: https://auth.hirednoobs.com/api/oidc/authorization
+            - name: GF_AUTH_GENERIC_OAUTH_TOKEN_URL
+              value: https://auth.hirednoobs.com/api/oidc/token
+            - name: GF_AUTH_GENERIC_OAUTH_API_URL
+              value: https://auth.hirednoobs.com/api/oidc/userinfo
+            # The client's token_endpoint_auth_method: client_secret_basic.
+            - name: GF_AUTH_GENERIC_OAUTH_AUTH_STYLE
+              value: AuthStyleInHeader
+            - name: GF_AUTH_GENERIC_OAUTH_USE_PKCE
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_USE_REFRESH_TOKEN
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH
+              value: preferred_username
+            - name: GF_AUTH_GENERIC_OAUTH_NAME_ATTRIBUTE_PATH
+              value: name
+            - name: GF_AUTH_GENERIC_OAUTH_EMAIL_ATTRIBUTE_PATH
+              value: email
+            - name: GF_AUTH_GENERIC_OAUTH_GROUPS_ATTRIBUTE_PATH
+              value: groups
+            - name: GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH
+              value: contains(groups[*], 'admins') && 'GrafanaAdmin'
+            - name: GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN
+              value: "true"
+            - name: GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP
+              value: "true"
+            # Straight to Authelia. The local login (the admin account, break-glass when Authelia
+            # is down) is still at /login?disableAutoLogin.
+            - name: GF_AUTH_OAUTH_AUTO_LOGIN
+              value: "true"
+            # Signing out of Grafana signs out of Authelia too, or auto login would sign straight
+            # back in.
+            - name: GF_AUTH_SIGNOUT_REDIRECT_URL
+              value: https://auth.hirednoobs.com/logout
           ports:
             - name: https
               containerPort: 3000

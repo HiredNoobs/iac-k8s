@@ -1,5 +1,5 @@
-# grafana.hirednoobs.com, with Grafana's own login (no Authelia). A Backend rather than the
-# Service: Grafana serves HTTPS, and Envoy verifies its certificate against the monitoring CA
+# grafana.hirednoobs.com, not behind forward auth: Grafana's login goes to Authelia (OIDC,
+# statefulset.yaml). A Backend rather than the Service: Grafana serves HTTPS, and Envoy verifies its certificate against the monitoring CA
 # (ca.crt in grafana-tls) and the service name (sni, one of the certificate's dnsNames).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
