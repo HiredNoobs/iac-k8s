@@ -42,6 +42,10 @@ env:
   # renovate: datasource=helm depName=longhorn registryUrl=https://charts.longhorn.io
   LONGHORN_VERSION: "1.12.1"
   LONGHORN_MANIFEST_SHA256: "41648963af867ac1d0c85755fb53cf61cacd57c9bb22e1942e3fb0439eeb04fd"
+  # Vector, the same version as its image (apps/base/vector/daemonset.yaml), for its config tests.
+  # renovate: datasource=github-releases depName=vectordotdev/vector extractVersion=^v(?<version>.+)$
+  VECTOR_VERSION: "0.59.0"
+  VECTOR_SHA256: "a8dbc43c18ae25d0b23a712c9262f3aad904e352b1db5e7db1d9c4aecab59496"
 
 jobs:
   lint:
@@ -80,6 +84,12 @@ jobs:
           mkdir -p /tmp/flux-crd-schemas
           tar -xzf /tmp/flux-crd-schemas.tar.gz -C /tmp/flux-crd-schemas
 
+          curl -fsSLo /tmp/vector.tar.gz \
+            "https://github.com/vectordotdev/vector/releases/download/v${VECTOR_VERSION}/vector-${VECTOR_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${VECTOR_SHA256}  /tmp/vector.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/vector.tar.gz -C /usr/local/bin --strip-components=3 \
+            ./vector-x86_64-unknown-linux-musl/bin/vector
+
       # The controllers' CRDs converted to schemas, named like Flux's.
       - name: Controller CRD schemas
         run: |
@@ -100,6 +110,15 @@ jobs:
           echo "${LONGHORN_MANIFEST_SHA256}  /tmp/longhorn.yaml" | sha256sum -c -
 
           python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
+
+      # Vector's config loads, and its transforms do what tests.yaml expects.
+      - name: Vector
+        env:
+          NODE_NAME: cp-1
+          VECTOR_SELF_NODE_NAME: cp-1
+        run: |
+          vector validate --no-environment apps/base/vector/vector.yaml
+          vector test apps/base/vector/vector.yaml apps/base/vector/tests.yaml
 
       # The Security folder's ATT&CK coverage dashboard is generated from the alert rules' labels.
       - name: ATT&CK coverage
