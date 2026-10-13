@@ -738,6 +738,98 @@ tests:
               assert_eq!(get!(., ["log.logger"]), "plugin/reload")
               assert!(!exists(."dns.question.name"))
 
+  - name: zap console line (Envoy Gateway's controller, the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T08:06:57.198Z\tinfo\txds\tv3/simple.go:693\topen delta watch ID:311 for type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+            "timestamp": t'2026-10-13T08:06:57.199Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-gateway-1", "container_name": "envoy-gateway"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy-gateway.envoy-gateway")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["log.logger"]), "xds")
+              assert_eq!(get!(., ["log.origin.file.name"]), "v3/simple.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 693)
+
+  - name: klog line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "W1013 08:00:00.123456       1 reflector.go:561] k8s.io/client-go: failed to list",
+            "timestamp": t'2026-10-13T08:00:00.124Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "cert-manager", "pod_name": "cert-manager-1", "container_name": "cert-manager-controller"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.origin.file.name"]), "reflector.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 561)
+
+  - name: logrus text line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "time=\"2026-10-13T08:00:00Z\" level=error msg=\"failed to sync\" func=controller.(*X).sync",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "longhorn-manager-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "error")
+
+  - name: client-go warning (the Longhorn sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "longhorn-manager-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+
+  - name: Grafana JSON (t, level, logger)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-13T08:00:00.000Z\",\"level\":\"warn\",\"logger\":\"context\",\"msg\":\"Request Completed\"}",
+            "timestamp": t'2026-10-13T08:00:00.001Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.logger"]), "context")
+
   - name: audit event (unchanged)
     inputs:
       - insert_at: events

@@ -395,10 +395,40 @@ transforms:
       ."host.hostname" = node
       ."host.name" = if node == "" || domain == "" { node } else { node + "." + domain }
 
+      if !exists(."log.logger") && is_string(.logger) { ."log.logger" = .logger }
+
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
-      # (anything else as it is, lower case).
+      # (anything else as it is, lower case). From a JSON line's level, lvl or severity, else
+      # from the text formats several apps share.
       if !exists(."log.level") {
         raw = .level || .lvl || .severity
+        msg = string(._msg) ?? ""
+        if raw == null {
+          # zap's console format: "<time>\t<level>\t[<logger>\t]<file>.go:<line>\t<message>".
+          zap, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\t(?P<level>[A-Za-z]+)\t(?:(?P<logger>[^\t]+)\t)?(?P<file>[^\t\s]+\.go):(?P<line>\d+)\t')
+          if err == null {
+            raw = zap.level
+            if zap.logger != null && !exists(."log.logger") { ."log.logger" = zap.logger }
+            ."log.origin.file.name" = zap.file
+            ."log.origin.file.line" = to_int(zap.line) ?? null
+          }
+        }
+        if raw == null {
+          # klog: "<I|W|E|F>MMDD hh:mm:ss.uuuuuu <pid> <file>:<line>] <message>".
+          klog, err = parse_regex(msg, r'^(?P<sev>[IWEF])\d{4} \d\d:\d\d:\d\d\.\d+\s+\d+ (?P<file>[^:\]\s]+):(?P<line>\d+)\] ')
+          if err == null {
+            raw = if klog.sev == "I" { "info" } else if klog.sev == "W" { "warning" } else if klog.sev == "E" { "error" } else { "critical" }
+            ."log.origin.file.name" = klog.file
+            ."log.origin.file.line" = to_int(klog.line) ?? null
+          }
+        }
+        if raw == null {
+          # logfmt (logrus' text format, Go's slog): a level= pair.
+          kv, err = parse_regex(msg, r'(?:^|\s)level=(?P<level>[A-Za-z]+)(?:\s|$)')
+          if err == null { raw = kv.level }
+        }
+        # client-go's warnings from the API server (deprecated APIs).
+        if raw == null && starts_with(msg, "Warning: ") { raw = "warning" }
         if is_string(raw) {
           l = downcase(string!(raw))
           if includes(["trace", "debug", "dbug"], l) {
