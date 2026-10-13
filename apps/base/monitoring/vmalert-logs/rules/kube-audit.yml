@@ -1,7 +1,9 @@
-# kube-apiserver's audit log (iac-homelab's audit policy, shipped by apps/base/vector). Each
-# event is one log line with the event's fields (user.username, verb, objectRef.resource,
-# objectRef.namespace, objectRef.name, objectRef.subresource, responseStatus.code, requestURI,
-# auditID, requestObject.* for RBAC changes and directly created pods) plus remote_ip, the client.
+# kube-apiserver's audit log (iac-homelab's audit policy, shipped by apps/base/vector),
+# event.dataset kubernetes.audit. Each event is one log line with the event's fields (verb,
+# objectRef.resource, objectRef.namespace, objectRef.name, objectRef.subresource,
+# responseStatus.code, requestURI, auditID, requestObject.* for RBAC changes and directly created
+# pods) plus Vector's ECS fields: user.name (the event's user.username) and source.ip, the client
+# (sourceIPs[0]).
 #
 # The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
 # deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
@@ -18,10 +20,10 @@ groups:
       # A session logs ResponseStarted and ResponseComplete under one auditID.
       - alert: KubeExecIntoPod
         expr: >-
-          {source="kube-audit"} objectRef.resource:=pods
+          {event.dataset="kubernetes.audit"} objectRef.resource:=pods
           objectRef.subresource:in("exec", "attach", "portforward")
-          | copy user.username as user, objectRef.namespace as namespace, objectRef.name as pod,
-          objectRef.subresource as action
+          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace,
+          objectRef.name as pod, objectRef.subresource as action
           | stats by (user, remote_ip, namespace, pod, action) count_uniq(auditID) as sessions
         labels:
           severity: warning
@@ -43,9 +45,9 @@ groups:
       # person's or an app's.
       - alert: KubeSecretRead
         expr: >-
-          {source="kube-audit"} objectRef.resource:=secrets verb:in("get", "list", "watch")
+          {event.dataset="kubernetes.audit"} objectRef.resource:=secrets verb:in("get", "list", "watch")
           responseStatus.code:=200
-          | copy user.username as user, objectRef.namespace as namespace
+          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as reads
         labels:
           severity: warning
@@ -65,11 +67,11 @@ groups:
 
       - alert: KubeRBACChange
         expr: >-
-          {source="kube-audit"} objectRef.apiGroup:="rbac.authorization.k8s.io"
+          {event.dataset="kubernetes.audit"} objectRef.apiGroup:="rbac.authorization.k8s.io"
           verb:in("create", "update", "patch", "delete", "deletecollection")
-          -user.username:~"^system:serviceaccount:(flux-system|kube-system):" -requestURI:~"dryRun="
-          | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace,
-          objectRef.name as name
+          -user.name:~"^system:serviceaccount:(flux-system|kube-system):" -requestURI:~"dryRun="
+          | copy user.name as user, source.ip as remote_ip, objectRef.resource as resource,
+          objectRef.namespace as namespace, objectRef.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
         labels:
           severity: warning
@@ -92,13 +94,13 @@ groups:
       # restarts them, Envoy Gateway runs its proxies, Longhorn its managers).
       - alert: KubeWorkloadChangeOutsideFlux
         expr: >-
-          {source="kube-audit"}
+          {event.dataset="kubernetes.audit"}
           objectRef.resource:in("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs")
           verb:in("create", "update", "patch", "delete", "deletecollection") objectRef.subresource:=""
-          -user.username:~"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$"
+          -user.name:~"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$"
           -requestURI:~"dryRun="
-          | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace,
-          objectRef.name as name
+          | copy user.name as user, source.ip as remote_ip, objectRef.resource as resource,
+          objectRef.namespace as namespace, objectRef.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
         labels:
           severity: warning
@@ -118,13 +120,14 @@ groups:
 
       - alert: KubePrivilegedPodCreated
         expr: >-
-          {source="kube-audit"} objectRef.resource:=pods verb:=create objectRef.subresource:=""
+          {event.dataset="kubernetes.audit"} objectRef.resource:=pods verb:=create objectRef.subresource:=""
           responseStatus.code:<300
           (requestObject.spec.hostNetwork:=true or requestObject.spec.hostPID:=true
           or requestObject.spec.hostIPC:=true or requestObject.spec.volumes:~"hostPath"
           or requestObject.spec.containers:~"\"privileged\":true")
           -objectRef.namespace:in("kube-system", "longhorn-system", "kube-vip", "node-exporter", "vector", "falco")
-          | copy user.username as user, objectRef.namespace as namespace, objectRef.name as pod
+          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace,
+          objectRef.name as pod
           | stats by (user, remote_ip, namespace, pod) count() as pods
         labels:
           severity: critical
@@ -144,8 +147,8 @@ groups:
 
       - alert: KubePodSecurityViolation
         expr: >-
-          {source="kube-audit"} responseStatus.code:=403 responseStatus.message:~"violates PodSecurity"
-          | copy user.username as user, objectRef.namespace as namespace
+          {event.dataset="kubernetes.audit"} responseStatus.code:=403 responseStatus.message:~"violates PodSecurity"
+          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as rejected
         labels:
           severity: warning
@@ -165,8 +168,8 @@ groups:
 
       - alert: KubeForbiddenBurst
         expr: >-
-          {source="kube-audit"} responseStatus.code:=403
-          | copy user.username as user
+          {event.dataset="kubernetes.audit"} responseStatus.code:=403
+          | copy user.name as user, source.ip as remote_ip
           | stats by (user, remote_ip) count() as forbidden
           | filter forbidden:>=10
         labels:
@@ -189,10 +192,10 @@ groups:
       # loopback: the control planes' kubelets talk to their own kube-apiserver over ::1.
       - alert: KubeAPIUnexpectedSource
         expr: >-
-          {source="kube-audit"}
-          -remote_ip:ipv4_range("192.168.111.0/24") -remote_ip:ipv4_range("10.244.0.0/16")
-          -remote_ip:ipv4_range("127.0.0.0/8") -remote_ip:="::1"
-          | copy user.username as user
+          {event.dataset="kubernetes.audit"}
+          -source.ip:ipv4_range("192.168.111.0/24") -source.ip:ipv4_range("10.244.0.0/16")
+          -source.ip:ipv4_range("127.0.0.0/8") -source.ip:="::1"
+          | copy user.name as user, source.ip as remote_ip
           | stats by (user, remote_ip) count() as requests
         labels:
           severity: warning
