@@ -1,0 +1,26 @@
+# Log collection: Vector (apps/base/vector), from its own metrics (vmagent's pods job). A log that
+# doesn't reach VictoriaLogs is one no log alert can see. Lines it couldn't parse are stored and
+# alerted on from VictoriaLogs (vmalert-logs' LogPipelineErrors).
+groups:
+  - name: Vector
+    interval: 60s
+    rules:
+      # Sending to VictoriaLogs fails: the lines wait in the node's disk buffer (256 MiB), then
+      # reading stops.
+      - alert: VectorSendFailing
+        expr: 'sum by (pod, component_id) (rate(vector_component_errors_total{job="vector", stage="sending"}[5m])) > 0'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Vector can't send logs to VictoriaLogs ({{ $labels.pod }})
+          description: "{{ $labels.component_id }} on {{ $labels.pod }} has been failing to send for 10 minutes. The lines are buffered on the node's disk until it's full."
+
+      # Lines Vector gave up on: they're gone.
+      - alert: VectorLogsLost
+        expr: 'sum by (pod, component_id) (increase(vector_component_discarded_events_total{job="vector", intentional="false"}[15m])) > 0'
+        labels:
+          severity: critical
+        annotations:
+          summary: Vector lost logs ({{ $labels.pod }})
+          description: "{{ $labels.component_id }} on {{ $labels.pod }} discarded {{ $value | humanize }} lines in 15 minutes: they never reached VictoriaLogs."

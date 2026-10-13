@@ -20,3 +20,4 @@ configMapGenerator:
       - rules/kube-audit.yml
       - rules/lldap.yml
       - rules/vaultwarden.yml
+      - rules/vector.yml

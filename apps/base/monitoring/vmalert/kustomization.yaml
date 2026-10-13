@@ -14,3 +14,4 @@ configMapGenerator:
       - rules/controllers.yml
       - rules/blackbox.yml
       - rules/pihole.yml
+      - rules/logging.yml

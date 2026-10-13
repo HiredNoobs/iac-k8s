@@ -1,0 +1,32 @@
+# Lines Vector (apps/base/vector) couldn't parse, kept as they came in with event.kind
+# pipeline_error: a remap failed on them (error.type remap_error), or they looked like their
+# source's format but didn't match it (format_mismatch, e.g. after an upgrade changed it). Either
+# way they lack that source's fields, so the detections that use them miss them. Lines without a
+# parser of their own aren't errors (tags generic).
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: vector
+    type: vlogs
+    interval: 5m
+    rules:
+      - alert: LogPipelineErrors
+        expr: >-
+          {event.kind="pipeline_error"}
+          | copy event.dataset as dataset, error.type as error_type
+          | stats by (dataset, error_type) count() as lines
+        labels:
+          severity: warning
+          source: vector
+        annotations:
+          summary: "{{ $value }} {{ $labels.dataset }} lines Vector couldn't parse ({{ $labels.error_type }}) in 5 minutes"
+          description: >-
+            Vector kept them unparsed: without the source's own fields (source.ip, user.name,
+            ...), so log alerts for {{ $labels.dataset }} don't see them. A format_mismatch
+            usually means the app's log format changed; a remap_error is a bug in vector.yaml.
+          runbook: >-
+            The lines and why: {event.kind="pipeline_error", event.dataset="{{ $labels.dataset }}"}
+            | fields _time, error.message, _msg. Fix the remap in apps/base/vector/vector.yaml,
+            with a test for the new line in tests.yaml. Trigger: kubectl -n mealie exec
+            deploy/mealie -- sh -c 'echo "WARNING  not mealie format" > /proc/1/fd/1' (a
+            format_mismatch in mealie.log; the exec itself raises KubeExecIntoPod).
