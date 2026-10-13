@@ -95,11 +95,73 @@ transforms:
       .kubernetes = meta
       .output_stream = output_stream
 
-  # Fields every pod's line gets, after its source's own remap (none yet). Overwritten whatever
-  # the line had, so a container can't pass its logs off as another source's.
+  # Each source with its own fields to its remap (by namespace and container, which the pod can't
+  # choose), the rest straight to ecs.
+  by_source:
+    type: route
+    inputs: [pods]
+    route:
+      envoy: .kubernetes.pod_namespace == "envoy-gateway" && .kubernetes.container_name == "envoy"
+
+  # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
+  # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
+  envoy:
+    type: remap
+    inputs: [by_source.envoy]
+    source: |
+      if !exists(.start_time) || !exists(.response_code) {
+        %dataset = "envoy.log"
+      } else {
+        %dataset = "envoy.access"
+        # The string values it has, without the "-"s.
+        v = {}
+        for_each(["method", ":authority", "x-envoy-origin-path", "user-agent", "x-request-id"]) -> |_i, key| {
+          s = get!(., [key])
+          if is_string(s) && s != "-" && s != "" { v = set!(v, [key], s) }
+        }
+        # The client, downstream_remote_address without its port ([...] for IPv6).
+        addr, err = parse_regex(string(.downstream_remote_address) ?? "", r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+        if err == null {
+          ."source.ip" = addr.ip
+          ."source.port" = to_int(addr.port) ?? null
+        }
+        method = get!(v, ["method"])
+        if method != null { ."http.request.method" = method }
+        # 0 when no response was sent (the client went away first).
+        code = to_int(.response_code) ?? 0
+        if code > 0 {
+          ."http.response.status_code" = code
+          ."event.outcome" = if code < 400 { "success" } else { "failure" }
+        } else {
+          ."event.outcome" = "unknown"
+        }
+        domain = get!(v, [":authority"])
+        if domain != null { ."url.domain" = domain }
+        path = get!(v, ["x-envoy-origin-path"])
+        if path != null {
+          ."url.original" = path
+          parts = split(string!(path), "?", limit: 2)
+          ."url.path" = parts[0]
+          if length(parts) > 1 { ."url.query" = parts[1] }
+        }
+        ua = get!(v, ["user-agent"])
+        if ua != null { ."user_agent.original" = ua }
+        id = get!(v, ["x-request-id"])
+        if id != null { ."http.request.id" = id }
+        received = to_int(.bytes_received) ?? null
+        if received != null { ."http.request.bytes" = received }
+        sent = to_int(.bytes_sent) ?? null
+        if sent != null { ."http.response.bytes" = sent }
+        # ECS durations are in nanoseconds.
+        ms = to_int(.duration) ?? -1
+        if ms >= 0 { ."event.duration" = ms * 1000000 }
+      }
+
+  # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
+  # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [pods]
+    inputs: [by_source._unmatched, envoy]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
