@@ -115,6 +115,7 @@ jobs:
       - name: Vector
         env:
           NODE_NAME: cp-1
+          NODE_DOMAIN: hirednoobs.com
           VECTOR_SELF_NODE_NAME: cp-1
         run: |
           vector validate --no-environment apps/base/vector/vector.yaml

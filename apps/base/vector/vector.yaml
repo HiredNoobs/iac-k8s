@@ -4,7 +4,16 @@
 # node, image and the pod's labels (kubernetes.*). A JSON line is split into its fields: the first
 # of message, msg, log becomes _msg and the first of time, timestamp, ts that parses becomes
 # _time (otherwise the time the container runtime wrote the line). Any other line is _msg as it
-# is. Stream fields: kubernetes.pod_namespace, kubernetes.pod_name, kubernetes.container_name.
+# is. Then the common fields, ECS names (https://www.elastic.co/guide/en/ecs/current/) written as
+# flat dotted keys, so they can't clash with an app's own field of the same top-level name (the
+# same field in VictoriaLogs either way):
+#   event.dataset   which source: its own name (envoy.access, ...) or <namespace>.<container>
+#   event.provider  what wrote it: the dataset's first part (envoy, ...) or the container
+#   host.hostname   the node's hostname (its name)
+#   host.name       the node's FQDN, <hostname>.<NODE_DOMAIN> (daemonset.yaml)
+#   log.level       the app's level as debug, info, notice, warning, error or critical
+# Stream fields: event.dataset, host.name, kubernetes.pod_namespace, kubernetes.pod_name,
+# kubernetes.container_name.
 #
 # kube-apiserver's audit log, on the control planes: each event as one JSON line. The event's
 # fields stay as they are (nested ones become user.username, objectRef.resource,
@@ -86,6 +95,49 @@ transforms:
       .kubernetes = meta
       .output_stream = output_stream
 
+  # Fields every pod's line gets, after its source's own remap (none yet). Overwritten whatever
+  # the line had, so a container can't pass its logs off as another source's.
+  ecs:
+    type: remap
+    inputs: [pods]
+    source: |
+      # The dataset's product unless the remap says otherwise, the container for the rest.
+      dataset = string(%dataset) ?? ""
+      provider = string(%provider) ?? ""
+      if dataset == "" {
+        dataset = (string(.kubernetes.pod_namespace) ?? "") + "." + (string(.kubernetes.container_name) ?? "")
+        if provider == "" { provider = string(.kubernetes.container_name) ?? "" }
+      } else if provider == "" {
+        provider = split(dataset, ".")[0]
+      }
+      ."event.dataset" = dataset
+      ."event.provider" = provider
+      node = string(.kubernetes.pod_node_name) ?? ""
+      domain = get_env_var("NODE_DOMAIN") ?? ""
+      ."host.hostname" = node
+      ."host.name" = if node == "" || domain == "" { node } else { node + "." + domain }
+
+      # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
+      # (anything else as it is, lower case).
+      if !exists(."log.level") {
+        raw = .level || .lvl || .severity
+        if is_string(raw) {
+          l = downcase(string!(raw))
+          if includes(["trace", "debug", "dbug"], l) {
+            l = "debug"
+          } else if includes(["info", "information", "informational"], l) {
+            l = "info"
+          } else if includes(["warn", "warning"], l) {
+            l = "warning"
+          } else if includes(["error", "err", "eror"], l) {
+            l = "error"
+          } else if includes(["crit", "critical", "fatal", "panic", "dpanic", "alert", "emerg", "emergency"], l) {
+            l = "critical"
+          }
+          ."log.level" = l
+        }
+      }
+
   events:
     type: remap
     inputs: [audit]
@@ -111,8 +163,8 @@ sinks:
   # Two sinks for their stream fields: an app's own `source` or `node` field must not become one.
   victorialogs_pods:
     type: http
-    inputs: [pods]
-    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
+    inputs: [ecs]
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,host.name,kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
       codec: json

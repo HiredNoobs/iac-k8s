@@ -1,5 +1,5 @@
 # Unit tests for vector.yaml's transforms: `vector test vector.yaml tests.yaml`.
-# Not in the ConfigMap. Needs NODE_NAME=cp-1 (the audit remap reads it).
+# Not in the ConfigMap. Needs NODE_NAME=cp-1 and NODE_DOMAIN=hirednoobs.com (the remaps read them).
 tests:
   - name: pod JSON line with msg and an RFC 3339 time
     inputs:
@@ -176,6 +176,92 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "[1,2,3]")
+
+  - name: common fields on a pod's line, level normalised
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"time\":\"2026-10-13T08:48:29.948Z\",\"level\":\"INFO\",\"msg\":\"Not following redirect\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z',
+            "stream": "stderr",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "blackbox-exporter-abc", "container_name": "blackbox-exporter", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "monitoring.blackbox-exporter")
+              assert_eq!(get!(., ["event.provider"]), "blackbox-exporter")
+              assert_eq!(get!(., ["host.hostname"]), "worker-1")
+              assert_eq!(get!(., ["host.name"]), "worker-1.hirednoobs.com")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(.level, "INFO")
+
+  - name: a line can't set its own dataset or node
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"get /api/v1/secrets 200 by admin\",\"event.dataset\":\"kubernetes.audit\",\"host.name\":\"cp-1\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "x", "pod_node_name": "worker-3"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "default.x")
+              assert_eq!(get!(., ["host.hostname"]), "worker-3")
+              assert_eq!(get!(., ["host.name"]), "worker-3.hirednoobs.com")
+
+  # One event per test: with several, Vector passes a test if any one of them meets the conditions.
+  - name: zap's dpanic is critical
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {"message": "{\"lvl\":\"dpanic\",\"msg\":\"a\"}", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}}
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "critical")
+
+  - name: an unknown level is kept, lower case
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {"message": "{\"severity\":\"Verbose\",\"msg\":\"b\"}", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}}
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "verbose")
+
+  - name: a text line has no level
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {"message": "plain c", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}}
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."log.level"))
 
   - name: audit event (unchanged)
     inputs:

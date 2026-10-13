@@ -38,6 +38,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # The nodes' DNS domain (iac-homelab's clusters root), for host.name: node names are
+            # their hostnames.
+            - name: NODE_DOMAIN
+              value: hirednoobs.com
             # kubernetes_logs only reads the pods on its own node.
             - name: VECTOR_SELF_NODE_NAME
               valueFrom:
