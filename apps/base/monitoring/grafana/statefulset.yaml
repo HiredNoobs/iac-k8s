@@ -50,6 +50,8 @@ spec:
                 secretKeyRef:
                   name: grafana
                   key: GRAFANA_ADMIN_PASS
+            - name: GF_LOG_CONSOLE_FORMAT
+              value: json
             - name: GF_SERVER_PROTOCOL
               value: https
             - name: GF_SERVER_HTTP_PORT
