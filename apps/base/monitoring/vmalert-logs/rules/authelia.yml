@@ -1,6 +1,8 @@
-# Authelia's logins (apps/base/authelia), from its pod logs. remote_ip is the client (the Gateway
-# passes it through); the username is only in _msg, so it's extracted. Authelia logs failures, not
-# successes (at log level info).
+# Authelia's logins (apps/base/authelia), from its pod logs: event.dataset authelia.log with
+# Vector's ECS fields (apps/base/vector). source.ip is the client (the Gateway passes it through),
+# user.name the username from the message. A failed login is event.outcome failure with
+# event.action password-login or totp-login, event.reason "unknown user" for a username that
+# doesn't exist. Authelia logs failures, not successes (at log level info).
 #
 # Regulation (Authelia's defaults: 3 failed first factors in 2 minutes ban the user for 5) doesn't
 # log the ban itself, only the attempts made during it ("... and they are banned until ..."), and
@@ -14,9 +16,10 @@ groups:
     rules:
       - alert: AutheliaLoginFailures
         expr: >-
-          {kubernetes.pod_namespace="authelia",kubernetes.container_name="authelia"}
-          "Unsuccessful 1FA authentication attempt by user" -"by user ''"
-          | extract "by user '<user>'"
+          {event.dataset="authelia.log"}
+          event.action:=password-login event.outcome:=failure user.name:*
+          -event.reason:="unknown user"
+          | copy user.name as user, source.ip as remote_ip
           | stats by (user, remote_ip) count() as failures
           | filter failures:>=5
         labels:
@@ -31,14 +34,15 @@ groups:
             has the user banned: password guessing, or a client with a stale password.
           tested: "2026-10-10"
           runbook: >-
-            Look at the client's other requests (remote_ip in the Envoy access logs) and whether a
+            Look at the client's other requests (source.ip in the Envoy access logs) and whether a
             TOTP failure followed (the password worked). Trigger: six wrong passwords for a real
             user within 5 minutes; the user is then banned for 5 minutes.
 
       - alert: AutheliaUnknownUsers
         expr: >-
-          {kubernetes.pod_namespace="authelia",kubernetes.container_name="authelia"}
-          "which usually indicates they do not exist"
+          {event.dataset="authelia.log"}
+          event.reason:="unknown user"
+          | copy source.ip as remote_ip
           | stats by (remote_ip) count() as attempts
           | filter attempts:>=3
         labels:
@@ -58,9 +62,9 @@ groups:
 
       - alert: AutheliaSecondFactorFailures
         expr: >-
-          {kubernetes.pod_namespace="authelia",kubernetes.container_name="authelia"}
-          "Unsuccessful TOTP authentication attempt by user"
-          | extract "by user '<user>'"
+          {event.dataset="authelia.log"}
+          event.action:=totp-login event.outcome:=failure
+          | copy user.name as user, source.ip as remote_ip
           | stats by (user, remote_ip) count() as failures
           | filter failures:>=3
         labels:
