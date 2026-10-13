@@ -139,6 +139,58 @@
     },
     {
       "type": "row",
+      "title": "Events, all sources (client and user)",
+      "id": 49,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "logs",
+      "title": "Events",
+      "id": 50,
+      "description": "Every pod log line and audit event with this client (source.ip) or user (user.name), whatever its source: the Gateway, Authelia, Vaultwarden, lldap, the Kubernetes API, ... The source is in brackets (event.dataset). The prx-999 hosts' journals aren't normalised yet: they're further down.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "(source.ip:* or user.name:*) source.ip:~\"^${ip}$\" user.name:~\"^${user}$\" -url.path:~\"^/static/\" | format \"[<event.dataset>] <_msg>\" as _msg",
+          "maxLines": 500
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false
+      }
+    },
+    {
+      "type": "row",
       "title": "Gateway (client)",
       "id": 35,
       "collapsed": false,
@@ -147,7 +199,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 18
       }
     },
     {
@@ -163,7 +215,7 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 8
+        "y": 19
       },
       "targets": [
         {
@@ -174,7 +226,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" | copy \":authority\" as host | stats by (host, response_code) count() as requests, uniq_values(\"x-envoy-origin-path\") limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} source.ip:~\"^${ip}$\" | copy url.domain as host, http.response.status_code as response_code | stats by (host, response_code) count() as requests, uniq_values(url.original) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
@@ -264,7 +316,7 @@
         "h": 9,
         "w": 16,
         "x": 8,
-        "y": 8
+        "y": 19
       },
       "targets": [
         {
@@ -275,7 +327,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" | stats by (\"user-agent\") count() as requests, max(_time) as _time | sort by (requests desc) | limit 20"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} source.ip:~\"^${ip}$\" | copy user_agent.original as user_agent | stats by (user_agent) count() as requests, max(_time) as _time | sort by (requests desc) | limit 20"
         }
       ],
       "transformations": [
@@ -311,15 +363,15 @@
               "streamId": true
             },
             "indexByName": {
-              "user-agent": 0,
               "requests": 1,
               "Time": 2,
-              "examples": 3
+              "examples": 3,
+              "user_agent": 0
             },
             "renameByName": {
-              "user-agent": "User agent",
               "requests": "Requests",
-              "Time": "Last seen"
+              "Time": "Last seen",
+              "user_agent": "User agent"
             }
           }
         },
@@ -362,7 +414,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 28
       },
       "targets": [
         {
@@ -373,7 +425,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} downstream_remote_address:~\"^${ip}:\" -\"/static/\"",
+          "expr": "{event.dataset=\"envoy.access\"} source.ip:~\"^${ip}$\" -url.path:~\"^/static/\"",
           "maxLines": 500
         }
       ],
@@ -398,7 +450,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 38
       }
     },
     {
@@ -414,7 +466,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 39
       },
       "targets": [
         {
@@ -425,7 +477,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{kubernetes.pod_namespace=\"authelia\",kubernetes.container_name=\"authelia\"} remote_ip:~\"^${ip}$\" _msg:~\"user(name input)? '${user}'\"",
+          "expr": "{event.dataset=\"authelia.log\"} event.action:~\"-login$\" source.ip:~\"^${ip}$\" user.name:~\"^${user}$\"",
           "maxLines": 500
         }
       ],
@@ -453,7 +505,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 39
       },
       "targets": [
         {
@@ -464,7 +516,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{kubernetes.pod_namespace=\"vaultwarden\",kubernetes.container_name=\"vaultwarden\"} _msg:~\"IP: ${ip}[.] Username: ${user}[.]$\"",
+          "expr": "{event.dataset=\"vaultwarden.log\"} event.action:=password-login source.ip:~\"^${ip}$\" user.name:~\"^${user}$\"",
           "maxLines": 500
         }
       ],
@@ -489,7 +541,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 49
       }
     },
     {
@@ -505,7 +557,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 50
       },
       "targets": [
         {
@@ -516,7 +568,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{kubernetes.pod_namespace=\"lldap\",kubernetes.container_name=\"bootstrap\"} (\"successfully created\" or \"successfully deleted\" or \"successfully added to the group\" or \"successfully removed from the group\" or \"[WARNING]\") _msg:~\"\\\"${user}\\\"\"",
+          "expr": "{event.dataset=\"lldap.bootstrap\"} (event.category:=iam or log.level:=warning) user.name:~\"^${user}$\"",
           "maxLines": 500
         }
       ],
@@ -541,7 +593,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 58
       }
     },
     {
@@ -557,7 +609,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 59
       },
       "targets": [
         {
@@ -568,7 +620,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{source=\"kube-audit\"} remote_ip:~\"^${ip}$\" user.username:~\"^${user}$\"",
+          "expr": "{event.dataset=\"kubernetes.audit\"} source.ip:~\"^${ip}$\" user.name:~\"^${user}$\"",
           "maxLines": 500
         }
       ],
@@ -593,7 +645,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 69
       }
     },
     {
@@ -609,7 +661,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 70
       },
       "targets": [
         {
@@ -648,7 +700,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 70
       },
       "targets": [
         {
