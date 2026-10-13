@@ -1,0 +1,195 @@
+# Unit tests for vector.yaml's transforms: `vector test vector.yaml tests.yaml`.
+# Not in the ConfigMap. Needs NODE_NAME=cp-1 (the audit remap reads it).
+tests:
+  - name: pod JSON line with msg and an RFC 3339 time
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"time\":\"2026-10-13T08:48:29.948Z\",\"level\":\"INFO\",\"source\":\"http.go:492\",\"msg\":\"Not following redirect\",\"module\":\"https_authelia\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z',
+            "stream": "stderr",
+            "file": "/var/log/pods/x/0.log",
+            "source_type": "kubernetes_logs",
+            "kubernetes": {
+              "pod_namespace": "monitoring",
+              "pod_name": "blackbox-exporter-abc",
+              "container_name": "blackbox-exporter",
+              "pod_node_name": "worker-1",
+              "pod_ip": "10.244.1.5",
+              "container_image": "quay.io/prometheus/blackbox-exporter:v0.29.0",
+              "container_id": "containerd://abc",
+              "pod_uid": "uid",
+              "pod_labels": {"app.kubernetes.io/name": "blackbox-exporter"},
+              "pod_annotations": {"prometheus.io/scrape": "true"},
+              "namespace_labels": {"kubernetes.io/metadata.name": "monitoring"}
+            }
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "Not following redirect")
+              assert_eq!(._time, t'2026-10-13T08:48:29.948Z')
+              assert_eq!(.level, "INFO")
+              assert_eq!(.source, "http.go:492")
+              assert_eq!(.module, "https_authelia")
+              assert!(!exists(.time))
+              assert!(!exists(.msg))
+              assert_eq!(.output_stream, "stderr")
+              assert_eq!(.kubernetes, {
+                "pod_namespace": "monitoring",
+                "pod_name": "blackbox-exporter-abc",
+                "container_name": "blackbox-exporter",
+                "pod_node_name": "worker-1",
+                "pod_ip": "10.244.1.5",
+                "container_image": "quay.io/prometheus/blackbox-exporter:v0.29.0",
+                "pod_labels": {"app.kubernetes.io/name": "blackbox-exporter"}
+              })
+              assert!(!exists(.file))
+              assert!(!exists(.source_type))
+              assert!(!exists(.timestamp))
+
+  - name: pod JSON line with message and no time field (Envoy's access log)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET grafana.hirednoobs.com/ 200 3ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"downstream_remote_address\":\"192.168.50.10:51234\",\":authority\":\"grafana.hirednoobs.com\",\"response_code\":200}",
+            "timestamp": t'2026-10-13T08:00:00.010Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "GET grafana.hirednoobs.com/ 200 3ms")
+              assert_eq!(._time, t'2026-10-13T08:00:00.010Z')
+              assert_eq!(.start_time, "2026-10-13T08:00:00.000Z")
+              assert_eq!(.downstream_remote_address, "192.168.50.10:51234")
+              assert_eq!(get!(., [":authority"]), "grafana.hirednoobs.com")
+              assert_eq!(.response_code, 200)
+              assert_eq!(.kubernetes.container_name, "envoy")
+
+  - name: plain text line stays as _msg (CoreDNS)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout",
+            "timestamp": t'2026-10-13T09:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
+              assert_eq!(._time, t'2026-10-13T09:00:00.000Z')
+              assert_eq!(keys(.), ["_msg", "_time", "kubernetes", "output_stream"])
+
+  - name: zap JSON with ts as Unix seconds
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":1791878400.5,\"logger\":\"controller\",\"msg\":\"reconciled\"}",
+            "timestamp": t'2026-10-13T10:00:01.000Z',
+            "stream": "stderr",
+            "kubernetes": {"pod_namespace": "external-secrets", "pod_name": "eso-1", "container_name": "external-secrets"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "reconciled")
+              assert_eq!(._time, t'2026-10-13T08:00:00.500Z')
+              assert!(!exists(.ts))
+              assert_eq!(.logger, "controller")
+
+  - name: Falco alert, message and a nanosecond time
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"hostname\":\"worker-2\",\"message\":\"08:20:41.123456789: Notice Shell in container\",\"priority\":\"Notice\",\"rule\":\"Terminal shell in container\",\"source\":\"syscall\",\"tags\":[\"T1059\",\"mitre_execution\"],\"time\":\"2026-10-13T08:20:41.123456789Z\",\"output_fields\":{\"k8s.ns.name\":\"default\",\"proc.name\":\"sh\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco", "pod_node_name": "worker-2"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "08:20:41.123456789: Notice Shell in container")
+              assert_eq!(._time, t'2026-10-13T08:20:41.123456789Z')
+              assert_eq!(.rule, "Terminal shell in container")
+              assert_eq!(.tags, ["T1059", "mitre_execution"])
+              assert_eq!(get!(.output_fields, ["k8s.ns.name"]), "default")
+
+  - name: a time that doesn't parse stays a field, _time is the runtime's
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hello\",\"time\":\"yesterday\"}",
+            "timestamp": t'2026-10-13T11:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "hello")
+              assert_eq!(.time, "yesterday")
+              assert_eq!(._time, t'2026-10-13T11:00:00.000Z')
+
+  - name: a JSON line that isn't an object stays text
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[1,2,3]",
+            "timestamp": t'2026-10-13T11:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "[1,2,3]")
+
+  - name: audit event (unchanged)
+    inputs:
+      - insert_at: events
+        type: vrl
+        source: |
+          . = {"message": "{\"auditID\":\"a1\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"responseStatus\":{\"code\":200},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+    outputs:
+      - extract_from: events
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "get /api/v1/namespaces/default/secrets/x 200 by admin")
+              assert_eq!(._time, "2026-10-13T12:00:00.000000Z")
+              assert_eq!(.source, "kube-audit")
+              assert_eq!(.node, "cp-1")
+              assert_eq!(.remote_ip, "192.168.111.254")

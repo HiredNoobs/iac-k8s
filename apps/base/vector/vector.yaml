@@ -1,6 +1,14 @@
-# Vector on each control plane: tails kube-apiserver's audit log and sends each event to
-# VictoriaLogs as one JSON line. The event's fields stay as they are (nested ones become
-# user.username, objectRef.resource, responseStatus.code, ... in VictoriaLogs), plus:
+# Vector on every node, sending to VictoriaLogs.
+#
+# Pod logs: every container's log lines (kubernetes_logs), with their namespace, pod, container,
+# node, image and the pod's labels (kubernetes.*). A JSON line is split into its fields: the first
+# of message, msg, log becomes _msg and the first of time, timestamp, ts that parses becomes
+# _time (otherwise the time the container runtime wrote the line). Any other line is _msg as it
+# is. Stream fields: kubernetes.pod_namespace, kubernetes.pod_name, kubernetes.container_name.
+#
+# kube-apiserver's audit log, on the control planes: each event as one JSON line. The event's
+# fields stay as they are (nested ones become user.username, objectRef.resource,
+# responseStatus.code, ... in VictoriaLogs), plus:
 #   _msg       "<verb> <requestURI> <code> by <user>", a summary to read in lists
 #   _time      when the response completed (stageTimestamp)
 #   remote_ip  the client, sourceIPs[0] (sourceIPs itself is an array, stored as JSON text), named
@@ -9,6 +17,13 @@
 data_dir: /var/lib/vector
 
 sources:
+  # Not Vector's own pods (the vector.dev/exclude label, daemonset.yaml): its errors about
+  # sending would be sent through itself. Its metrics show them.
+  pod_logs:
+    type: kubernetes_logs
+    # Without a checkpoint (first start), from now rather than every file on the node. Files
+    # found later (new pods, rotations) are read from their start.
+    read_from: end
   audit:
     type: file
     include:
@@ -22,6 +37,55 @@ sources:
     type: internal_metrics
 
 transforms:
+  pods:
+    type: remap
+    inputs: [pod_logs]
+    source: |
+      meta = {
+        "pod_namespace": .kubernetes.pod_namespace,
+        "pod_name": .kubernetes.pod_name,
+        "container_name": .kubernetes.container_name,
+        "pod_node_name": .kubernetes.pod_node_name,
+        "pod_ip": .kubernetes.pod_ip,
+        "container_image": .kubernetes.container_image,
+        "pod_labels": .kubernetes.pod_labels,
+      }
+      line = string(.message) ?? ""
+      written = .timestamp
+      output_stream = .stream
+
+      parsed, err = parse_json(line)
+      if err == null && is_object(parsed) {
+        . = object!(parsed)
+        if is_string(.message) && .message != "" {
+          ._msg = del(.message)
+        } else if is_string(.msg) && .msg != "" {
+          ._msg = del(.msg)
+        } else if is_string(.log) && .log != "" {
+          ._msg = del(.log)
+        }
+        # RFC 3339 strings, or Unix seconds as a number (zap's default).
+        t = null
+        for_each(["time", "timestamp", "ts"]) -> |_i, key| {
+          v = get!(., [key])
+          if t == null && v != null {
+            if is_string(v) {
+              t = parse_timestamp(string(v) ?? "", "%+") ?? null
+            } else if is_float(v) || is_integer(v) {
+              ms = to_int((to_float(v) ?? 0.0) * 1000)
+              t = from_unix_timestamp(ms, unit: "milliseconds") ?? null
+            }
+            if t != null { . = remove!(., [key]) }
+          }
+        }
+        if t == null { t = written }
+        ._time = t
+      } else {
+        . = {"_msg": line, "_time": written}
+      }
+      .kubernetes = meta
+      .output_stream = output_stream
+
   events:
     type: remap
     inputs: [audit]
@@ -44,6 +108,24 @@ transforms:
       ]), " ")
 
 sinks:
+  # Two sinks for their stream fields: an app's own `source` or `node` field must not become one.
+  victorialogs_pods:
+    type: http
+    inputs: [pods]
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
+    method: post
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    compression: gzip
+    tls:
+      ca_file: /etc/vector/tls/ca.crt
+    # On the node's disk while VictoriaLogs is down (256 MiB is Vector's minimum).
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: block
   victorialogs:
     type: http
     inputs: [events]
@@ -56,7 +138,6 @@ sinks:
     compression: gzip
     tls:
       ca_file: /etc/vector/tls/ca.crt
-    # On the node's disk while VictoriaLogs is down (256 MiB is Vector's minimum).
     buffer:
       type: disk
       max_size: 268435488

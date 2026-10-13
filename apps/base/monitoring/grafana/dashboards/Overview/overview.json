@@ -1737,7 +1737,7 @@
       "type": "timeseries",
       "title": "Pod log lines per second",
       "id": 24,
-      "description": "Container log lines collected by vlagent, per namespace. Explore them in VictoriaLogs: `{kubernetes.pod_namespace=\"<ns>\"}` for a namespace's stream.\n\nCLI: `kubectl -n <ns> logs <pod> [-c <container>] --tail=100`",
+      "description": "Container log lines collected by Vector, per namespace. Explore them in VictoriaLogs: `{kubernetes.pod_namespace=\"<ns>\"}` for a namespace's stream.\n\nCLI: `kubectl -n <ns> logs <pod> [-c <container>] --tail=100`",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"

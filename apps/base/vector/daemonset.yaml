@@ -1,7 +1,8 @@
-# Vector (vector.yaml) on each control plane, where kube-apiserver writes its audit log
-# (/var/log/audit/kube, as its own user, 65534). Root with only CAP_DAC_READ_SEARCH: it can read
-# those files and write its read positions and buffer to the node (/var/lib/vector), nothing
-# else. vlagent can't do this: it only collects containers' logs.
+# Vector (vector.yaml) on every node: every pod's log files (/var/log/pods), and on the control
+# planes kube-apiserver's audit log (/var/log/audit/kube, as its own user, 65534). Root with only
+# CAP_DAC_READ_SEARCH: it can read those files and write its read positions and buffer to the
+# node (/var/lib/vector), nothing else. Its service account reads pods, namespaces and nodes
+# (rbac.yaml) for the logs' metadata.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -16,18 +17,15 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: vector
+        vector.dev/exclude: "true"
       annotations:
         # Scraped by vmagent's pods job: lines read and sent, errors (TargetDown if it's gone).
         prometheus.io/scrape: "true"
         prometheus.io/port: "9598"
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
+      serviceAccountName: vector
       tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          operator: Exists
-          effect: NoSchedule
-      automountServiceAccountToken: false
+        - operator: Exists
       securityContext:
         seccompProfile:
           type: RuntimeDefault
@@ -37,6 +35,11 @@ spec:
           args: ["--config", "/etc/vector/vector.yaml"]
           env:
             - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # kubernetes_logs only reads the pods on its own node.
+            - name: VECTOR_SELF_NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
@@ -54,13 +57,16 @@ spec:
               add: ["DAC_READ_SEARCH"]
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              memory: 256Mi
+              memory: 512Mi
           volumeMounts:
             - name: config
               mountPath: /etc/vector
+              readOnly: true
+            - name: pods
+              mountPath: /var/log/pods
               readOnly: true
             - name: audit
               mountPath: /var/log/audit/kube
@@ -74,8 +80,14 @@ spec:
         - name: config
           configMap:
             name: vector
+        # Only the pods' logs, not all of /var/log (or /var/lib, etcd's data on the control
+        # planes).
+        - name: pods
+          hostPath:
+            path: /var/log/pods
         # No type check: Talos' kubelet runs in its own container without /var/log/audit, so it
-        # would report the directory missing; containerd mounts it from the host.
+        # would report the directory missing; containerd mounts it from the host. Empty on the
+        # workers.
         - name: audit
           hostPath:
             path: /var/log/audit/kube

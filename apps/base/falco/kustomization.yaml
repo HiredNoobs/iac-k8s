@@ -1,4 +1,4 @@
-# Runtime detection: Falco on every node, its alerts as JSON on stdout, so vlagent ships them to
+# Runtime detection: Falco on every node, its alerts as JSON on stdout, so Vector ships them to
 # VictoriaLogs like any pod's logs and vmalert-logs turns them into alerts
 # (apps/base/monitoring/vmalert-logs/rules/falco.yml).
 apiVersion: kustomize.config.k8s.io/v1beta1

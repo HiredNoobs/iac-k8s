@@ -12,7 +12,6 @@ resources:
   - ../base/monitoring
   - ../base/node-exporter
   - ../base/rsyslog
-  - ../base/vlagent
   - ../base/vector
   - ../base/falco
   - ../base/vaultwarden

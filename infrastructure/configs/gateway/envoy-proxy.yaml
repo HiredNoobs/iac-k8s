@@ -34,7 +34,7 @@ spec:
               memory: 128Mi
             limits:
               memory: 512Mi
-  # Access logs to stdout (collected by vlagent into VictoriaLogs), as JSON: Envoy Gateway's
+  # Access logs to stdout (collected by Vector into VictoriaLogs), as JSON: Envoy Gateway's
   # default fields (EnvoyJSONLogFields in internal/xds/translator/accesslog.go, v1.9.2) plus
   # message, a one-line summary, which becomes the log's _msg (without it VictoriaLogs shows
   # "missing _msg field"). Setting this replaces the default, so the fields are all listed.

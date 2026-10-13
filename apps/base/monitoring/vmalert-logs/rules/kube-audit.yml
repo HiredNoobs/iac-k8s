@@ -6,7 +6,7 @@
 # The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
 # deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
 # kube-vip, kubelet-serving-cert-approver, longhorn-system, metrics-server, rabbitmq-system,
-# reloader, monitoring, vlagent), so a read that is logged is a person's or an app's. Writes are
+# reloader, monitoring, vector), so a read that is logged is a person's or an app's. Writes are
 # always logged. "admin" is the Talos-generated kubeconfig's user (mgmt, 192.168.111.254).
 #
 # Each group's interval is also the window its queries count over.
@@ -123,7 +123,7 @@ groups:
           (requestObject.spec.hostNetwork:=true or requestObject.spec.hostPID:=true
           or requestObject.spec.hostIPC:=true or requestObject.spec.volumes:~"hostPath"
           or requestObject.spec.containers:~"\"privileged\":true")
-          -objectRef.namespace:in("kube-system", "longhorn-system", "kube-vip", "vlagent", "node-exporter", "vector", "falco")
+          -objectRef.namespace:in("kube-system", "longhorn-system", "kube-vip", "node-exporter", "vector", "falco")
           | copy user.username as user, objectRef.namespace as namespace, objectRef.name as pod
           | stats by (user, remote_ip, namespace, pod) count() as pods
         labels:

@@ -101,7 +101,7 @@ spec:
       # Notice and above: Info and Debug rules are too chatty to keep.
       priority: notice
       # One JSON object per alert on stdout. "message" (the alert's text) instead of "output"
-      # (the same, prefixed with the time and priority): vlagent takes message as _msg.
+      # (the same, prefixed with the time and priority): Vector takes message as _msg.
       json_output: true
       json_include_output_property: false
       json_include_message_property: true

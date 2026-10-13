@@ -1,4 +1,4 @@
-# Falco's alerts (apps/base/falco), one JSON line each on its pods' stdout, collected by vlagent:
+# Falco's alerts (apps/base/falco), one JSON line each on its pods' stdout, collected by Vector:
 # rule, priority, message (_msg), tags (JSON text, e.g. ["T1059","container","mitre_execution",
 # "shell"]), output_fields.* (the event: proc.cmdline, user.name, fd.name, container.name,
 # k8s.ns.name, k8s.pod.name, ...). Falco's own log lines (startup, errors) have no rule field.

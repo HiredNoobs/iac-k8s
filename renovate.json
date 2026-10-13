@@ -107,9 +107,9 @@
       "groupName": "falco"
     },
     {
-      "description": "vlagent is kept at VictoriaLogs' version",
-      "matchPackageNames": ["victoria-logs-collector", "victoriametrics/vlagent", "victoriametrics/victoria-logs"],
-      "groupName": "victorialogs"
+      "description": "lint.yml tests vector.yaml with the image's version",
+      "matchPackageNames": ["timberio/vector", "vectordotdev/vector"],
+      "groupName": "vector"
     },
     {
       "matchPackageNames": ["victoriametrics/victoria-metrics", "victoriametrics/vmagent", "victoriametrics/vmalert"],
