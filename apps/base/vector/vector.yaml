@@ -319,7 +319,8 @@ transforms:
         %dataset = "lldap.bootstrap"
         %provider = "lldap-bootstrap"
         if contains(msg, "[WARNING]") { ."log.level" = "warning" }
-        change, err = parse_regex(msg, r'(?P<kind>User|Group) "(?P<name>[^"]+)" successfully (?P<what>created|deleted|added to the group|removed from the group)(?: "(?P<group>[^"]+)")?')
+        # A group is named with its id: Group "<name>" (<id>) successfully deleted.
+        change, err = parse_regex(msg, r'(?P<kind>User|Group) "(?P<name>[^"]+)"(?: \(\d+\))? successfully (?P<what>created|deleted|added to the group|removed from the group)(?: "(?P<group>[^"]+)")?')
         if err == null {
           ."event.category" = "iam"
           ."event.outcome" = "success"

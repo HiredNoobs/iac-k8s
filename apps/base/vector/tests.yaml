@@ -618,7 +618,7 @@ tests:
         type: vrl
         source: |
           . = {
-            "message": "User \"mallory\" successfully removed from the group \"lldap_admin\"",
+            "message": "User \"mallory\" successfully removed from the group \"lldap_admin\" (1)",
             "timestamp": t'2026-10-13T09:17:02.000Z', "stream": "stdout",
             "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-bootstrap-29340000-abcde", "container_name": "bootstrap"}
           }
@@ -640,7 +640,7 @@ tests:
         type: vrl
         source: |
           . = {
-            "message": "Group \"extra\" successfully deleted",
+            "message": "Group \"extra\" (7) successfully deleted",
             "timestamp": t'2026-10-13T09:17:02.000Z', "stream": "stdout",
             "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-bootstrap-29340000-abcde", "container_name": "bootstrap"}
           }
