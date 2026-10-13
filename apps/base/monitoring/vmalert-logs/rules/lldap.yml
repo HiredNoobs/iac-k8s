@@ -5,6 +5,11 @@
 # resets declared users' attributes and passwords without saying whether they had changed, so
 # those aren't covered.
 #
+# Its lines are event.dataset lldap.bootstrap with Vector's ECS fields (apps/base/vector): a change
+# is event.category iam with event.action user-created, user-deleted, group-created,
+# group-deleted, added-to-group or removed-from-group, and user.name and group.name; a warning is
+# log.level warning.
+#
 # A change to the declared users or groups in git logs the same lines on its first run.
 #
 # Each group's interval is also the window its queries count over.
@@ -15,10 +20,10 @@ groups:
     rules:
       - alert: LldapAdminGroupGranted
         expr: >-
-          {kubernetes.pod_namespace="lldap",kubernetes.container_name="bootstrap"}
-          "successfully removed from the group"
-          | extract 'User "<user>" successfully removed from the group "<group>"'
-          | filter group:in("lldap_admin", "lldap_password_manager", "admins")
+          {event.dataset="lldap.bootstrap"}
+          event.action:=removed-from-group
+          group.name:in("lldap_admin", "lldap_password_manager", "admins")
+          | copy user.name as user, group.name as group
           | stats by (user, group) count() as removals
         labels:
           severity: critical
@@ -41,10 +46,10 @@ groups:
 
       - alert: LldapDirectoryDrift
         expr: >-
-          {kubernetes.pod_namespace="lldap",kubernetes.container_name="bootstrap"}
-          ("successfully created" or "successfully deleted" or "successfully added to the group"
-          or "successfully removed from the group" or "[WARNING]")
-          -~'removed from the group "(lldap_admin|lldap_password_manager|admins)"'
+          {event.dataset="lldap.bootstrap"}
+          (event.category:=iam or log.level:=warning)
+          -(event.action:=removed-from-group
+          group.name:in("lldap_admin", "lldap_password_manager", "admins"))
           | copy _msg as change
           | stats by (change) count() as changes
         labels:
