@@ -85,17 +85,18 @@ spec:
             - name: ldaps
               containerPort: 6360
               protocol: TCP
-          # The image's own healthcheck, it checks the LDAP, LDAPS and HTTP servers.
+          # Readiness on /health, which isn't logged. The image's `lldap healthcheck` also checks
+          # LDAP and LDAPS but logs their sessions on every run, so only liveness uses it, once a minute.
           readinessProbe:
             exec:
-              command: ["/app/lldap", "healthcheck", "--config-file", "/data/lldap_config.toml"]
+              command: ["curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:17170/health"]
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             exec:
               command: ["/app/lldap", "healthcheck", "--config-file", "/data/lldap_config.toml"]
-            periodSeconds: 30
-            failureThreshold: 3
+            periodSeconds: 60
+            failureThreshold: 2
           resources:
             requests:
               cpu: 20m
