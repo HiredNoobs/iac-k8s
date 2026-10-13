@@ -1,12 +1,14 @@
 # Falco's alerts (apps/base/falco), one JSON line each on its pods' stdout, collected by Vector:
-# rule, priority, message (_msg), tags (JSON text, e.g. ["T1059","container","mitre_execution",
-# "shell"]), output_fields.* (the event: proc.cmdline, user.name, fd.name, container.name,
-# k8s.ns.name, k8s.pod.name, ...). Falco's own log lines (startup, errors) have no rule field.
+# event.dataset falco.alert (its own log lines are falco.log), with Vector's ECS fields
+# (apps/base/vector): rule.name, log.level (Falco's priority: Emergency, Alert and Critical are
+# critical), threat.tactic.name and threat.technique.id (the first mitre_<tactic> and T<id> in
+# its tags), host.hostname (the node), orchestrator.namespace and orchestrator.resource.name (the
+# pod), and process.*, file.path, user.name from output_fields.*, which stay as well.
 #
-# One alert for all of Falco's rules: its ATT&CK tactic and technique come from the event's
-# tags (mitre_<tactic>, T<id>), its severity from Falco's priority (Critical and above critical,
-# Error and Warning warning). Notice-level events (a shell in a container, a pod talking to the
-# API) aren't alerted: they're in VictoriaLogs and the Security dashboards.
+# One alert for all of Falco's rules: its ATT&CK tactic and technique come from the event, its
+# severity from the level (critical stays critical, error and warning are warning). Notice-level
+# events (a shell in a container, a pod talking to the API) aren't alerted: they're in
+# VictoriaLogs and the Security dashboards.
 #
 # Each group's interval is also the window its queries count over.
 groups:
@@ -16,16 +18,13 @@ groups:
     rules:
       - alert: FalcoRuntimeAlert
         expr: >-
-          {kubernetes.pod_namespace="falco",kubernetes.container_name="falco"} rule:*
-          priority:in("Emergency", "Alert", "Critical", "Error", "Warning")
-          | extract_regexp "\"mitre_(?P<tactic>[a-z_]+)\"" from tags
-          | extract_regexp "\"(?P<technique>T[0-9]{4}(?:\\.[0-9]{3})?)\"" from tags
-          | replace ("_", "-") at tactic
-          | copy kubernetes.pod_node_name as node, output_fields.k8s.ns.name as namespace,
-          output_fields.k8s.pod.name as pod
-          | stats by (rule, priority, tactic, technique, node, namespace, pod) count() as events
+          {event.dataset="falco.alert"} log.level:in("critical", "error", "warning")
+          | copy rule.name as rule, log.level as level, threat.tactic.name as tactic,
+          threat.technique.id as technique, host.hostname as node,
+          orchestrator.namespace as namespace, orchestrator.resource.name as pod
+          | stats by (rule, level, tactic, technique, node, namespace, pod) count() as events
         labels:
-          severity: '{{ if or (eq $labels.priority "Emergency") (eq $labels.priority "Alert") (eq $labels.priority "Critical") }}critical{{ else }}warning{{ end }}'
+          severity: '{{ if eq $labels.level "critical" }}critical{{ else }}warning{{ end }}'
           source: falco
           mitre_tactic: "{{ $labels.tactic }}"
           mitre_technique: "{{ $labels.technique }}"
@@ -33,13 +32,13 @@ groups:
           summary: "Falco: {{ $labels.rule }} in {{ $labels.namespace }}/{{ $labels.pod }} on {{ $labels.node }} ({{ $value }} events)"
           description: >-
             Falco saw something in a running container or on the node that its rule
-            "{{ $labels.rule }}" ({{ $labels.priority }}) flags: what it did is in the event
+            "{{ $labels.rule }}" ({{ $labels.level }}) flags: what it did is in the event
             (process, file, connection).
           tested: "2026-10-11"
           runbook: >-
-            The events: {kubernetes.pod_namespace="falco"} rule:="{{ $labels.rule }}" in
-            VictoriaLogs (output_fields.proc.cmdline, .proc.pname, .fd.name, .user.name). If it's
-            expected (a tool that really does this), add an exception in the HelmRelease's
-            customRules rather than silencing it. Trigger (Read sensitive file untrusted, a root
-            process opening /etc/shadow): kubectl -n falco run siem-test --rm -i --restart=Never
-            --image=busybox:1.37 -- cat /etc/shadow
+            The events: {event.dataset="falco.alert"} rule.name:="{{ $labels.rule }}" in
+            VictoriaLogs (process.command_line, output_fields.proc.pname, file.path, user.name).
+            If it's expected (a tool that really does this), add an exception in the
+            HelmRelease's customRules rather than silencing it. Trigger (Read sensitive file
+            untrusted, a root process opening /etc/shadow): kubectl -n falco run siem-test --rm
+            -i --restart=Never --image=busybox:1.37 -- cat /etc/shadow
