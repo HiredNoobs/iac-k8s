@@ -693,6 +693,51 @@ tests:
               assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
               assert!(!exists(."event.action"))
 
+  - name: CoreDNS failed query (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "coredns.log")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["log.logger"]), "plugin/errors")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["dns.question.name"]), "pihole.hirednoobs.com")
+              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
+              assert_eq!(get!(., ["error.message"]), "read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
+              assert_eq!(get!(., ["event.count"]), 2)
+              assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
+              assert_eq!(get!(., ["destination.port"]), 53)
+
+  - name: CoreDNS other plugin line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[INFO] plugin/reload: Running configuration SHA512 = 1a2b",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["log.logger"]), "plugin/reload")
+              assert!(!exists(."dns.question.name"))
+
   - name: audit event (unchanged)
     inputs:
       - insert_at: events

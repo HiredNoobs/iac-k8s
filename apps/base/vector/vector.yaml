@@ -109,6 +109,7 @@ transforms:
       falco: .kubernetes.pod_namespace == "falco" && .kubernetes.container_name == "falco"
       lldap: .kubernetes.pod_namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container_name)
       vaultwarden: .kubernetes.pod_namespace == "vaultwarden" && .kubernetes.container_name == "vaultwarden"
+      coredns: .kubernetes.pod_namespace == "kube-system" && .kubernetes.container_name == "coredns"
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -342,11 +343,41 @@ transforms:
         if err == null { ."source.ip" = ws.ip }
       }
 
+  # CoreDNS: "[<LEVEL>] plugin/<name>: <message>". The errors plugin's lines are failed queries:
+  # "<count> <name> <type>: <error>", the error usually naming the upstream it asked
+  # ("read udp <us>-><upstream>:53: i/o timeout").
+  coredns:
+    type: remap
+    inputs: [by_source.coredns]
+    source: |
+      %dataset = "coredns.log"
+      line, err = parse_regex(string(._msg) ?? "", r'^\[(?P<level>[A-Z]+)\] (?:(?P<plugin>plugin/[a-z0-9_]+): )?(?P<rest>.*)$')
+      if err == null {
+        l = downcase(string!(line.level))
+        ."log.level" = if l == "warn" { "warning" } else if l == "fatal" { "critical" } else { l }
+        if line.plugin != null { ."log.logger" = line.plugin }
+        if line.plugin == "plugin/errors" {
+          q, err = parse_regex(string!(line.rest), r'^(?P<count>\d+) (?P<name>\S+) (?P<type>[A-Z0-9]+): (?P<error>.*)$')
+          if err == null {
+            ."event.outcome" = "failure"
+            ."dns.question.name" = replace(string!(q.name), r'\.$', "")
+            ."dns.question.type" = q.type
+            ."error.message" = q.error
+            ."event.count" = to_int(q.count) ?? null
+            upstream, err = parse_regex(string!(q.error), r'->\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)')
+            if err == null {
+              ."destination.ip" = upstream.ip
+              ."destination.port" = to_int(upstream.port) ?? null
+            }
+          }
+        }
+      }
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
