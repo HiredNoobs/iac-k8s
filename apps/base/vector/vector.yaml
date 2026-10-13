@@ -108,6 +108,7 @@ transforms:
       authelia: .kubernetes.pod_namespace == "authelia" && .kubernetes.container_name == "authelia"
       falco: .kubernetes.pod_namespace == "falco" && .kubernetes.container_name == "falco"
       lldap: .kubernetes.pod_namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container_name)
+      vaultwarden: .kubernetes.pod_namespace == "vaultwarden" && .kubernetes.container_name == "vaultwarden"
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -314,11 +315,38 @@ transforms:
         }
       }
 
+  # Vaultwarden: "[<time>][<module>][<LEVEL>] <message>". It logs failed logins (a wrong password
+  # and an unknown account alike), not successful ones. The IP is the client's (IP_HEADER is
+  # X-Forwarded-For).
+  vaultwarden:
+    type: remap
+    inputs: [by_source.vaultwarden]
+    source: |
+      %dataset = "vaultwarden.log"
+      msg = string(._msg) ?? ""
+      prefix, err = parse_regex(msg, r'^\[[^\]]+\]\[(?P<logger>[^\]]+)\]\[(?P<level>[A-Z]+)\]')
+      if err == null {
+        ."log.logger" = prefix.logger
+        l = downcase(string!(prefix.level))
+        ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+      }
+      login, err = parse_regex(msg, r'Username or password is incorrect\..* IP: (?P<ip>\S+)\. Username: (?P<user>.*)\.$')
+      if err == null {
+        ."event.category" = "authentication"
+        ."event.action" = "password-login"
+        ."event.outcome" = "failure"
+        ."source.ip" = login.ip
+        if login.user != "" { ."user.name" = login.user }
+      } else {
+        ws, err = parse_regex(msg, r' connection from (?P<ip>[0-9A-Fa-f.:]+)$')
+        if err == null { ."source.ip" = ws.ip }
+      }
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco, lldap]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""

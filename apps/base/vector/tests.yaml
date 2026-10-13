@@ -651,6 +651,48 @@ tests:
               assert_eq!(get!(., ["group.name"]), "extra")
               assert!(!exists(."user.name"))
 
+  - name: Vaultwarden failed login
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[2026-10-13 12:20:01.123][vaultwarden::api::identity][ERROR] Username or password is incorrect. Try again. IP: 192.168.50.140. Username: bob@example.com.",
+            "timestamp": t'2026-10-13T12:20:01.124Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "vaultwarden", "pod_name": "vaultwarden-0", "container_name": "vaultwarden"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "vaultwarden.log")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["log.logger"]), "vaultwarden::api::identity")
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(get!(., ["user.name"]), "bob@example.com")
+
+  - name: Vaultwarden WebSocket line (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[2026-10-13 12:16:49.552][vaultwarden::api::notifications][INFO] Closing WS connection from 192.168.50.140",
+            "timestamp": t'2026-10-13T12:16:49.553Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "vaultwarden", "pod_name": "vaultwarden-0", "container_name": "vaultwarden"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert!(!exists(."event.action"))
+
   - name: audit event (unchanged)
     inputs:
       - insert_at: events
