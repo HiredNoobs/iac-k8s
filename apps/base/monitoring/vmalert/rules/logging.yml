@@ -15,6 +15,7 @@ groups:
         annotations:
           summary: Vector can't send logs to VictoriaLogs ({{ $labels.pod }})
           description: "{{ $labels.component_id }} on {{ $labels.pod }} has been failing to send for 10 minutes. The lines are buffered on the node's disk until it's full."
+          tested: "2026-10-13"
 
       # Lines Vector gave up on: they're gone.
       - alert: VectorLogsLost

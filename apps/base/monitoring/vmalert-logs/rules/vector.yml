@@ -30,3 +30,4 @@ groups:
             with a test for the new line in tests.yaml. Trigger: kubectl -n mealie exec
             deploy/mealie -- sh -c 'echo "WARNING  not mealie format" > /proc/1/fd/1' (a
             format_mismatch in mealie.log; the exec itself raises KubeExecIntoPod).
+          tested: "2026-10-13"
