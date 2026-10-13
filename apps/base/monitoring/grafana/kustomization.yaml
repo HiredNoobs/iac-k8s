@@ -17,7 +17,7 @@ configMapGenerator:
   # changes while it runs (every 30s, config/dashboards.yml), so fixed names: the pod isn't
   # restarted and the mounted files follow the ConfigMaps.
   #
-  # Upstream's, pinned (below), except Overview. Only their data source references are changed,
+  # Upstream's, pinned (below), except Overview, Security and Log pipeline. Only their data source references are changed,
   # for file provisioning: import placeholders (${DS_...}) without a matching variable point at
   # the prometheus data source, data source variables have no saved selection (so the default).
   # Overview: ours, the home dashboard (statefulset.yaml). To change it, edit it in Grafana, then
@@ -57,9 +57,10 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   # Monitoring: VictoriaMetrics/VictoriaMetrics v1.136.0 and VictoriaMetrics/VictoriaLogs
-  # v1.46.0 (dashboards/).
+  # v1.46.0 (dashboards/). Log pipeline: ours (what Vector made of the logs).
   - name: grafana-dashboards-monitoring
     files:
+      - dashboards/Monitoring/log-pipeline.json
       - dashboards/Monitoring/victorialogs.json
       - dashboards/Monitoring/victoriametrics.json
       - dashboards/Monitoring/vmagent.json
