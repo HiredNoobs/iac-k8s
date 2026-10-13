@@ -194,7 +194,7 @@
           },
           "editorMode": "code",
           "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=~\"authelia|vaultwarden\"} (\"Unsuccessful 1FA\" or \"Unsuccessful TOTP\" or \"Username or password is incorrect\") | count() as failures"
+          "expr": "_time:$__range {event.dataset=~\"authelia.log|vaultwarden.log\"} event.outcome:=failure event.action:in(\"password-login\", \"totp-login\") -event.reason:=\"unknown user\" | count() as failures"
         }
       ],
       "fieldConfig": {
@@ -258,7 +258,7 @@
           },
           "editorMode": "code",
           "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} method:=POST response_code:=200 \":authority\":=\"auth.hirednoobs.com\" \"x-envoy-origin-path\":=\"/api/secondfactor/totp\" | count() as logins"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} http.request.method:=POST http.response.status_code:=200 url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\" | count() as logins"
         }
       ],
       "fieldConfig": {
@@ -318,7 +318,7 @@
           },
           "editorMode": "code",
           "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} response_code:in(\"401\", \"403\", \"404\") -\"user-agent\":\"Blackbox-Exporter\"* | count() as refused"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} http.response.status_code:in(401, 403, 404) -user_agent.original:\"Blackbox-Exporter\"* | count() as refused"
         }
       ],
       "fieldConfig": {
@@ -382,7 +382,7 @@
           },
           "editorMode": "code",
           "queryType": "stats",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} (\"x-envoy-origin-path\":~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\" or (\":authority\":=\"alertmanager.hirednoobs.com\" method:=POST \"x-envoy-origin-path\":=\"/api/v2/silences\") or (\":authority\":=\"victoriametrics.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/api/v1/admin/tsdb/delete_series\") or (\":authority\":=\"victorialogs.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/delete/\") or (\":authority\":=\"grafana.hirednoobs.com\" method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") \"x-envoy-origin-path\":~\"^/api/(admin/users|org/users)\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/admin\")) -response_code:=302 | count() as requests"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} (url.original:~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\" or (url.domain:=\"alertmanager.hirednoobs.com\" http.request.method:=POST url.path:=\"/api/v2/silences\") or (url.domain:=\"victoriametrics.hirednoobs.com\" url.path:~\"^/api/v1/admin/tsdb/delete_series\") or (url.domain:=\"victorialogs.hirednoobs.com\" url.path:~\"^/delete/\") or (url.domain:=\"grafana.hirednoobs.com\" http.request.method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") url.path:~\"^/api/(admin/users|org/users)\") or (url.domain:=\"vaultwarden.hirednoobs.com\" url.path:~\"^/admin\")) -http.response.status_code:=302 | count() as requests"
         }
       ],
       "fieldConfig": {
@@ -672,7 +672,7 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "{kubernetes.pod_namespace=\"authelia\",kubernetes.container_name=\"authelia\"} \"Unsuccessful 1FA\" | stats count() as failures",
+          "expr": "{event.dataset=\"authelia.log\"} event.action:=password-login event.outcome:=failure -event.reason:=\"unknown user\" | stats count() as failures",
           "legendFormat": "Authelia password"
         },
         {
@@ -683,7 +683,7 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "{kubernetes.pod_namespace=\"authelia\",kubernetes.container_name=\"authelia\"} \"Unsuccessful TOTP\" | stats count() as failures",
+          "expr": "{event.dataset=\"authelia.log\"} event.action:=totp-login event.outcome:=failure | stats count() as failures",
           "legendFormat": "Authelia TOTP"
         },
         {
@@ -694,7 +694,7 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "{kubernetes.pod_namespace=\"vaultwarden\",kubernetes.container_name=\"vaultwarden\"} \"Username or password is incorrect\" | stats count() as failures",
+          "expr": "{event.dataset=\"vaultwarden.log\"} event.action:=password-login event.outcome:=failure | stats count() as failures",
           "legendFormat": "Vaultwarden"
         }
       ],
@@ -751,7 +751,7 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "{kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} method:=POST response_code:=200 ((\":authority\":=\"auth.hirednoobs.com\" \"x-envoy-origin-path\":=\"/api/secondfactor/totp\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":=\"/identity/connect/token\")) | copy \":authority\" as host | stats by (host) count() as logins",
+          "expr": "{event.dataset=\"envoy.access\"} http.request.method:=POST http.response.status_code:=200 ((url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\") or (url.domain:=\"vaultwarden.hirednoobs.com\" url.path:=\"/identity/connect/token\")) | copy url.domain as host | stats by (host) count() as logins",
           "legendFormat": "{{host}}"
         }
       ],
@@ -808,7 +808,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"authelia\",kubernetes.container_name=\"authelia\"} (\"Unsuccessful 1FA\" or \"Unsuccessful TOTP\") | extract \"Unsuccessful <factor> authentication attempt by user '<user>'\" | stats by (user, remote_ip, factor) count() as failures, max(_time) as _time | sort by (failures desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"authelia.log\"} event.outcome:=failure event.action:in(\"password-login\", \"totp-login\") -event.reason:=\"unknown user\" | copy user.name as user, source.ip as remote_ip, event.action as factor | stats by (user, remote_ip, factor) count() as failures, max(_time) as _time | sort by (failures desc) | limit 50"
         }
       ],
       "transformations": [
@@ -928,7 +928,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"vaultwarden\",kubernetes.container_name=\"vaultwarden\"} \"Username or password is incorrect\" | extract_regexp \"IP: (?P<remote_ip>\\\\S+)\\\\. Username: (?P<user>.*)\\\\.$\" | stats by (user, remote_ip) count() as failures, max(_time) as _time | sort by (failures desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"vaultwarden.log\"} event.action:=password-login event.outcome:=failure | copy user.name as user, source.ip as remote_ip | stats by (user, remote_ip) count() as failures, max(_time) as _time | sort by (failures desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1046,7 +1046,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} method:=POST response_code:=200 ((\":authority\":=\"auth.hirednoobs.com\" \"x-envoy-origin-path\":=\"/api/secondfactor/totp\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":=\"/identity/connect/token\")) | extract \"<remote_ip>:\" from downstream_remote_address | copy \":authority\" as host | stats by (host, remote_ip) count() as logins, max(_time) as _time | sort by (logins desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} http.request.method:=POST http.response.status_code:=200 ((url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\") or (url.domain:=\"vaultwarden.hirednoobs.com\" url.path:=\"/identity/connect/token\")) | copy source.ip as remote_ip, url.domain as host | stats by (host, remote_ip) count() as logins, max(_time) as _time | sort by (logins desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1177,7 +1177,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} response_code:in(\"401\", \"403\", \"404\") -\"user-agent\":\"Blackbox-Exporter\"* | extract \"<remote_ip>:\" from downstream_remote_address | stats by (remote_ip) count() as refused, count_uniq(\"x-envoy-origin-path\") as paths, uniq_values(\"x-envoy-origin-path\") limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (refused desc) | limit 20"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} http.response.status_code:in(401, 403, 404) -user_agent.original:\"Blackbox-Exporter\"* | copy source.ip as remote_ip | stats by (remote_ip) count() as refused, count_uniq(url.original) as paths, uniq_values(url.original) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (refused desc) | limit 20"
         }
       ],
       "transformations": [
@@ -1300,7 +1300,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"envoy-gateway\",kubernetes.container_name=\"envoy\"} (\"x-envoy-origin-path\":~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\" or (\":authority\":=\"alertmanager.hirednoobs.com\" method:=POST \"x-envoy-origin-path\":=\"/api/v2/silences\") or (\":authority\":=\"victoriametrics.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/api/v1/admin/tsdb/delete_series\") or (\":authority\":=\"victorialogs.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/delete/\") or (\":authority\":=\"grafana.hirednoobs.com\" method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") \"x-envoy-origin-path\":~\"^/api/(admin/users|org/users)\") or (\":authority\":=\"vaultwarden.hirednoobs.com\" \"x-envoy-origin-path\":~\"^/admin\")) -response_code:=302 | extract \"<remote_ip>:\" from downstream_remote_address | copy \":authority\" as host, \"x-envoy-origin-path\" as path | stats by (remote_ip, method, host, path, response_code) count() as requests, max(_time) as _time | sort by (requests desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"envoy.access\"} (url.original:~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\" or (url.domain:=\"alertmanager.hirednoobs.com\" http.request.method:=POST url.path:=\"/api/v2/silences\") or (url.domain:=\"victoriametrics.hirednoobs.com\" url.path:~\"^/api/v1/admin/tsdb/delete_series\") or (url.domain:=\"victorialogs.hirednoobs.com\" url.path:~\"^/delete/\") or (url.domain:=\"grafana.hirednoobs.com\" http.request.method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") url.path:~\"^/api/(admin/users|org/users)\") or (url.domain:=\"vaultwarden.hirednoobs.com\" url.path:~\"^/admin\")) -http.response.status_code:=302 | copy source.ip as remote_ip, http.request.method as method, url.domain as host, url.original as path, http.response.status_code as response_code | stats by (remote_ip, method, host, path, response_code) count() as requests, max(_time) as _time | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1437,7 +1437,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{kubernetes.pod_namespace=\"lldap\",kubernetes.container_name=\"bootstrap\"} (\"successfully created\" or \"successfully deleted\" or \"successfully added to the group\" or \"successfully removed from the group\" or \"[WARNING]\")",
+          "expr": "{event.dataset=\"lldap.bootstrap\"} (event.category:=iam or log.level:=warning)",
           "maxLines": 500
         }
       ],
@@ -1476,7 +1476,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{kubernetes.pod_namespace=\"lldap\",kubernetes.container_name=\"lldap\"} \"login attempt\"",
+          "expr": "{event.dataset=\"lldap.log\"} event.action:=password-login",
           "maxLines": 500
         }
       ],
@@ -1528,7 +1528,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {source=\"kube-audit\"} verb:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.username:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager|external-secrets):.*)$\" -requestURI:~\"dryRun=\" -objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") | copy user.username as user, objectRef.resource as resource, objectRef.namespace as namespace | stats by (user, remote_ip, verb, resource, namespace) count() as requests, uniq_values(objectRef.name) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"kubernetes.audit\"} verb:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.name:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager|external-secrets):.*)$\" -requestURI:~\"dryRun=\" -objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") | copy user.name as user, source.ip as remote_ip, objectRef.resource as resource, objectRef.namespace as namespace | stats by (user, remote_ip, verb, resource, namespace) count() as requests, uniq_values(objectRef.name) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1653,7 +1653,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {source=\"kube-audit\"} (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") or (objectRef.resource:=secrets verb:in(\"get\", \"list\", \"watch\")) or responseStatus.code:=403) | format if (objectRef.resource:=secrets) \"secret read\" as kind | format if (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\")) \"<objectRef.subresource>\" as kind | format if (responseStatus.code:=403) \"forbidden\" as kind | copy user.username as user, objectRef.namespace as namespace | stats by (user, remote_ip, kind, namespace) count() as requests, uniq_values(objectRef.name) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"kubernetes.audit\"} (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\") or (objectRef.resource:=secrets verb:in(\"get\", \"list\", \"watch\")) or responseStatus.code:=403) | format if (objectRef.resource:=secrets) \"secret read\" as kind | format if (objectRef.subresource:in(\"exec\", \"attach\", \"portforward\")) \"<objectRef.subresource>\" as kind | format if (responseStatus.code:=403) \"forbidden\" as kind | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace | stats by (user, remote_ip, kind, namespace) count() as requests, uniq_values(objectRef.name) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1789,8 +1789,8 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "{kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | stats by (priority) count() as events",
-          "legendFormat": "{{priority}}"
+          "expr": "{event.dataset=\"falco.alert\"} | stats by (log.level) count() as events",
+          "legendFormat": "{{log.level}}"
         }
       ],
       "fieldConfig": {
@@ -1826,7 +1826,7 @@
       "type": "table",
       "title": "Falco events by rule",
       "id": 28,
-      "description": "Which Falco rules fired, where. The events themselves: {kubernetes.pod_namespace=\"falco\"} rule:=\"<rule>\" in VictoriaLogs.",
+      "description": "Which Falco rules fired, where. The events themselves: {event.dataset=\"falco.alert\"} rule.name:=\"<rule>\" in VictoriaLogs.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -1846,7 +1846,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | copy output_fields.k8s.ns.name as namespace, output_fields.k8s.pod.name as pod | stats by (rule, priority, namespace, pod) count() as events, uniq_values(output_fields.proc.cmdline) limit 3 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (events desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"falco.alert\"} | copy rule.name as rule, log.level as level, orchestrator.namespace as namespace, orchestrator.resource.name as pod | stats by (rule, level, namespace, pod) count() as events, uniq_values(process.command_line) limit 3 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (events desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1883,21 +1883,21 @@
             },
             "indexByName": {
               "rule": 0,
-              "priority": 1,
               "namespace": 2,
               "pod": 3,
               "events": 4,
               "examples": 5,
-              "Time": 6
+              "Time": 6,
+              "level": 1
             },
             "renameByName": {
               "rule": "Rule",
-              "priority": "Priority",
               "namespace": "Namespace",
               "pod": "Pod",
               "events": "Events",
               "examples": "Example commands",
-              "Time": "Last seen"
+              "Time": "Last seen",
+              "level": "Level"
             }
           }
         },
@@ -1951,7 +1951,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {kubernetes.pod_namespace=\"falco\",kubernetes.container_name=\"falco\"} rule:* | collapse_nums prettify | stats by (priority, rule, _msg) count() as events, max(_time) as _time | sort by (events desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"falco.alert\"} | collapse_nums prettify | copy rule.name as rule, log.level as level | stats by (level, rule, _msg) count() as events, max(_time) as _time | sort by (events desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1986,19 +1986,19 @@
               "streamId": true
             },
             "indexByName": {
-              "priority": 0,
               "rule": 1,
               "Line": 2,
               "events": 3,
               "Time": 4,
-              "examples": 5
+              "examples": 5,
+              "level": 0
             },
             "renameByName": {
-              "priority": "Priority",
               "rule": "Rule",
               "Line": "Message",
               "events": "Events",
-              "Time": "Last seen"
+              "Time": "Last seen",
+              "level": "Level"
             }
           }
         },
