@@ -738,6 +738,71 @@ tests:
               assert_eq!(get!(., ["log.logger"]), "plugin/reload")
               assert!(!exists(."dns.question.name"))
 
+  - name: Mealie access line (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "INFO     2026-10-13T09:48:38 - [10.244.1.1:48410] 200 OK \"GET /api/app/about?x=1 HTTP/1.1\"",
+            "timestamp": t'2026-10-13T09:48:38.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "mealie.access")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["source.ip"]), "10.244.1.1")
+              assert_eq!(get!(., ["source.port"]), 48410)
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(get!(., ["http.version"]), "1.1")
+              assert_eq!(get!(., ["url.path"]), "/api/app/about")
+              assert_eq!(get!(., ["url.query"]), "x=1")
+
+  - name: Mealie other line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "WARNING  2026-10-13T09:48:38 - something happened",
+            "timestamp": t'2026-10-13T09:48:38.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "mealie.log")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert!(!exists(."source.ip"))
+
+  - name: ghostunnel pipe (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[1] 2026/10/13 07:49:16.884630 opening pipe: tcp:10.244.10.27:45578 [no cert] <-> tcp:127.0.0.1:17170 [no tls] ",
+            "timestamp": t'2026-10-13T07:49:16.885Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "ghostunnel"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "ghostunnel.log")
+              assert_eq!(get!(., ["source.ip"]), "10.244.10.27")
+              assert_eq!(get!(., ["source.port"]), 45578)
+              assert_eq!(get!(., ["destination.ip"]), "127.0.0.1")
+              assert_eq!(get!(., ["destination.port"]), 17170)
+
   - name: zap console line (Envoy Gateway's controller, the sample)
     inputs:
       - insert_at: pods

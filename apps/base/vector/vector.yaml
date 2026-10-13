@@ -110,6 +110,8 @@ transforms:
       lldap: .kubernetes.pod_namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container_name)
       vaultwarden: .kubernetes.pod_namespace == "vaultwarden" && .kubernetes.container_name == "vaultwarden"
       coredns: .kubernetes.pod_namespace == "kube-system" && .kubernetes.container_name == "coredns"
+      mealie: .kubernetes.pod_namespace == "mealie" && .kubernetes.container_name == "mealie"
+      ghostunnel: .kubernetes.pod_namespace == "lldap" && .kubernetes.container_name == "ghostunnel"
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -373,11 +375,53 @@ transforms:
         }
       }
 
+  # Mealie: "<LEVEL>    <time> - <message>"; its access lines' message is
+  # "[<ip>:<port>] <code> <reason> \"<method> <path> HTTP/<version>\"" (the Gateway's address).
+  mealie:
+    type: remap
+    inputs: [by_source.mealie]
+    source: |
+      %dataset = "mealie.log"
+      line, err = parse_regex(string(._msg) ?? "", r'^(?P<level>[A-Z]+)\s+\S+ - (?P<rest>.*)$')
+      if err == null {
+        l = downcase(string!(line.level))
+        ."log.level" = if l == "warn" { "warning" } else { l }
+        access, err = parse_regex(string!(line.rest), r'^\[(?P<ip>[^\]]+?):(?P<port>\d+)\] (?P<code>\d{3}) [^"]*"(?P<method>[A-Z]+) (?P<path>\S+) HTTP/(?P<version>[0-9.]+)"$')
+        if err == null {
+          %dataset = "mealie.access"
+          ."source.ip" = access.ip
+          ."source.port" = to_int(access.port) ?? null
+          code = to_int(access.code) ?? 0
+          ."http.response.status_code" = code
+          ."event.outcome" = if code < 400 { "success" } else { "failure" }
+          ."http.request.method" = access.method
+          ."http.version" = access.version
+          ."url.original" = access.path
+          parts = split(string!(access.path), "?", limit: 2)
+          ."url.path" = parts[0]
+          if length(parts) > 1 { ."url.query" = parts[1] }
+        }
+      }
+
+  # ghostunnel (lldap's HTTPS): "[<pid>] <time> opening pipe: tcp:<client> [...] <-> tcp:<target>".
+  ghostunnel:
+    type: remap
+    inputs: [by_source.ghostunnel]
+    source: |
+      %dataset = "ghostunnel.log"
+      pipe, err = parse_regex(string(._msg) ?? "", r'pipe: tcp:\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+) .*<-> tcp:\[?(?P<dip>[0-9A-Fa-f.:]+?)\]?:(?P<dport>\d+)')
+      if err == null {
+        ."source.ip" = pipe.ip
+        ."source.port" = to_int(pipe.port) ?? null
+        ."destination.ip" = pipe.dip
+        ."destination.port" = to_int(pipe.dport) ?? null
+      }
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, ghostunnel]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
