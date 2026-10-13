@@ -479,6 +479,80 @@ tests:
               assert_eq!(get!(., ["http.response.status_code"]), 302)
               assert!(!exists(."user.name"))
 
+  - name: Falco alert, ECS fields
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"hostname\":\"worker-2\",\"message\":\"Terminal shell in container | user=root process=sh\",\"priority\":\"Notice\",\"rule\":\"Terminal shell in container\",\"source\":\"syscall\",\"tags\":[\"T1059\",\"container\",\"mitre_execution\",\"shell\"],\"time\":\"2026-10-13T08:20:41.123456789Z\",\"output_fields\":{\"k8s.ns.name\":\"default\",\"k8s.pod.name\":\"shell-pod\",\"proc.name\":\"sh\",\"proc.cmdline\":\"sh -i\",\"proc.exepath\":\"/bin/sh\",\"proc.pid\":4242,\"user.name\":\"root\",\"container.name\":\"app\",\"container.image.repository\":\"docker.io/library/busybox\",\"fd.name\":\"<NA>\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco", "pod_node_name": "worker-2"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "falco.alert")
+              assert_eq!(get!(., ["event.kind"]), "alert")
+              assert_eq!(get!(., ["rule.name"]), "Terminal shell in container")
+              assert_eq!(get!(., ["log.level"]), "notice")
+              assert_eq!(get!(., ["threat.tactic.name"]), "execution")
+              assert_eq!(get!(., ["threat.technique.id"]), "T1059")
+              assert_eq!(get!(., ["process.name"]), "sh")
+              assert_eq!(get!(., ["process.command_line"]), "sh -i")
+              assert_eq!(get!(., ["process.executable"]), "/bin/sh")
+              assert_eq!(get!(., ["process.pid"]), 4242)
+              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(get!(., ["container.name"]), "app")
+              assert_eq!(get!(., ["container.image.name"]), "docker.io/library/busybox")
+              assert!(!exists(."file.path"))
+              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
+              assert_eq!(get!(., ["orchestrator.namespace"]), "default")
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "pod")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "shell-pod")
+              assert_eq!(.priority, "Notice")
+              assert_eq!(.source, "syscall")
+
+  - name: Falco critical alert with a sub-technique and a two-word tactic
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"x\",\"priority\":\"Critical\",\"rule\":\"Drop and execute new binary in container\",\"tags\":[\"mitre_defense_evasion\",\"T1036.005\",\"mitre_persistence\"],\"output_fields\":{}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "critical")
+              assert_eq!(get!(., ["threat.tactic.name"]), "defense-evasion")
+              assert_eq!(get!(., ["threat.technique.id"]), "T1036.005")
+              assert!(!exists(."orchestrator.type"))
+
+  - name: Falco's own log line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "Tue Oct 13 08:00:00 2026: Falco initialized with configuration files:",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "falco.log")
+              assert!(!exists(."rule.name"))
+
   - name: audit event (unchanged)
     inputs:
       - insert_at: events

@@ -106,6 +106,7 @@ transforms:
     route:
       envoy: .kubernetes.pod_namespace == "envoy-gateway" && .kubernetes.container_name == "envoy"
       authelia: .kubernetes.pod_namespace == "authelia" && .kubernetes.container_name == "authelia"
+      falco: .kubernetes.pod_namespace == "falco" && .kubernetes.container_name == "falco"
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -204,11 +205,72 @@ transforms:
         if is_string(.path) { ."url.path" = .path }
       }
 
+  # Falco's alerts (rule, priority, tags, output_fields.*), falco.alert; its own log lines are
+  # falco.log. The tactic and technique are the first of each in the tags, like the alert rule's.
+  falco:
+    type: remap
+    inputs: [by_source.falco]
+    source: |
+      if !exists(.rule) {
+        %dataset = "falco.log"
+      } else {
+        %dataset = "falco.alert"
+        ."event.kind" = "alert"
+        ."rule.name" = .rule
+        p = downcase(string(.priority) ?? "")
+        ."log.level" = if includes(["emergency", "alert", "critical"], p) {
+          "critical"
+        } else if p == "informational" {
+          "info"
+        } else {
+          p
+        }
+        tactic = null
+        technique = null
+        for_each(array(.tags) ?? []) -> |_i, t| {
+          s = string(t) ?? ""
+          if tactic == null && starts_with(s, "mitre_") {
+            tactic = replace(slice!(s, 6), "_", "-")
+          }
+          if technique == null && match(s, r'^T[0-9]{4}(\.[0-9]{3})?$') {
+            technique = s
+          }
+        }
+        if tactic != null { ."threat.tactic.name" = tactic }
+        if technique != null { ."threat.technique.id" = technique }
+        # The event's own fields (output_fields keys have dots in them).
+        f = object(.output_fields) ?? {}
+        for_each({
+          "proc.name": "process.name",
+          "proc.cmdline": "process.command_line",
+          "proc.exepath": "process.executable",
+          "proc.pid": "process.pid",
+          "user.name": "user.name",
+          "container.name": "container.name",
+          "container.image.repository": "container.image.name",
+          "fd.name": "file.path",
+        }) -> |from, to| {
+          x = get!(f, [from])
+          if x != null && x != "<NA>" { . = set!(., [to], x) }
+        }
+        # Where in the cluster (ECS has no Kubernetes fields of its own).
+        ns = get!(f, ["k8s.ns.name"])
+        if is_string(ns) && ns != "<NA>" {
+          ."orchestrator.type" = "kubernetes"
+          ."orchestrator.namespace" = ns
+          pod = get!(f, ["k8s.pod.name"])
+          if is_string(pod) && pod != "<NA>" {
+            ."orchestrator.resource.type" = "pod"
+            ."orchestrator.resource.name" = pod
+          }
+        }
+      }
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia]
+    inputs: [by_source._unmatched, envoy, authelia, falco]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
