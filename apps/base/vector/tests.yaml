@@ -397,7 +397,7 @@ tests:
       - insert_at: events
         type: vrl
         source: |
-          . = {"message": "{\"auditID\":\"a1\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"responseStatus\":{\"code\":200},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+          . = {"message": "{\"auditID\":\"a1\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x\",\"userAgent\":\"kubectl/v1.37.0\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"responseStatus\":{\"code\":200},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
     outputs:
       - extract_from: events
         conditions:
@@ -408,3 +408,27 @@ tests:
               assert_eq!(.source, "kube-audit")
               assert_eq!(.node, "cp-1")
               assert_eq!(.remote_ip, "192.168.111.254")
+              assert_eq!(get!(., ["event.dataset"]), "kubernetes.audit")
+              assert_eq!(get!(., ["event.provider"]), "kube-apiserver")
+              assert_eq!(get!(., ["host.hostname"]), "cp-1")
+              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
+              assert_eq!(get!(., ["source.ip"]), "192.168.111.254")
+              assert_eq!(get!(., ["user.name"]), "admin")
+              assert_eq!(get!(., ["user_agent.original"]), "kubectl/v1.37.0")
+              assert_eq!(get!(., ["event.action"]), "get")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+
+  - name: audit event, refused
+    inputs:
+      - insert_at: events
+        type: vrl
+        source: |
+          . = {"message": "{\"auditID\":\"a2\",\"verb\":\"list\",\"requestURI\":\"/api/v1/secrets\",\"user\":{\"username\":\"system:serviceaccount:default:x\"},\"sourceIPs\":[\"10.244.2.9\"],\"responseStatus\":{\"code\":403},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+    outputs:
+      - extract_from: events
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["user.name"]), "system:serviceaccount:default:x")
+              assert_eq!(.user.username, "system:serviceaccount:default:x")

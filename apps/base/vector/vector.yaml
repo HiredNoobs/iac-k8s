@@ -23,6 +23,9 @@
 #   remote_ip  the client, sourceIPs[0] (sourceIPs itself is an array, stored as JSON text), named
 #              like the other sources' client field
 #   source     "kube-audit", and node: the stream fields
+# and the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
+# host.hostname, host.name, source.ip, user.name, user_agent.original, event.action (the verb)
+# and event.outcome (from the response code).
 data_dir: /var/lib/vector
 
 sources:
@@ -209,7 +212,8 @@ transforms:
       . = object!(parse_json!(.message))
       ._time = .stageTimestamp || .requestReceivedTimestamp
       .source = "kube-audit"
-      .node = get_env_var!("NODE_NAME")
+      node = get_env_var!("NODE_NAME")
+      .node = node
       .remote_ip = .sourceIPs[0]
       code = ""
       if .responseStatus.code != null { code = to_string!(.responseStatus.code) }
@@ -220,6 +224,19 @@ transforms:
         "by",
         string(.user.username) ?? "",
       ]), " ")
+
+      # The common fields (ECS, as for pod logs).
+      ."event.dataset" = "kubernetes.audit"
+      ."event.provider" = "kube-apiserver"
+      domain = get_env_var("NODE_DOMAIN") ?? ""
+      ."host.hostname" = node
+      ."host.name" = if domain == "" { node } else { node + "." + domain }
+      ."source.ip" = .remote_ip
+      ."user.name" = .user.username
+      ."user_agent.original" = .userAgent
+      ."event.action" = .verb
+      status = to_int(.responseStatus.code) ?? 0
+      ."event.outcome" = if status == 0 { "unknown" } else if status < 400 { "success" } else { "failure" }
 
 sinks:
   # Two sinks for their stream fields: an app's own `source` or `node` field must not become one.
@@ -243,7 +260,7 @@ sinks:
   victorialogs:
     type: http
     inputs: [events]
-    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=source,node&_msg_field=_msg&_time_field=_time
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=source,node,event.dataset,host.name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
       codec: json
