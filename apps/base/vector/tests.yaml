@@ -392,6 +392,93 @@ tests:
               assert_eq!(get!(., ["event.dataset"]), "default.envoy")
               assert!(!exists(."source.ip"))
 
+  - name: Authelia failed first factor, banned
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"method\":\"POST\",\"msg\":\"Unsuccessful 1FA authentication attempt by user 'bob' and they are banned until 12:05:00PM on October 13 2026 (+00:00)\",\"path\":\"/api/firstfactor\",\"remote_ip\":\"192.168.50.140\",\"time\":\"2026-10-13T12:00:00Z\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(get!(., ["user.name"]), "bob")
+              assert_eq!(get!(., ["event.category"]), "authentication")
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["event.reason"]), "banned")
+              assert_eq!(get!(., ["http.request.method"]), "POST")
+              assert_eq!(get!(., ["url.path"]), "/api/firstfactor")
+              assert_eq!(.remote_ip, "192.168.50.140")
+
+  - name: Authelia failed TOTP, empty user stays unset
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"msg\":\"Unsuccessful TOTP authentication attempt by user ''\",\"remote_ip\":\"192.168.50.140\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "totp-login")
+              assert!(!exists(."user.name"))
+              assert!(!exists(."event.reason"))
+
+  - name: Authelia unknown user
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"msg\":\"Error occurred getting details for user with username input 'mallory' which usually indicates they do not exist\",\"remote_ip\":\"192.168.50.9\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["user.name"]), "mallory")
+              assert_eq!(get!(., ["event.reason"]), "unknown user")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+
+  - name: Authelia access decision (the sample line)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"method\":\"GET\",\"msg\":\"Access to https://victoriametrics.hirednoobs.com/ (method GET) is not authorized to user <anonymous>, responding with status code 302 with location redirect to https://auth.hirednoobs.com/?rd=https%3A%2F%2Fvictoriametrics.hirednoobs.com%2F&rm=GET\",\"path\":\"/api/authz/ext-authz\",\"remote_ip\":\"10.244.6.37\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "authorization")
+              assert_eq!(get!(., ["url.full"]), "https://victoriametrics.hirednoobs.com/")
+              assert_eq!(get!(., ["url.domain"]), "victoriametrics.hirednoobs.com")
+              assert_eq!(get!(., ["url.path"]), "/")
+              assert_eq!(get!(., ["http.response.status_code"]), 302)
+              assert!(!exists(."user.name"))
+
   - name: audit event (unchanged)
     inputs:
       - insert_at: events

@@ -105,6 +105,7 @@ transforms:
     inputs: [pods]
     route:
       envoy: .kubernetes.pod_namespace == "envoy-gateway" && .kubernetes.container_name == "envoy"
+      authelia: .kubernetes.pod_namespace == "authelia" && .kubernetes.container_name == "authelia"
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -160,11 +161,54 @@ transforms:
         if ms >= 0 { ."event.duration" = ms * 1000000 }
       }
 
+  # Authelia (JSON: level, msg, remote_ip, method, path). It logs failed logins, not successful
+  # ones, and its access decisions; the user is only in the message.
+  authelia:
+    type: remap
+    inputs: [by_source.authelia]
+    source: |
+      %dataset = "authelia.log"
+      if is_string(.remote_ip) { ."source.ip" = .remote_ip }
+      msg = string(._msg) ?? ""
+
+      login, err = parse_regex(msg, r'^Unsuccessful (?P<factor>1FA|TOTP|WebAuthn|Duo) authentication attempt by user \'(?P<user>[^\']*)\'(?P<banned> and they are banned)?')
+      if err == null {
+        ."event.category" = "authentication"
+        ."event.action" = if login.factor == "1FA" { "password-login" } else { downcase(string!(login.factor)) + "-login" }
+        ."event.outcome" = "failure"
+        if login.user != "" { ."user.name" = login.user }
+        if login.banned != null { ."event.reason" = "banned" }
+      }
+      unknown, err = parse_regex(msg, r'username input \'(?P<user>[^\']*)\' which usually indicates they do not exist')
+      if err == null {
+        ."event.category" = "authentication"
+        ."event.action" = "password-login"
+        ."event.outcome" = "failure"
+        ."event.reason" = "unknown user"
+        if unknown.user != "" { ."user.name" = unknown.user }
+      }
+      # An access decision for a site behind Authelia: the site's URL, not Authelia's own path.
+      access, err = parse_regex(msg, r'^Access to (?P<url>\S+) \(method (?P<method>[A-Z]+)\) is not authorized to user (?P<user>.+?), responding with status code (?P<code>\d+)')
+      if err == null {
+        ."event.category" = "authentication"
+        ."event.action" = "authorization"
+        ."event.outcome" = "failure"
+        ."url.full" = access.url
+        u, err = parse_url(string!(access.url))
+        if err == null { ."url.domain" = u.host; ."url.path" = u.path }
+        ."http.request.method" = access.method
+        ."http.response.status_code" = to_int(access.code) ?? null
+        if access.user != "<anonymous>" { ."user.name" = access.user }
+      } else {
+        if is_string(.method) { ."http.request.method" = .method }
+        if is_string(.path) { ."url.path" = .path }
+      }
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy]
+    inputs: [by_source._unmatched, envoy, authelia]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
