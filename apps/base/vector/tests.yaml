@@ -195,6 +195,8 @@ tests:
             source: |
               assert_eq!(get!(., ["event.dataset"]), "monitoring.blackbox-exporter")
               assert_eq!(get!(., ["event.provider"]), "blackbox-exporter")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(.tags, ["generic"])
               assert_eq!(get!(., ["host.hostname"]), "worker-1")
               assert_eq!(get!(., ["host.name"]), "worker-1.hirednoobs.com")
               assert_eq!(get!(., ["log.level"]), "info")
@@ -894,6 +896,410 @@ tests:
             source: |
               assert_eq!(get!(., ["log.level"]), "warning")
               assert_eq!(get!(., ["log.logger"]), "context")
+
+  - name: a line a source's remap failed on keeps that source's name
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "_msg": "GET x/ 200 1ms", "_time": t'2026-10-13T08:00:00.000Z', "output_stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy", "pod_node_name": "worker-4"},
+            "metadata": {"dropped": {"component_id": "envoy", "component_kind": "transform", "component_type": "remap", "message": "function call error for \"to_int\"", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.log")
+              assert_eq!(get!(., ["event.provider"]), "envoy")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "remap_error")
+              assert_eq!(get!(., ["error.message"]), "function call error for \"to_int\"")
+              assert_eq!(get!(., ["host.hostname"]), "worker-4")
+              assert_eq!(get!(., ["host.name"]), "worker-4.hirednoobs.com")
+              assert!(!exists(.tags))
+              assert_eq!(._msg, "GET x/ 200 1ms")
+              assert!(!exists(.metadata))
+
+  - name: a line the pod remap failed on is kept as it came
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "message": "some line", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "file": "/var/log/pods/x/0.log", "source_type": "kubernetes_logs",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app", "pod_node_name": "worker-1", "pod_uid": "u", "pod_annotations": {"a": "b"}},
+            "metadata": {"dropped": {"component_id": "pods", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "some line")
+              assert_eq!(._time, t'2026-10-13T08:00:00.000Z')
+              assert_eq!(.output_stream, "stderr")
+              assert_eq!(get!(., ["event.dataset"]), "default.app")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "remap_error")
+              assert_eq!(get!(., ["error.message"]), "boom")
+              assert!(!exists(.tags))
+              assert!(!exists(.kubernetes.pod_annotations))
+              assert!(!exists(.file))
+              assert!(!exists(.metadata))
+
+  - name: a line can't claim to be a pipeline error
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hi\",\"event.kind\":\"pipeline_error\",\"error.type\":\"x\",\"metadata\":{\"dropped\":{\"component_id\":\"envoy\",\"message\":\"x\"}}}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "default.app")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(.tags, ["generic"])
+
+  - name: an audit log line that isn't JSON is kept
+    inputs:
+      - insert_at: events
+        type: vrl
+        source: |
+          . = {"message": "{\"auditID\":\"a3\",\"verb\":\"ge", "timestamp": t'2026-10-13T12:00:00.000Z'}
+    outputs:
+      - extract_from: audit_unparsed
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "{\"auditID\":\"a3\",\"verb\":\"ge")
+              assert_eq!(.source, "kube-audit")
+              assert_eq!(.node, "cp-1")
+              assert_eq!(get!(., ["event.dataset"]), "kubernetes.audit")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "remap_error")
+              assert!(contains(string!(get!(., ["error.message"])), "parse_json"))
+
+  - name: a parsed audit event is an event
+    inputs:
+      - insert_at: events
+        type: vrl
+        source: |
+          . = {"message": "{\"auditID\":\"a4\",\"verb\":\"get\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+    outputs:
+      - extract_from: events
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!exists(."error.type"))
+
+  - name: a line with a parser isn't generic
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[INFO] plugin/reload: Running configuration SHA512 = 1a2b",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!exists(.tags))
+
+  - name: generic is added to an app's own tags
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hi\",\"tags\":[\"a\",\"b\"]}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.tags, ["a", "b", "generic"])
+
+  - name: generic is added to an app's single tag
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hi\",\"tags\":\"a\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.tags, ["a", "generic"])
+
+  - name: "format mismatch: Envoy access line without a client address"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET x/ 200 1ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"response_code\":\"200\",\"downstream_remote_address\":\"-\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.access")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(get!(., ["error.message"]), "downstream_remote_address isn't <ip>:<port>")
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+
+  - name: "format mismatch: Envoy response_code that isn't a number"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET x/\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"response_code\":\"-\",\"downstream_remote_address\":\"10.0.0.1:1\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.message"]), "response_code isn't a number")
+
+  - name: "format mismatch: Authelia line that isn't its JSON"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "time=2026-10-13T08:00:00Z level=info msg=hello",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+
+  - name: "format mismatch: Falco alert without priority"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"x\",\"rule\":\"Some rule\",\"tags\":[\"T1059\"]}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "falco.alert")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.message"]), "an alert without priority or tags")
+
+  - name: "format mismatch: lldap timestamped line without a level"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T08:48:31.145935991+00:00 [info] LDAP session start",
+            "timestamp": t'2026-10-13T08:48:31.146Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+
+  - name: lldap startup line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "> Starting lldap..",
+            "timestamp": t'2026-10-13T08:48:31.146Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+
+  - name: "format mismatch: Vaultwarden bracketed line without its prefix"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[2026-10-13 12:16:49.552] [INFO] Closing WS connection",
+            "timestamp": t'2026-10-13T12:16:49.553Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "vaultwarden", "pod_name": "vaultwarden-0", "container_name": "vaultwarden"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+
+  - name: Vaultwarden banner line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "/--------------------------------------------------------------------\\",
+            "timestamp": t'2026-10-13T12:16:49.553Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "vaultwarden", "pod_name": "vaultwarden-0", "container_name": "vaultwarden"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+
+  - name: "format mismatch: CoreDNS errors line that isn't a query"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: something new happened",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(get!(., ["log.level"]), "error")
+
+  - name: "format mismatch: CoreDNS bracketed line without a level"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[error] plugin/errors: 2 a. A: x",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.message"]), "no [<LEVEL>] prefix")
+
+  - name: CoreDNS banner line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "CoreDNS-1.12.4",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+
+  - name: Mealie's uvicorn line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "INFO: Started server process [1]",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+
+  - name: "format mismatch: Mealie level and space without its prefix"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "WARNING  something changed format",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+
+  - name: Mealie traceback line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "Traceback (most recent call last):",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
 
   - name: audit event (unchanged)
     inputs:

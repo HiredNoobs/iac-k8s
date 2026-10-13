@@ -12,8 +12,11 @@
 #   host.hostname   the node's hostname (its name)
 #   host.name       the node's FQDN, <hostname>.<NODE_DOMAIN> (daemonset.yaml)
 #   log.level       the app's level as debug, info, notice, warning, error or critical
-# Stream fields: event.dataset, host.name, kubernetes.pod_namespace, kubernetes.pod_name,
-# kubernetes.container_name.
+#   event.kind      event, alert (Falco's), or pipeline_error: a line Vector couldn't parse
+#                   (error.type remap_error or format_mismatch, error.message why), kept as it is
+#   tags            "generic" added for a line without a parser of its own
+# Stream fields: event.dataset, event.kind, host.name, kubernetes.pod_namespace,
+# kubernetes.pod_name, kubernetes.container_name.
 #
 # kube-apiserver's audit log, on the control planes: each event as one JSON line. The event's
 # fields stay as they are (nested ones become user.username, objectRef.resource,
@@ -24,8 +27,9 @@
 #              like the other sources' client field
 #   source     "kube-audit", and node: the stream fields
 # and the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
-# host.hostname, host.name, source.ip, user.name, user_agent.original, event.action (the verb)
-# and event.outcome (from the response code).
+# event.kind, host.hostname, host.name, source.ip, user.name, user_agent.original,
+# event.action (the verb) and event.outcome (from the response code). A line that isn't JSON
+# is kept as a pipeline_error.
 data_dir: /var/lib/vector
 
 sources:
@@ -52,6 +56,8 @@ transforms:
   pods:
     type: remap
     inputs: [pod_logs]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       meta = {
         "pod_namespace": .kubernetes.pod_namespace,
@@ -118,6 +124,8 @@ transforms:
   envoy:
     type: remap
     inputs: [by_source.envoy]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       if !exists(.start_time) || !exists(.response_code) {
         %dataset = "envoy.log"
@@ -134,16 +142,19 @@ transforms:
         if err == null {
           ."source.ip" = addr.ip
           ."source.port" = to_int(addr.port) ?? null
+        } else {
+          %mismatch = "downstream_remote_address isn't <ip>:<port>"
         }
         method = get!(v, ["method"])
         if method != null { ."http.request.method" = method }
         # 0 when no response was sent (the client went away first).
-        code = to_int(.response_code) ?? 0
+        code = to_int(.response_code) ?? -1
         if code > 0 {
           ."http.response.status_code" = code
           ."event.outcome" = if code < 400 { "success" } else { "failure" }
         } else {
           ."event.outcome" = "unknown"
+          if code < 0 { %mismatch = "response_code isn't a number" }
         }
         domain = get!(v, [":authority"])
         if domain != null { ."url.domain" = domain }
@@ -172,8 +183,11 @@ transforms:
   authelia:
     type: remap
     inputs: [by_source.authelia]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       %dataset = "authelia.log"
+      if !exists(.level) { %mismatch = "not Authelia's JSON (no level)" }
       if is_string(.remote_ip) { ."source.ip" = .remote_ip }
       msg = string(._msg) ?? ""
 
@@ -215,12 +229,15 @@ transforms:
   falco:
     type: remap
     inputs: [by_source.falco]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       if !exists(.rule) {
         %dataset = "falco.log"
       } else {
         %dataset = "falco.alert"
-        ."event.kind" = "alert"
+        %kind = "alert"
+        if !is_string(.priority) || !is_array(.tags) { %mismatch = "an alert without priority or tags" }
         ."rule.name" = .rule
         p = downcase(string(.priority) ?? "")
         ."log.level" = if includes(["emergency", "alert", "critical"], p) {
@@ -277,6 +294,8 @@ transforms:
   lldap:
     type: remap
     inputs: [by_source.lldap]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       msg = string(._msg) ?? ""
       if .kubernetes.container_name == "lldap" {
@@ -285,6 +304,8 @@ transforms:
         if err == null {
           l = downcase(string!(prefix.level))
           ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+        } else if match(msg, r'^\d{4}-\d\d-\d\dT') {
+          %mismatch = "a timestamped line without lldap's level"
         }
         # A login to its UI: whether it worked isn't logged.
         login, err = parse_regex(msg, r'login attempt for "(?P<user>[^"]+)"')
@@ -324,6 +345,8 @@ transforms:
   vaultwarden:
     type: remap
     inputs: [by_source.vaultwarden]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       %dataset = "vaultwarden.log"
       msg = string(._msg) ?? ""
@@ -332,6 +355,9 @@ transforms:
         ."log.logger" = prefix.logger
         l = downcase(string!(prefix.level))
         ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+      } else if starts_with(msg, "[") {
+        # Not a continuation line or the startup banner, which have no prefix.
+        %mismatch = "no [<time>][<module>][<LEVEL>] prefix"
       }
       login, err = parse_regex(msg, r'Username or password is incorrect\..* IP: (?P<ip>\S+)\. Username: (?P<user>.*)\.$')
       if err == null {
@@ -351,9 +377,16 @@ transforms:
   coredns:
     type: remap
     inputs: [by_source.coredns]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       %dataset = "coredns.log"
-      line, err = parse_regex(string(._msg) ?? "", r'^\[(?P<level>[A-Z]+)\] (?:(?P<plugin>plugin/[a-z0-9_]+): )?(?P<rest>.*)$')
+      msg = string(._msg) ?? ""
+      line, err = parse_regex(msg, r'^\[(?P<level>[A-Z]+)\] (?:(?P<plugin>plugin/[a-z0-9_]+): )?(?P<rest>.*)$')
+      if err != null && starts_with(msg, "[") {
+        # Not the startup banner (".:53", "CoreDNS-<version>", ...), which has no prefix.
+        %mismatch = "no [<LEVEL>] prefix"
+      }
       if err == null {
         l = downcase(string!(line.level))
         ."log.level" = if l == "warn" { "warning" } else if l == "fatal" { "critical" } else { l }
@@ -371,6 +404,8 @@ transforms:
               ."destination.ip" = upstream.ip
               ."destination.port" = to_int(upstream.port) ?? null
             }
+          } else {
+            %mismatch = "an errors plugin line that isn't <count> <name> <type>: <error>"
           }
         }
       }
@@ -380,9 +415,16 @@ transforms:
   mealie:
     type: remap
     inputs: [by_source.mealie]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       %dataset = "mealie.log"
-      line, err = parse_regex(string(._msg) ?? "", r'^(?P<level>[A-Z]+)\s+\S+ - (?P<rest>.*)$')
+      msg = string(._msg) ?? ""
+      line, err = parse_regex(msg, r'^(?P<level>[A-Z]+)\s+\S+ - (?P<rest>.*)$')
+      if err != null && match(msg, r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s') {
+        # Not a traceback's lines, which have no prefix.
+        %mismatch = "a level without Mealie's <time> - prefix"
+      }
       if err == null {
         l = downcase(string!(line.level))
         ."log.level" = if l == "warn" { "warning" } else { l }
@@ -407,6 +449,8 @@ transforms:
   ghostunnel:
     type: remap
     inputs: [by_source.ghostunnel]
+    drop_on_error: true
+    reroute_dropped: true
     source: |
       %dataset = "ghostunnel.log"
       pipe, err = parse_regex(string(._msg) ?? "", r'pipe: tcp:\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+) .*<-> tcp:\[?(?P<dip>[0-9A-Fa-f.:]+?)\]?:(?P<dport>\d+)')
@@ -417,15 +461,78 @@ transforms:
         ."destination.port" = to_int(pipe.dport) ?? null
       }
 
+  # A line one of the remaps above failed on (a runtime error: none is expected, VRL makes every
+  # fallible call be handled): as it came into that remap, Vector's reason in metadata.dropped.
+  # Kept, in that source's <name>.log, as a remap_error (ecs). Only the remaps' dropped outputs
+  # come here, so a line can't claim to be one.
+  unparsed:
+    type: remap
+    inputs: [pods.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, ghostunnel.dropped]
+    source: |
+      dropped = object(.metadata.dropped) ?? {}
+      . = remove!(., ["metadata", "dropped"])
+      if .metadata == {} { del(.metadata) }
+      component = string(dropped.component_id) ?? ""
+      if component == "pods" {
+        # Straight from kubernetes_logs.
+        . = {
+          "_msg": .message,
+          "_time": .timestamp,
+          "output_stream": .stream,
+          "kubernetes": {
+            "pod_namespace": .kubernetes.pod_namespace,
+            "pod_name": .kubernetes.pod_name,
+            "container_name": .kubernetes.container_name,
+            "pod_node_name": .kubernetes.pod_node_name,
+            "pod_ip": .kubernetes.pod_ip,
+            "container_image": .kubernetes.container_image,
+            "pod_labels": .kubernetes.pod_labels,
+          },
+        }
+      } else if component != "" {
+        %dataset = component + ".log"
+      }
+      %error_type = "remap_error"
+      %error_message = dropped.message
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
-  # had, so a container can't pass its logs off as another source's.
+  # had, so a container can't pass its logs off as another source's. The remaps say what they
+  # found in metadata (%dataset, %provider, %kind, %mismatch, %error_*), which a line can't set.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, ghostunnel]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, ghostunnel, unparsed]
     source: |
+      # event.kind: pipeline_error for a line a remap failed on (remap_error) or one that looked
+      # like its source's format but didn't parse (format_mismatch), the reason in error.message;
+      # alert for Falco's alerts; event for the rest.
+      kind = string(%kind) ?? "event"
+      error_type = string(%error_type) ?? ""
+      error_message = string(%error_message) ?? ""
+      mismatch = string(%mismatch) ?? ""
+      if error_type == "" && mismatch != "" {
+        error_type = "format_mismatch"
+        error_message = mismatch
+      }
+      if error_type != "" {
+        kind = "pipeline_error"
+        ."error.type" = error_type
+        ."error.message" = error_message
+      }
+      ."event.kind" = kind
+
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
       provider = string(%provider) ?? ""
+      # A line without a parser of its own (only the fields below) is tagged generic.
+      if dataset == "" && kind == "event" {
+        if is_array(.tags) {
+          .tags = push(array!(.tags), "generic")
+        } else if exists(.tags) {
+          .tags = [.tags, "generic"]
+        } else {
+          .tags = ["generic"]
+        }
+      }
       if dataset == "" {
         dataset = (string(.kubernetes.pod_namespace) ?? "") + "." + (string(.kubernetes.container_name) ?? "")
         if provider == "" { provider = string(.kubernetes.container_name) ?? "" }
@@ -493,8 +600,9 @@ transforms:
   events:
     type: remap
     inputs: [audit]
-    # A line that isn't JSON is dropped (logged by Vector) rather than sent half-parsed.
+    # A line that isn't JSON isn't sent half-parsed: it goes to audit_unparsed.
     drop_on_error: true
+    reroute_dropped: true
     source: |
       . = object!(parse_json!(.message))
       ._time = .stageTimestamp || .requestReceivedTimestamp
@@ -515,6 +623,7 @@ transforms:
       # The common fields (ECS, as for pod logs).
       ."event.dataset" = "kubernetes.audit"
       ."event.provider" = "kube-apiserver"
+      ."event.kind" = "event"
       domain = get_env_var("NODE_DOMAIN") ?? ""
       ."host.hostname" = node
       ."host.name" = if domain == "" { node } else { node + "." + domain }
@@ -525,12 +634,35 @@ transforms:
       status = to_int(.responseStatus.code) ?? 0
       ."event.outcome" = if status == 0 { "unknown" } else if status < 400 { "success" } else { "failure" }
 
+  # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
+  # the audit log that can't be read is worth seeing.
+  audit_unparsed:
+    type: remap
+    inputs: [events.dropped]
+    source: |
+      node = get_env_var("NODE_NAME") ?? ""
+      domain = get_env_var("NODE_DOMAIN") ?? ""
+      fqdn = if domain == "" { node } else { node + "." + domain }
+      . = {
+        "_msg": .message,
+        "_time": .timestamp,
+        "source": "kube-audit",
+        "node": node,
+        "event.dataset": "kubernetes.audit",
+        "event.provider": "kube-apiserver",
+        "host.hostname": node,
+        "host.name": fqdn,
+        "event.kind": "pipeline_error",
+        "error.type": "remap_error",
+        "error.message": .metadata.dropped.message,
+      }
+
 sinks:
   # Two sinks for their stream fields: an app's own `source` or `node` field must not become one.
   victorialogs_pods:
     type: http
     inputs: [ecs]
-    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,host.name,kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,event.kind,host.name,kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
       codec: json
@@ -546,8 +678,8 @@ sinks:
       when_full: block
   victorialogs:
     type: http
-    inputs: [events]
-    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=source,node,event.dataset,host.name&_msg_field=_msg&_time_field=_time
+    inputs: [events, audit_unparsed]
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=source,node,event.dataset,event.kind,host.name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
       codec: json
