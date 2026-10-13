@@ -107,6 +107,7 @@ transforms:
       envoy: .kubernetes.pod_namespace == "envoy-gateway" && .kubernetes.container_name == "envoy"
       authelia: .kubernetes.pod_namespace == "authelia" && .kubernetes.container_name == "authelia"
       falco: .kubernetes.pod_namespace == "falco" && .kubernetes.container_name == "falco"
+      lldap: .kubernetes.pod_namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container_name)
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -266,11 +267,58 @@ transforms:
         }
       }
 
+  # lldap: its own lines ("<time>  INFO     ｉ [info]: LDAP session start: ...", tracing's
+  # tree lines without the prefix), and lldap-bootstrap's hourly run, whose lines say what it
+  # changed back to match git.
+  lldap:
+    type: remap
+    inputs: [by_source.lldap]
+    source: |
+      msg = string(._msg) ?? ""
+      if .kubernetes.container_name == "lldap" {
+        %dataset = "lldap.log"
+        prefix, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\s+(?P<level>[A-Z]+)\s')
+        if err == null {
+          l = downcase(string!(prefix.level))
+          ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+        }
+        # A login to its UI: whether it worked isn't logged.
+        login, err = parse_regex(msg, r'login attempt for "(?P<user>[^"]+)"')
+        if err == null {
+          ."event.category" = "authentication"
+          ."event.action" = "password-login"
+          ."event.outcome" = "unknown"
+          ."user.name" = login.user
+        }
+      } else {
+        %dataset = "lldap.bootstrap"
+        %provider = "lldap-bootstrap"
+        if contains(msg, "[WARNING]") { ."log.level" = "warning" }
+        change, err = parse_regex(msg, r'(?P<kind>User|Group) "(?P<name>[^"]+)" successfully (?P<what>created|deleted|added to the group|removed from the group)(?: "(?P<group>[^"]+)")?')
+        if err == null {
+          ."event.category" = "iam"
+          ."event.outcome" = "success"
+          if change.kind == "User" {
+            ."user.name" = change.name
+            if change.group != null { ."group.name" = change.group }
+          } else {
+            ."group.name" = change.name
+          }
+          ."event.action" = if change.what == "added to the group" {
+            "added-to-group"
+          } else if change.what == "removed from the group" {
+            "removed-from-group"
+          } else {
+            downcase(string!(change.kind)) + "-" + string!(change.what)
+          }
+        }
+      }
+
   # Fields every pod's line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap]
     source: |
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
