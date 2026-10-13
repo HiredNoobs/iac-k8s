@@ -88,7 +88,7 @@ groups:
           description: >-
             Many refused or missing paths for one client: directory or wordlist scanning, or a
             misconfigured client retrying.
-          tested: "2026-10-11"
+          tested: "2026-10-13"
           runbook: >-
             The paths and user-agent are in the client's access logs (url.original,
             user_agent.original). Trigger (a site not behind Authelia, which answers 302 instead
@@ -113,7 +113,7 @@ groups:
           description: >-
             A path no site here serves, but which scanners and exploit kits try first (secrets
             files, WordPress, path traversal): a scanner on the LAN or in a container.
-          tested: "2026-10-11"
+          tested: "2026-10-13"
           runbook: >-
             Look at the client's other requests and user-agent, and find the device. Trigger:
             curl -so /dev/null https://homepage.hirednoobs.com/.env
@@ -163,7 +163,7 @@ groups:
           description: >-
             Deleting metrics or logs is how tracks are covered. VictoriaMetrics' delete_series
             works; VictoriaLogs' delete API is disabled, so there it's an attempt.
-          tested: "2026-10-11"
+          tested: "2026-10-13"
           runbook: >-
             The request's url.query has the series or log filter. Check what's missing around that
             time, and who the client is. Trigger: curl -s
@@ -209,7 +209,7 @@ groups:
           description: >-
             Vaultwarden's admin panel is disabled; requests for it are someone looking for a way
             in to the password vaults.
-          tested: "2026-10-11"
+          tested: "2026-10-13"
           runbook: >-
             Look at the client's other requests and user-agent. Trigger: curl -so /dev/null
             https://vaultwarden.hirednoobs.com/admin
