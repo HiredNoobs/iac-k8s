@@ -1,7 +1,9 @@
-# The Gateway's access logs (Envoy, infrastructure/configs/gateway/envoy-proxy.yaml), JSON fields.
-# The client is downstream_remote_address (the TCP peer, kept by externalTrafficPolicy: Local), not
-# x-forwarded-for, which the client can set. The site is :authority, not requested_server_name:
-# browsers reuse one HTTP/2 connection for every site the wildcard certificate covers. Lines are
+# The Gateway's access logs (Envoy, infrastructure/configs/gateway/envoy-proxy.yaml), event.dataset
+# envoy.access with Vector's ECS fields (apps/base/vector). The client is source.ip, from
+# downstream_remote_address (the TCP peer, kept by externalTrafficPolicy: Local), not
+# x-forwarded-for, which the client can set. The site is url.domain, from :authority, not
+# requested_server_name: browsers reuse one HTTP/2 connection for every site the wildcard
+# certificate covers. url.path is the path without its query, url.original with it. Lines are
 # written in batches, so _time can be ~10 s after start_time.
 #
 # A completed Authelia login is POST /api/secondfactor/totp -> 200 (a wrong code is 403).
@@ -18,13 +20,12 @@ groups:
       # Gateway (blackbox only sends GETs), so one that does is a compromised container.
       - alert: LoginFromUntrustedNetwork
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          method:=POST response_code:=200
-          ((":authority":="auth.hirednoobs.com" "x-envoy-origin-path":="/api/secondfactor/totp")
-          or (":authority":="vaultwarden.hirednoobs.com" "x-envoy-origin-path":="/identity/connect/token"))
-          | extract "<remote_ip>:" from downstream_remote_address
-          | filter -remote_ip:ipv4_range("192.168.50.0/24") -remote_ip:ipv4_range("192.168.111.0/24")
-          | copy ":authority" as host
+          {event.dataset="envoy.access"}
+          http.request.method:=POST http.response.status_code:=200
+          ((url.domain:="auth.hirednoobs.com" url.path:="/api/secondfactor/totp")
+          or (url.domain:="vaultwarden.hirednoobs.com" url.path:="/identity/connect/token"))
+          -source.ip:ipv4_range("192.168.50.0/24") -source.ip:ipv4_range("192.168.111.0/24")
+          | copy source.ip as remote_ip, url.domain as host
           | stats by (host, remote_ip) count() as logins
         labels:
           severity: warning
@@ -47,11 +48,11 @@ groups:
       # StatefulSet). Authelia only: Vaultwarden clients refresh at any hour.
       - alert: LoginOutsideHours
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
+          {event.dataset="envoy.access"}
           _time:day_range[01:00, 06:00)
-          method:=POST response_code:=200
-          ":authority":="auth.hirednoobs.com" "x-envoy-origin-path":="/api/secondfactor/totp"
-          | extract "<remote_ip>:" from downstream_remote_address
+          http.request.method:=POST http.response.status_code:=200
+          url.domain:="auth.hirednoobs.com" url.path:="/api/secondfactor/totp"
+          | copy source.ip as remote_ip
           | stats by (remote_ip) count() as logins
         labels:
           severity: warning
@@ -71,10 +72,10 @@ groups:
       # Blackbox probes are excluded: a failing probe isn't scanning.
       - alert: HttpErrorBurst
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          response_code:in("401", "403", "404")
-          -"user-agent":"Blackbox-Exporter"*
-          | extract "<remote_ip>:" from downstream_remote_address
+          {event.dataset="envoy.access"}
+          http.response.status_code:in(401, 403, 404)
+          -user_agent.original:"Blackbox-Exporter"*
+          | copy source.ip as remote_ip
           | stats by (remote_ip) count() as errors
           | filter errors:>=20
         labels:
@@ -89,18 +90,18 @@ groups:
             misconfigured client retrying.
           tested: "2026-10-11"
           runbook: >-
-            The paths and user-agent are in the client's access logs (x-envoy-origin-path).
-            Trigger (a site not behind Authelia, which answers 302 instead of 404): for i in
-            $(seq 25); do curl -so /dev/null https://vaultwarden.hirednoobs.com/nope-$i; done
+            The paths and user-agent are in the client's access logs (url.original,
+            user_agent.original). Trigger (a site not behind Authelia, which answers 302 instead
+            of 404): for i in $(seq 25); do curl -so /dev/null
+            https://vaultwarden.hirednoobs.com/nope-$i; done
 
       # A short, fixed list of what scanners try first and no site here serves, so one request is
       # enough. Wordlists are HttpErrorBurst's job; requests to paths that do exist are below.
       - alert: ScannerPathRequest
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          "x-envoy-origin-path":~"(?i)(/\\.env|/\\.git/|/\\.aws/|wp-login\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\.\\./|%2e%2e)"
-          | extract "<remote_ip>:" from downstream_remote_address
-          | copy "x-envoy-origin-path" as path
+          {event.dataset="envoy.access"}
+          url.original:~"(?i)(/\\.env|/\\.git/|/\\.aws/|wp-login\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\.\\./|%2e%2e)"
+          | copy source.ip as remote_ip, url.original as path
           | stats by (remote_ip, path) count() as requests
         labels:
           severity: warning
@@ -123,10 +124,10 @@ groups:
       # through the Gateway, aren't seen here.
       - alert: AlertSilenced
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          ":authority":="alertmanager.hirednoobs.com" method:=POST
-          "x-envoy-origin-path":="/api/v2/silences" response_code:=200
-          | extract "<remote_ip>:" from downstream_remote_address
+          {event.dataset="envoy.access"}
+          url.domain:="alertmanager.hirednoobs.com" http.request.method:=POST
+          url.path:="/api/v2/silences" http.response.status_code:=200
+          | copy source.ip as remote_ip
           | stats by (remote_ip) count() as silences
         labels:
           severity: warning
@@ -146,12 +147,11 @@ groups:
       # VictoriaLogs' delete API is off (no -delete.enable), so any request to it is an attempt.
       - alert: MonitoringDataDeletion
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          ((":authority":="victoriametrics.hirednoobs.com" "x-envoy-origin-path":~"^/api/v1/admin/tsdb/delete_series")
-          or (":authority":="victorialogs.hirednoobs.com" "x-envoy-origin-path":~"^/delete/"))
-          -response_code:=302
-          | extract "<remote_ip>:" from downstream_remote_address
-          | copy ":authority" as host
+          {event.dataset="envoy.access"}
+          ((url.domain:="victoriametrics.hirednoobs.com" url.path:~"^/api/v1/admin/tsdb/delete_series")
+          or (url.domain:="victorialogs.hirednoobs.com" url.path:~"^/delete/"))
+          -http.response.status_code:=302
+          | copy source.ip as remote_ip, url.domain as host, http.response.status_code as response_code
           | stats by (host, remote_ip, response_code) count() as requests
         labels:
           severity: warning
@@ -165,18 +165,17 @@ groups:
             works; VictoriaLogs' delete API is disabled, so there it's an attempt.
           tested: "2026-10-11"
           runbook: >-
-            The request's path has the series or log filter. Check what's missing around that
+            The request's url.query has the series or log filter. Check what's missing around that
             time, and who the client is. Trigger: curl -s
             'https://victoriametrics.hirednoobs.com/api/v1/admin/tsdb/delete_series?match[]=siem_test_nonexistent'
             with an Authelia session cookie, or from a browser.
 
       - alert: GrafanaUserChange
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          ":authority":="grafana.hirednoobs.com" method:in("POST", "PUT", "PATCH", "DELETE")
-          "x-envoy-origin-path":~"^/api/(admin/users|org/users)" response_code:~"^2"
-          | extract "<remote_ip>:" from downstream_remote_address
-          | copy "x-envoy-origin-path" as path
+          {event.dataset="envoy.access"}
+          url.domain:="grafana.hirednoobs.com" http.request.method:in("POST", "PUT", "PATCH", "DELETE")
+          url.path:~"^/api/(admin/users|org/users)" http.response.status_code:range[200, 300)
+          | copy source.ip as remote_ip, http.request.method as method, url.path as path
           | stats by (remote_ip, method, path) count() as requests
         labels:
           severity: warning
@@ -196,9 +195,9 @@ groups:
       # The admin panel is disabled (no ADMIN_TOKEN), so any request is probing.
       - alert: VaultwardenAdminRequest
         expr: >-
-          {kubernetes.pod_namespace="envoy-gateway",kubernetes.container_name="envoy"}
-          ":authority":="vaultwarden.hirednoobs.com" "x-envoy-origin-path":~"^/admin"
-          | extract "<remote_ip>:" from downstream_remote_address
+          {event.dataset="envoy.access"}
+          url.domain:="vaultwarden.hirednoobs.com" url.path:~"^/admin"
+          | copy source.ip as remote_ip
           | stats by (remote_ip) count() as requests
         labels:
           severity: warning
