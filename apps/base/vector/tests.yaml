@@ -949,12 +949,54 @@ tests:
               assert_eq!(get!(., ["log.level"]), "error")
               assert_eq!(get!(., ["log.logger"]), "plugin/errors")
               assert_eq!(get!(., ["event.outcome"]), "failure")
+              # The first number is the response code (plugin/errors), by its name.
+              assert_eq!(get!(., ["dns.response_code"]), "SERVFAIL")
+              assert!(get!(., ["event.count"]) == null)
               assert_eq!(get!(., ["dns.question.name"]), "pihole.hirednoobs.com")
               assert_eq!(get!(., ["dns.question.type"]), "AAAA")
               assert_eq!(get!(., ["error.message"]), "read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
-              assert_eq!(get!(., ["event.count"]), 2)
               assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
               assert_eq!(get!(., ["destination.port"]), 53)
+              assert_eq!(get!(., ["related.ip"]), ["169.254.116.108"])
+
+  - name: CoreDNS consolidated errors line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 3 errors like '^read udp .* i/o timeout$' occurred in last 5m0s",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["Dns.ErrorCount"]), 3)
+              assert_eq!(get!(., ["error.message"]), "^read udp .* i/o timeout$")
+              assert!(get!(., ["dns.response_code"]) == null)
+
+  - name: CoreDNS response code with no name stays a number
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 23 x.hirednoobs.com. A: bad cookie",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["dns.response_code"]), "23")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
 
   - name: CoreDNS other plugin line
     inputs:
