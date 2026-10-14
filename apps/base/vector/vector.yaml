@@ -23,13 +23,14 @@
 # responseStatus.code, ... in VictoriaLogs), plus:
 #   _msg       "<verb> <requestURI> <code> by <user>", a summary to read in lists
 #   _time      when the response completed (stageTimestamp)
-#   remote_ip  the client, sourceIPs[0] (sourceIPs itself is an array, stored as JSON text), named
-#              like the other sources' client field
-#   source     "kube-audit", and node: the stream fields
 # and the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
-# event.kind, host.hostname, host.name, source.ip, user.name, user_agent.original,
-# event.action (the verb) and event.outcome (from the response code). A line that isn't JSON
-# is kept as a pipeline_error.
+# event.kind, host.hostname, host.name, source.ip (the client, sourceIPs[0]; sourceIPs itself is
+# an array, stored as JSON text), user.name, user_agent.original, event.action (the verb) and
+# event.outcome (from the response code). A line that isn't JSON is kept as a pipeline_error.
+#
+# A source's own field that has an ECS field is dropped once it's been moved (Envoy's
+# downstream_remote_address, :authority, ...; Authelia's remote_ip; Falco's rule, priority and
+# output_fields with an ECS home). A value that doesn't parse stays where it was.
 data_dir: /var/lib/vector
 
 sources:
@@ -131,23 +132,27 @@ transforms:
         %dataset = "envoy.log"
       } else {
         %dataset = "envoy.access"
-        # The string values it has, without the "-"s.
+        # The string values it has, without the "-"s. Each becomes its ECS field below, and the
+        # original goes ("-" included: it only says there's no value).
         v = {}
         for_each(["method", ":authority", "x-envoy-origin-path", "user-agent", "x-request-id"]) -> |_i, key| {
           s = get!(., [key])
           if is_string(s) && s != "-" && s != "" { v = set!(v, [key], s) }
+          if is_string(s) { . = remove!(., [key]) }
         }
-        # The client, downstream_remote_address without its port ([...] for IPv6).
+        # The client, downstream_remote_address without its port ([...] for IPv6). An address
+        # that doesn't parse stays as it is.
         addr, err = parse_regex(string(.downstream_remote_address) ?? "", r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
         if err == null {
           ."source.ip" = addr.ip
           ."source.port" = to_int(addr.port) ?? null
+          del(.downstream_remote_address)
         } else {
           %mismatch = "downstream_remote_address isn't <ip>:<port>"
         }
         method = get!(v, ["method"])
         if method != null { ."http.request.method" = method }
-        # 0 when no response was sent (the client went away first).
+        # 0 when no response was sent (the client went away first). One that isn't a number stays.
         code = to_int(.response_code) ?? -1
         if code > 0 {
           ."http.response.status_code" = code
@@ -156,6 +161,7 @@ transforms:
           ."event.outcome" = "unknown"
           if code < 0 { %mismatch = "response_code isn't a number" }
         }
+        if code >= 0 { del(.response_code) }
         domain = get!(v, [":authority"])
         if domain != null { ."url.domain" = domain }
         path = get!(v, ["x-envoy-origin-path"])
@@ -170,12 +176,12 @@ transforms:
         id = get!(v, ["x-request-id"])
         if id != null { ."http.request.id" = id }
         received = to_int(.bytes_received) ?? null
-        if received != null { ."http.request.bytes" = received }
+        if received != null { ."http.request.bytes" = received; del(.bytes_received) }
         sent = to_int(.bytes_sent) ?? null
-        if sent != null { ."http.response.bytes" = sent }
+        if sent != null { ."http.response.bytes" = sent; del(.bytes_sent) }
         # ECS durations are in nanoseconds.
         ms = to_int(.duration) ?? -1
-        if ms >= 0 { ."event.duration" = ms * 1000000 }
+        if ms >= 0 { ."event.duration" = ms * 1000000; del(.duration) }
       }
 
   # Authelia (JSON: level, msg, remote_ip, method, path). It logs failed logins, not successful
@@ -188,7 +194,7 @@ transforms:
     source: |
       %dataset = "authelia.log"
       if !exists(.level) { %mismatch = "not Authelia's JSON (no level)" }
-      if is_string(.remote_ip) { ."source.ip" = .remote_ip }
+      if is_string(.remote_ip) { ."source.ip" = del(.remote_ip) }
       msg = string(._msg) ?? ""
 
       login, err = parse_regex(msg, r'^Unsuccessful (?P<factor>1FA|TOTP|WebAuthn|Duo) authentication attempt by user \'(?P<user>[^\']*)\'(?P<banned> and they are banned)?')
@@ -207,7 +213,8 @@ transforms:
         ."event.reason" = "unknown user"
         if unknown.user != "" { ."user.name" = unknown.user }
       }
-      # An access decision for a site behind Authelia: the site's URL, not Authelia's own path.
+      # An access decision for a site behind Authelia: the site's URL, not Authelia's own path
+      # (method and path, which stay as they are on these lines).
       access, err = parse_regex(msg, r'^Access to (?P<url>\S+) \(method (?P<method>[A-Z]+)\) is not authorized to user (?P<user>.+?), responding with status code (?P<code>\d+)')
       if err == null {
         ."event.category" = "authentication"
@@ -220,8 +227,8 @@ transforms:
         ."http.response.status_code" = to_int(access.code) ?? null
         if access.user != "<anonymous>" { ."user.name" = access.user }
       } else {
-        if is_string(.method) { ."http.request.method" = .method }
-        if is_string(.path) { ."url.path" = .path }
+        if is_string(.method) { ."http.request.method" = del(.method) }
+        if is_string(.path) { ."url.path" = del(.path) }
       }
 
   # Falco's alerts (rule, priority, tags, output_fields.*), falco.alert; its own log lines are
@@ -238,8 +245,11 @@ transforms:
         %dataset = "falco.alert"
         %kind = "alert"
         if !is_string(.priority) || !is_array(.tags) { %mismatch = "an alert without priority or tags" }
-        ."rule.name" = .rule
+        ."rule.name" = del(.rule)
+        # The node, which host.hostname already is.
+        del(.hostname)
         p = downcase(string(.priority) ?? "")
+        if is_string(.priority) { del(.priority) }
         ."log.level" = if includes(["emergency", "alert", "critical"], p) {
           "critical"
         } else if p == "informational" {
@@ -260,8 +270,10 @@ transforms:
         }
         if tactic != null { ."threat.tactic.name" = tactic }
         if technique != null { ."threat.technique.id" = technique }
-        # The event's own fields (output_fields keys have dots in them).
+        # The event's own fields (output_fields keys have dots in them). Each one with an ECS
+        # field moves there; the rest (and <NA>s, Falco's "no value") stay in output_fields.
         f = object(.output_fields) ?? {}
+        moved = []
         for_each({
           "proc.name": "process.name",
           "proc.cmdline": "process.command_line",
@@ -273,18 +285,27 @@ transforms:
           "fd.name": "file.path",
         }) -> |from, to| {
           x = get!(f, [from])
-          if x != null && x != "<NA>" { . = set!(., [to], x) }
+          if x != null && x != "<NA>" {
+            . = set!(., [to], x)
+            moved = push(moved, from)
+          }
         }
         # Where in the cluster (ECS has no Kubernetes fields of its own).
         ns = get!(f, ["k8s.ns.name"])
         if is_string(ns) && ns != "<NA>" {
           ."orchestrator.type" = "kubernetes"
           ."orchestrator.namespace" = ns
+          moved = push(moved, "k8s.ns.name")
           pod = get!(f, ["k8s.pod.name"])
           if is_string(pod) && pod != "<NA>" {
             ."orchestrator.resource.type" = "pod"
             ."orchestrator.resource.name" = pod
+            moved = push(moved, "k8s.pod.name")
           }
+        }
+        if is_object(.output_fields) {
+          for_each(moved) -> |_i, key| { f = remove!(f, [string!(key)]) }
+          .output_fields = f
         }
       }
 
@@ -547,13 +568,18 @@ transforms:
       ."host.hostname" = node
       ."host.name" = if node == "" || domain == "" { node } else { node + "." + domain }
 
-      if !exists(."log.logger") && is_string(.logger) { ."log.logger" = .logger }
+      if !exists(."log.logger") && is_string(.logger) { ."log.logger" = del(.logger) }
 
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
       # (anything else as it is, lower case). From a JSON line's level, lvl or severity, else
-      # from the text formats several apps share.
+      # from the text formats several apps share. The JSON field it came from goes.
       if !exists(."log.level") {
-        raw = .level || .lvl || .severity
+        raw = null
+        from = ""
+        for_each(["level", "lvl", "severity"]) -> |_i, key| {
+          v = get!(., [key])
+          if raw == null && v != null { raw = v; from = key }
+        }
         msg = string(._msg) ?? ""
         if raw == null {
           # zap's console format: "<time>\t<level>\t[<logger>\t]<file>.go:<line>\t<message>".
@@ -595,6 +621,7 @@ transforms:
             l = "critical"
           }
           ."log.level" = l
+          if from != "" { . = remove!(., [from]) }
         }
       }
 
@@ -607,10 +634,7 @@ transforms:
     source: |
       . = object!(parse_json!(.message))
       ._time = .stageTimestamp || .requestReceivedTimestamp
-      .source = "kube-audit"
       node = get_env_var!("NODE_NAME")
-      .node = node
-      .remote_ip = .sourceIPs[0]
       code = ""
       if .responseStatus.code != null { code = to_string!(.responseStatus.code) }
       ._msg = join!(compact([
@@ -628,12 +652,19 @@ transforms:
       domain = get_env_var("NODE_DOMAIN") ?? ""
       ."host.hostname" = node
       ."host.name" = if domain == "" { node } else { node + "." + domain }
-      ."source.ip" = .remote_ip
+      ."source.ip" = .sourceIPs[0]
       ."user.name" = .user.username
       ."user_agent.original" = .userAgent
       ."event.action" = .verb
       status = to_int(.responseStatus.code) ?? 0
       ."event.outcome" = if status == 0 { "unknown" } else if status < 400 { "success" } else { "failure" }
+      # The event's own copies of those. sourceIPs stays when it has more than the client (a
+      # proxy's chain).
+      del(.verb)
+      del(.userAgent)
+      del(.user.username)
+      if .user == {} { del(.user) }
+      if length(array(.sourceIPs) ?? []) == 1 { del(.sourceIPs) }
 
   # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
   # the audit log that can't be read is worth seeing.
@@ -647,8 +678,6 @@ transforms:
       . = {
         "_msg": .message,
         "_time": .timestamp,
-        "source": "kube-audit",
-        "node": node,
         "event.dataset": "kubernetes.audit",
         "event.provider": "kube-apiserver",
         "host.hostname": node,
@@ -659,10 +688,10 @@ transforms:
       }
 
 sinks:
-  # Two sinks for their stream fields: an app's own `source` or `node` field must not become one.
-  victorialogs_pods:
+  # Pod logs and audit events alike; audit events have no kubernetes.* stream fields.
+  victorialogs:
     type: http
-    inputs: [ecs]
+    inputs: [ecs, events, audit_unparsed]
     uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,event.kind,host.name,kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
@@ -673,22 +702,6 @@ sinks:
     tls:
       ca_file: /etc/vector/tls/ca.crt
     # On the node's disk while VictoriaLogs is down (256 MiB is Vector's minimum).
-    buffer:
-      type: disk
-      max_size: 268435488
-      when_full: block
-  victorialogs:
-    type: http
-    inputs: [events, audit_unparsed]
-    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=source,node,event.dataset,event.kind,host.name&_msg_field=_msg&_time_field=_time
-    method: post
-    encoding:
-      codec: json
-    framing:
-      method: newline_delimited
-    compression: gzip
-    tls:
-      ca_file: /etc/vector/tls/ca.crt
     buffer:
       type: disk
       max_size: 268435488
