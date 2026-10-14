@@ -1,10 +1,10 @@
 # The Gateway's access logs (Envoy, infrastructure/configs/gateway/envoy-proxy.yaml), event.dataset
 # envoy.access with Vector's ECS fields (apps/base/vector). The client is source.ip, from
 # downstream_remote_address (the TCP peer, kept by externalTrafficPolicy: Local), not
-# x-forwarded-for, which the client can set. The site is url.domain, from :authority, not
-# requested_server_name: browsers reuse one HTTP/2 connection for every site the wildcard
-# certificate covers. url.path is the path without its query, url.original with it. Lines are
-# written in batches, so _time can be ~10 s after start_time.
+# Proxy.ForwardedFor (the X-Forwarded-For header), which the client can set. The site is
+# url.domain, from :authority, not tls.client.server_name: browsers reuse one HTTP/2 connection
+# for every site the wildcard certificate covers. url.path is the path without its query,
+# url.original with it. Lines are written in batches, so _time can be ~10 s after event.start.
 #
 # A completed Authelia login is POST /api/secondfactor/totp -> 200 (a wrong code is 403).
 # Vaultwarden's POST /identity/connect/token -> 200 is a login or a token refresh (clients
