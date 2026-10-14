@@ -327,7 +327,9 @@ transforms:
       }
 
   # Falco's alerts (rule, priority, tags, output_fields.*), falco.alert; its own log lines are
-  # falco.log. The tactic and technique are the first of each in the tags, like the alert rule's.
+  # falco.log. Mapped as Elastic's Falco integration, but with log.level as well (the common
+  # vocabulary) and the tactic from the tags. The tactic and technique are the first of each in
+  # the tags, like the alert rule's.
   falco:
     type: remap
     inputs: [by_source.falco]
@@ -341,10 +343,17 @@ transforms:
         %kind = "alert"
         if !is_string(.priority) || !is_array(.tags) { %mismatch = "an alert without priority or tags" }
         ."rule.name" = del(.rule)
-        # The node, which host.hostname already is.
-        del(.hostname)
+        # Falco is the observer; container.* below is the container it saw, not Falco's own.
+        ."observer.product" = "falco"
+        ."observer.vendor" = "sysdig"
+        ."observer.type" = "sensor"
+        if is_string(.hostname) { ."observer.hostname" = del(.hostname) }
+        for_each(["container.id", "container.runtime", "container.image.name"]) -> |_i, key| {
+          . = remove!(., [key])
+        }
         # Falco's event source: syscall (its own drivers) or a source plugin's (k8saudit, ...).
-        if is_string(.source) { ."event.module" = del(.source) }
+        if is_string(.source) { %provider = del(.source) }
+        if is_string(.uuid) { ."event.id" = del(.uuid) }
         p = downcase(string(.priority) ?? "")
         if is_string(.priority) { del(.priority) }
         ."log.level" = if includes(["emergency", "alert", "critical"], p) {
@@ -354,19 +363,51 @@ transforms:
         } else {
           p
         }
+        # Elastic's numbers for Falco's priorities.
+        severity = get!({"emergency": 99, "alert": 99, "critical": 99, "error": 73, "warning": 47, "notice": 47, "informational": 21, "debug": 21}, [p])
+        if severity != null { ."event.severity" = severity }
+        # ATT&CK: mitre_<tactic> tags as the tactic's name and id, T<id> as the technique and
+        # T<id>.<sub> as the sub-technique (and its technique).
+        tactics = {
+          "reconnaissance": ["Reconnaissance", "TA0043"],
+          "resource_development": ["Resource Development", "TA0042"],
+          "initial_access": ["Initial Access", "TA0001"],
+          "execution": ["Execution", "TA0002"],
+          "persistence": ["Persistence", "TA0003"],
+          "privilege_escalation": ["Privilege Escalation", "TA0004"],
+          "defense_evasion": ["Defense Evasion", "TA0005"],
+          "credential_access": ["Credential Access", "TA0006"],
+          "discovery": ["Discovery", "TA0007"],
+          "lateral_movement": ["Lateral Movement", "TA0008"],
+          "collection": ["Collection", "TA0009"],
+          "command_and_control": ["Command and Control", "TA0011"],
+          "exfiltration": ["Exfiltration", "TA0010"],
+          "impact": ["Impact", "TA0040"],
+        }
         tactic = null
         technique = null
+        subtechnique = null
         for_each(array(.tags) ?? []) -> |_i, t| {
           s = string(t) ?? ""
           if tactic == null && starts_with(s, "mitre_") {
-            tactic = replace(slice!(s, 6), "_", "-")
+            tactic = get!(tactics, [slice!(s, 6)])
           }
-          if technique == null && match(s, r'^T[0-9]{4}(\.[0-9]{3})?$') {
-            technique = s
+          id, err = parse_regex(s, r'^(?P<technique>T[0-9]{4})(?P<sub>\.[0-9]{3})?$')
+          if err == null {
+            if technique == null { technique = id.technique }
+            if subtechnique == null && id.sub != null && id.technique == technique { subtechnique = s }
           }
         }
-        if tactic != null { ."threat.tactic.name" = tactic }
-        if technique != null { ."threat.technique.id" = technique }
+        if tactic != null {
+          ."threat.framework" = "MITRE ATT&CK"
+          ."threat.tactic.name" = tactic[0]
+          ."threat.tactic.id" = tactic[1]
+        }
+        if technique != null {
+          ."threat.framework" = "MITRE ATT&CK"
+          ."threat.technique.id" = technique
+        }
+        if subtechnique != null { ."threat.technique.subtechnique.id" = subtechnique }
         # What kind of event, from the rule's tags: ECS categories, as many as it has (container
         # and host say where, not what).
         categories = []
@@ -376,54 +417,110 @@ transforms:
         }
         if categories != [] { ."event.category" = categories }
         # The event's own fields (output_fields keys have dots in them). Each one with an ECS
-        # field moves there; the rest (and <NA>s, Falco's "no value") stay in output_fields.
+        # field moves there, as Elastic's; the rest (and <NA>s, Falco's "no value") go to
+        # Sensor.Fields.<Falco's name>.
         f = object(.output_fields) ?? {}
+        del(.output_fields)
+        value = {}
+        for_each(f) -> |key, x| {
+          if x != null && x != "<NA>" { value = set!(value, [key], x) }
+        }
         moved = []
         for_each({
           "proc.name": "process.name",
           "proc.cmdline": "process.command_line",
           "proc.exepath": "process.executable",
           "proc.pid": "process.pid",
-          "user.name": "user.name",
-          "container.name": "container.name",
-          "container.image.repository": "container.image.name",
-          "fd.name": "file.path",
+          "proc.vpid": "process.vpid",
+          "proc.cwd": "process.working_directory",
+          "proc.cmdnargs": "process.args_count",
           "proc.pname": "process.parent.name",
           "proc.ppid": "process.parent.pid",
+          "proc.pvpid": "process.parent.vpid",
           "proc.pcmdline": "process.parent.command_line",
+          "proc.pexepath": "process.parent.executable",
+          "proc.sid": "process.session_leader.pid",
+          "proc.sname": "process.session_leader.name",
+          "user.name": "process.user.name",
+          "user.uid": "process.user.id",
+          "group.name": "process.group.name",
+          "group.gid": "process.group.id",
           "container.id": "container.id",
+          "container.name": "container.name",
+          "container.image.repository": "container.image.name",
           "container.image.tag": "container.image.tag",
-          "user.uid": "user.id",
-          # A connection: the client and the server end (fd.cip is the container's own address
-          # for an outbound one).
-          "fd.cip": "source.ip",
-          "fd.cport": "source.port",
-          "fd.sip": "destination.ip",
-          "fd.sport": "destination.port",
+          "container.image.digest": "container.image.hash.all",
+          "container.type": "container.runtime",
+          "container.privileged": "container.security_context.privileged",
+          # A connection: the client and server ends (fd.cip is the container's own address for
+          # an outbound one), and the local and remote ends.
+          "fd.cip": "client.ip",
+          "fd.cport": "client.port",
+          "fd.cip.name": "client.domain",
+          "fd.sip": "server.ip",
+          "fd.sport": "server.port",
+          "fd.sip.name": "server.domain",
+          "fd.lip": "source.ip",
+          "fd.lport": "source.port",
+          "fd.lip.name": "source.domain",
+          "fd.rip": "destination.ip",
+          "fd.rport": "destination.port",
+          "fd.rip.name": "destination.domain",
+          "fd.directory": "file.directory",
+          "fd.filename": "file.name",
+          "fd.ino": "file.inode",
+          "evt.num": "event.sequence",
+          "k8s.pod.uid": "orchestrator.resource.id",
         }) -> |from, to| {
-          x = get!(f, [from])
-          if x != null && x != "<NA>" {
+          x = get!(value, [from])
+          if x != null {
+            # ECS's types: numbers for PIDs, ports and counts, a boolean for privileged, strings
+            # for the rest (process.user.id, file.inode, ... are keywords, though Falco's are
+            # numbers).
+            if includes(["process.pid", "process.vpid", "process.args_count", "process.parent.pid", "process.parent.vpid", "process.session_leader.pid", "client.port", "server.port", "source.port", "destination.port", "event.sequence"], to) {
+              x = to_int(x) ?? x
+            } else if to == "container.security_context.privileged" {
+              x = to_bool(x) ?? x
+            } else if !is_string(x) {
+              x = to_string(x) ?? x
+            }
             . = set!(., [to], x)
             moved = push(moved, from)
           }
         }
+        if !exists(."container.image.name") && is_string(value."container.image") {
+          ."container.image.name" = value."container.image"
+          moved = push(moved, "container.image")
+        }
+        for_each(["client", "server", "source", "destination"]) -> |_i, end| {
+          ip = get!(., [end + ".ip"])
+          if ip != null { . = set!(., [end + ".address"], ip) }
+        }
+        # fd.name is a file's path, or a connection's ends (<ip>:<port>-><ip>:<port>) and other
+        # descriptors' names: a path only when fd.type says it's a file or directory or, when it
+        # isn't in the output, when it's a filesystem path.
+        fdtype = string(value."fd.type") ?? ""
+        fdname = string(value."fd.name") ?? ""
+        if fdname != "" && (includes(["file", "directory"], fdtype) || (fdtype == "" && starts_with(fdname, "/"))) {
+          ."file.path" = fdname
+          moved = push(moved, "fd.name")
+          if fdtype != "" { ."file.type" = fdtype; moved = push(moved, "fd.type") }
+        }
         # Where in the cluster (ECS has no Kubernetes fields of its own).
-        ns = get!(f, ["k8s.ns.name"])
-        if is_string(ns) && ns != "<NA>" {
+        ns = get!(value, ["k8s.ns.name"])
+        if is_string(ns) {
           ."orchestrator.type" = "kubernetes"
           ."orchestrator.namespace" = ns
           moved = push(moved, "k8s.ns.name")
-          pod = get!(f, ["k8s.pod.name"])
-          if is_string(pod) && pod != "<NA>" {
+          pod = get!(value, ["k8s.pod.name"])
+          if is_string(pod) {
             ."orchestrator.resource.type" = "pod"
             ."orchestrator.resource.name" = pod
             moved = push(moved, "k8s.pod.name")
           }
         }
-        if is_object(.output_fields) {
-          for_each(moved) -> |_i, key| { f = remove!(f, [string!(key)]) }
-          .output_fields = f
-        }
+        for_each(moved) -> |_i, key| { f = remove!(f, [string!(key)]) }
+        for_each(f) -> |key, x| { . = set!(., ["Sensor.Fields." + key], x) }
       }
 
   # lldap: its own lines ("<time>  INFO     ｉ [info]: LDAP session start: ...", tracing's

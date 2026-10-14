@@ -660,16 +660,25 @@ tests:
               assert_eq!(get!(., ["event.kind"]), "alert")
               assert_eq!(get!(., ["rule.name"]), "Terminal shell in container")
               assert_eq!(get!(., ["log.level"]), "notice")
-              assert_eq!(get!(., ["threat.tactic.name"]), "execution")
+              assert_eq!(get!(., ["event.severity"]), 47)
+              assert_eq!(get!(., ["threat.framework"]), "MITRE ATT&CK")
+              assert_eq!(get!(., ["threat.tactic.name"]), "Execution")
+              assert_eq!(get!(., ["threat.tactic.id"]), "TA0002")
               assert_eq!(get!(., ["threat.technique.id"]), "T1059")
+              assert!(get!(., ["threat.technique.subtechnique.id"]) == null)
               assert_eq!(get!(., ["event.category"]), ["process"])
               assert_eq!(get!(., ["process.name"]), "sh")
               assert_eq!(get!(., ["process.command_line"]), "sh -i")
               assert_eq!(get!(., ["process.executable"]), "/bin/sh")
               assert_eq!(get!(., ["process.pid"]), 4242)
-              assert_eq!(get!(., ["user.name"]), "root")
+              # The process's user, not a person's account.
+              assert_eq!(get!(., ["process.user.name"]), "root")
+              assert!(get!(., ["user.name"]) == null)
+              assert!(get!(., ["related.user"]) == null)
+              # The container Falco saw, not Falco's own.
               assert_eq!(get!(., ["container.name"]), "app")
               assert_eq!(get!(., ["container.image.name"]), "docker.io/library/busybox")
+              assert!(get!(., ["container.id"]) == null)
               assert!(!exists(."file.path"))
               assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
               assert_eq!(get!(., ["orchestrator.namespace"]), "default")
@@ -677,10 +686,17 @@ tests:
               assert_eq!(get!(., ["orchestrator.resource.name"]), "shell-pod")
               assert!(!exists(.priority))
               assert!(!exists(.rule))
-              assert_eq!(get!(., ["event.module"]), "syscall")
+              # The event source is the provider, Falco the observer.
+              assert_eq!(get!(., ["event.provider"]), "syscall")
+              assert_eq!(get!(., ["observer.product"]), "falco")
+              assert_eq!(get!(., ["observer.vendor"]), "sysdig")
+              assert_eq!(get!(., ["observer.type"]), "sensor")
+              assert_eq!(get!(., ["observer.hostname"]), "worker-2")
               assert!(!exists(.source))
-              # Only what has no ECS field stays in output_fields, <NA>s included.
-              assert_eq!(.output_fields, {"fd.name": "<NA>"})
+              assert!(!exists(.hostname))
+              # Only what has no ECS field stays, under Sensor.Fields, <NA>s included.
+              assert!(!exists(.output_fields))
+              assert_eq!(get!(., ["Sensor.Fields.fd.name"]), "<NA>")
 
   - name: Falco alert about a connection, with the parent process
     inputs:
@@ -702,13 +718,80 @@ tests:
               assert_eq!(get!(., ["process.parent.command_line"]), "sh -c curl x")
               assert_eq!(get!(., ["container.id"]), "abc123")
               assert_eq!(get!(., ["container.image.tag"]), "1.37")
-              assert_eq!(get!(., ["user.id"]), 0)
+              assert_eq!(get!(., ["process.user.id"]), "0")
+              # fd.cip and fd.sip are the client and server, as Elastic's.
+              assert_eq!(get!(., ["client.ip"]), "10.244.3.9")
+              assert_eq!(get!(., ["client.address"]), "10.244.3.9")
+              assert_eq!(get!(., ["client.port"]), 40000)
+              assert_eq!(get!(., ["server.ip"]), "203.0.113.5")
+              assert_eq!(get!(., ["server.port"]), 443)
+              assert!(get!(., ["source.ip"]) == null)
+              assert_eq!(get!(., ["related.ip"]), ["10.244.3.9", "203.0.113.5"])
+              assert_eq!(get!(., ["Sensor.Fields.evt.type"]), "connect")
+              assert_eq!(get!(., ["event.category"]), ["network", "process"])
+              assert_eq!(get!(., ["event.severity"]), 47)
+
+  - name: Falco alert on a connection's descriptor isn't a file
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"x\",\"priority\":\"Error\",\"rule\":\"Contact K8S API Server From Container\",\"source\":\"syscall\",\"tags\":[\"T1565\",\"network\",\"mitre_discovery\"],\"output_fields\":{\"fd.name\":\"10.244.3.9:40000->10.96.0.1:443\",\"fd.lip\":\"10.244.3.9\",\"fd.lport\":40000,\"fd.rip\":\"10.96.0.1\",\"fd.rport\":443,\"user.name\":\"<NA>\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(get!(., ["file.path"]) == null)
+              assert_eq!(get!(., ["Sensor.Fields.fd.name"]), "10.244.3.9:40000->10.96.0.1:443")
               assert_eq!(get!(., ["source.ip"]), "10.244.3.9")
               assert_eq!(get!(., ["source.port"]), 40000)
-              assert_eq!(get!(., ["destination.ip"]), "203.0.113.5")
+              assert_eq!(get!(., ["destination.ip"]), "10.96.0.1")
+              assert_eq!(get!(., ["destination.address"]), "10.96.0.1")
               assert_eq!(get!(., ["destination.port"]), 443)
-              assert_eq!(.output_fields, {"evt.type": "connect"})
-              assert_eq!(get!(., ["event.category"]), ["network", "process"])
+              assert_eq!(get!(., ["event.severity"]), 73)
+              assert!(get!(., ["process.user.name"]) == null)
+              assert_eq!(get!(., ["Sensor.Fields.user.name"]), "<NA>")
+
+  - name: Falco alert on a file, with fd.type
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"x\",\"priority\":\"Warning\",\"rule\":\"Read sensitive file untrusted\",\"source\":\"syscall\",\"uuid\":\"7d1c\",\"tags\":[\"T1555\",\"filesystem\",\"mitre_credential_access\"],\"output_fields\":{\"fd.name\":\"/etc/shadow\",\"fd.type\":\"file\",\"fd.directory\":\"/etc\",\"fd.filename\":\"shadow\",\"group.gid\":0,\"fd.ino\":1234,\"proc.pid\":\"77\",\"container.privileged\":\"true\",\"container.image\":\"busybox:1.37\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco", "container_image": "falcosecurity/falco:0.45.0", "container_id": "containerd://f"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["file.path"]), "/etc/shadow")
+              assert_eq!(get!(., ["file.type"]), "file")
+              assert_eq!(get!(., ["file.directory"]), "/etc")
+              assert_eq!(get!(., ["file.name"]), "shadow")
+              assert_eq!(get!(., ["process.group.id"]), "0")
+              # ECS's types: keyword, long, boolean.
+              assert_eq!(get!(., ["file.inode"]), "1234")
+              assert_eq!(get!(., ["process.pid"]), 77)
+              assert_eq!(get!(., ["container.security_context.privileged"]), true)
+              assert_eq!(get!(., ["event.id"]), "7d1c")
+              # The container Falco saw (its full image, without a repository field).
+              assert_eq!(get!(., ["container.image.name"]), "busybox:1.37")
+              assert!(get!(., ["container.id"]) == null)
+              assert!(get!(., ["container.runtime"]) == null)
+              assert_eq!(get!(., ["threat.tactic.name"]), "Credential Access")
+              assert!(!exists(.uuid))
+              for_each(keys(.)) -> |_i, k| {
+                assert!(!starts_with(k, "Sensor."), "left over: " + k)
+              }
+              assert!(!exists(.output_fields))
 
   - name: a JSON line's error and zap's caller
     inputs:
@@ -767,8 +850,11 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["log.level"]), "critical")
-              assert_eq!(get!(., ["threat.tactic.name"]), "defense-evasion")
-              assert_eq!(get!(., ["threat.technique.id"]), "T1036.005")
+              assert_eq!(get!(., ["event.severity"]), 99)
+              assert_eq!(get!(., ["threat.tactic.name"]), "Defense Evasion")
+              assert_eq!(get!(., ["threat.tactic.id"]), "TA0005")
+              assert_eq!(get!(., ["threat.technique.id"]), "T1036")
+              assert_eq!(get!(., ["threat.technique.subtechnique.id"]), "T1036.005")
               assert!(!exists(."orchestrator.type"))
               assert!(!exists(."event.category"))
 
