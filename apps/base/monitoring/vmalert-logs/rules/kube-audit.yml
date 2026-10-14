@@ -1,9 +1,9 @@
 # kube-apiserver's audit log (iac-homelab's audit policy, shipped by apps/base/vector),
-# event.dataset kubernetes.audit. Each event is one log line with the event's fields (verb,
-# objectRef.resource, objectRef.namespace, objectRef.name, objectRef.subresource,
+# event.dataset kubernetes.audit. Each event is one log line with the event's fields
+# (objectRef.resource, objectRef.namespace, objectRef.name, objectRef.subresource,
 # responseStatus.code, requestURI, auditID, requestObject.* for RBAC changes and directly created
-# pods) plus Vector's ECS fields: user.name (the event's user.username) and source.ip, the client
-# (sourceIPs[0]).
+# pods) plus Vector's ECS fields: user.name (the event's user.username), event.action (its verb)
+# and source.ip, the client (sourceIPs[0]).
 #
 # The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
 # deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
@@ -45,7 +45,7 @@ groups:
       # person's or an app's.
       - alert: KubeSecretRead
         expr: >-
-          {event.dataset="kubernetes.audit"} objectRef.resource:=secrets verb:in("get", "list", "watch")
+          {event.dataset="kubernetes.audit"} objectRef.resource:=secrets event.action:in("get", "list", "watch")
           responseStatus.code:=200
           | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as reads
@@ -68,10 +68,10 @@ groups:
       - alert: KubeRBACChange
         expr: >-
           {event.dataset="kubernetes.audit"} objectRef.apiGroup:="rbac.authorization.k8s.io"
-          verb:in("create", "update", "patch", "delete", "deletecollection")
+          event.action:in("create", "update", "patch", "delete", "deletecollection")
           -user.name:~"^system:serviceaccount:(flux-system|kube-system):" -requestURI:~"dryRun="
-          | copy user.name as user, source.ip as remote_ip, objectRef.resource as resource,
-          objectRef.namespace as namespace, objectRef.name as name
+          | copy user.name as user, source.ip as remote_ip, event.action as verb,
+          objectRef.resource as resource, objectRef.namespace as namespace, objectRef.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
         labels:
           severity: warning
@@ -96,11 +96,11 @@ groups:
         expr: >-
           {event.dataset="kubernetes.audit"}
           objectRef.resource:in("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs")
-          verb:in("create", "update", "patch", "delete", "deletecollection") objectRef.subresource:=""
+          event.action:in("create", "update", "patch", "delete", "deletecollection") objectRef.subresource:=""
           -user.name:~"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$"
           -requestURI:~"dryRun="
-          | copy user.name as user, source.ip as remote_ip, objectRef.resource as resource,
-          objectRef.namespace as namespace, objectRef.name as name
+          | copy user.name as user, source.ip as remote_ip, event.action as verb,
+          objectRef.resource as resource, objectRef.namespace as namespace, objectRef.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
         labels:
           severity: warning
@@ -120,7 +120,7 @@ groups:
 
       - alert: KubePrivilegedPodCreated
         expr: >-
-          {event.dataset="kubernetes.audit"} objectRef.resource:=pods verb:=create objectRef.subresource:=""
+          {event.dataset="kubernetes.audit"} objectRef.resource:=pods event.action:=create objectRef.subresource:=""
           responseStatus.code:<300
           (requestObject.spec.hostNetwork:=true or requestObject.spec.hostPID:=true
           or requestObject.spec.hostIPC:=true or requestObject.spec.volumes:~"hostPath"
