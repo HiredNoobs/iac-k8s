@@ -1026,13 +1026,15 @@ transforms:
           by = if name != "" { "by " + name } else { "" }
           failed = if problem != "" { "failed: " + problem } else { "" }
           ._msg = join!(compact([string(a.type) ?? "", op, path, by, failed]), " ")
-          # The rest as Secrets.Audit.*, Vault's names capitalised; the request's and response's
-          # data and the token's metadata, in the entry and in a login's response (their keys are
-          # the secrets' and auth methods' own), keep theirs.
+          # The rest as Secrets.Audit.*, Vault's names capitalised; the token's metadata, in the
+          # entry and in a login's response, keeps its keys (the auth method's own). The request's
+          # and response's data is one JSON text field each: its keys are the secrets' (a field
+          # name per secret key otherwise); unpack_json from it at query time.
           keep = {}
           for_each([["request", "data"], ["response", "data"], ["auth", "metadata"], ["response", "auth", "metadata"]]) -> |_i, p| {
             v = get!(a, p)
             if v != null {
+              if p[1] == "data" { v = encode_json(v) }
               keep = set!(keep, [join(map_values(p) -> |s| { x = string!(s); upcase(slice!(x, 0, 1)) + slice!(x, 1) }, ".")], v)
               a = remove!(a, p)
             }

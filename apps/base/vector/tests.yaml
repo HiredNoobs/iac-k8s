@@ -2313,7 +2313,8 @@ tests:
               assert_eq!(get!(., ["Secrets.Audit.Request", "MountType"]), "system")
               assert_eq!(get!(., ["Secrets.Audit.Auth", "TokenPolicies"]), ["root"])
               assert_eq!(get!(., ["Secrets.Audit.Type"]), "response")
-              assert_eq!(get!(., ["Secrets.Audit.Request.Data"]), {"file_path": "hmac-sha256:cc"})
+              # The data as one JSON text field.
+              assert_eq!(get!(., ["Secrets.Audit.Request.Data"]), "{\"file_path\":\"hmac-sha256:cc\"}")
               assert!(get!(., ["Secrets.Audit.Time"]) == null)
 
   - name: Vault audit, a failed userpass login (the error in the response's data)
@@ -2334,7 +2335,7 @@ tests:
               assert_eq!(get!(., ["event.outcome"]), "failure")
               assert_eq!(get!(., ["error.message"]), "invalid username or password")
               assert!(get!(., ["user.name"]) == null)
-              assert_eq!(get!(., ["Secrets.Audit.Response.Data"]), {"error": "invalid username or password"})
+              assert_eq!(get!(., ["Secrets.Audit.Response.Data"]), "{\"error\":\"invalid username or password\"}")
               assert_eq!(._msg, "response update auth/userpass/login/nobody failed: invalid username or password")
 
   - name: Vault audit, a Kubernetes login (the token's metadata keeps its keys in the response too)
@@ -2357,6 +2358,27 @@ tests:
               assert_eq!(get!(., ["Secrets.Audit.Response", "Auth", "ClientToken"]), "hmac-sha256:dd")
               assert_eq!(get!(., ["Secrets.Audit.Response", "MountAccessor"]), "auth_kubernetes_1")
               assert!(get!(., ["Secrets.Audit.Response", "Auth", "Metadata"]) == null)
+
+  - name: Vault audit, a secret read (its keys stay inside one data field)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"kubernetes-external-secrets\",\"policies\":[\"eso\"]},\"request\":{\"id\":\"r-4\",\"operation\":\"read\",\"path\":\"labv2/data/production/contentbot\",\"remote_address\":\"192.168.111.22\",\"remote_port\":51003},\"response\":{\"data\":{\"data\":{\"CYTUBE_USER\":\"hmac-sha256:9f2c\",\"CYTUBE_PASS\":\"hmac-sha256:1c7a\"},\"metadata\":{\"version\":3}}},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"response\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              data = get!(., ["Secrets.Audit.Response.Data"])
+              assert!(is_string(data))
+              assert_eq!(parse_json!(data), {"data": {"CYTUBE_USER": "hmac-sha256:9f2c", "CYTUBE_PASS": "hmac-sha256:1c7a"}, "metadata": {"version": 3}})
+              assert!(get!(., ["Secrets.Audit.Response", "Data"]) == null)
+              assert_eq!(get!(., ["event.action"]), "read")
 
   - name: Vault's own line
     inputs:
