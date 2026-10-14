@@ -88,7 +88,7 @@ groups:
           description: >-
             A Role, ClusterRole or binding changed by something other than Flux (or the control
             plane): permissions granted by hand stay until someone notices.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             The event's Orchestrator.Audit.RequestObject has what was granted to whom (roleRef,
             subjects, rules). Flux doesn't remove objects it didn't create, so delete it by

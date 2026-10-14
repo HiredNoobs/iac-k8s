@@ -131,7 +131,7 @@ groups:
           description: >-
             Requests made with a root token: build.sh vault does this; anything else means the
             root token (or keys.json) is out.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             The paths are in the events (Secrets.Audit.Request.Path). If it wasn't an apply of
             terraform/vault,
@@ -156,7 +156,7 @@ groups:
           description: >-
             An audit device enabled or disabled. Disabling one is how Vault's trail is cut; only
             terraform/vault should touch them.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             vault audit list on the VM; both devices (stdout, file) should be there. If not,
             re-apply terraform/vault and treat the root token as compromised. Trigger (as root):
@@ -207,7 +207,7 @@ groups:
           description: >-
             Failed logins (userpass passwords, Kubernetes service account tokens): guessing, or
             ESO with a token Vault no longer accepts.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             The username is in the path (userpass), the error is HMAC'd (compare with vault
             write sys/audit-hash/stdout input=...). From a node address with auth/kubernetes:
