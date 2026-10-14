@@ -39,10 +39,9 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-    # The prx-999 VMs' journals on their own listener: Vector's (apps/base/vector), and while the
-    # VMs move to Vector, VictoriaLogs' journald endpoint, HTTP/1.1 only (traffic-policy.yaml):
-    # systemd-journal-upload aborts over HTTP/2 (systemd/systemd#39166). Clients pick the
-    # listener by SNI, the more specific hostname wins over the wildcard.
+    # The prx-999 VMs' journals on their own listener, to Vector (apps/base/vector), which only
+    # these VMs may reach. Clients pick the listener by SNI, the more specific hostname wins over
+    # the wildcard.
     - name: journald
       protocol: HTTPS
       port: 443
@@ -55,7 +54,5 @@ spec:
         namespaces:
           from: Selector
           selector:
-            matchExpressions:
-              - key: kubernetes.io/metadata.name
-                operator: In
-                values: [vector, monitoring]
+            matchLabels:
+              kubernetes.io/metadata.name: vector
