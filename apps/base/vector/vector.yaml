@@ -36,6 +36,10 @@
 # output_fields with an ECS home; the audit event's verb, requestURI, ...; a JSON line's level,
 # logger, error and zap's caller). A value that doesn't parse stays where it was, as does
 # sourceIPs when it has more than the client (a proxy's chain).
+#
+# A field a parser adds that has no ECS field is capitalised under a generic concept (Envoy's
+# response flags as Proxy.ResponseFlags, ...), as ECS recommends for custom fields: ECS names are
+# lower case, so these can't clash with a future ECS field.
 data_dir: /var/lib/vector
 
 sources:
@@ -177,7 +181,28 @@ transforms:
           if length(parts) > 1 { ."url.query" = parts[1] }
         }
         ua = get!(v, ["user-agent"])
-        if ua != null { ."user_agent.original" = ua }
+        if ua != null {
+          ."user_agent.original" = ua
+          # uap-core's parse, as Elastic's user_agent processor. Versions from their parts (its
+          # own version can be the name), no device when it's only a "Generic ..." guess.
+          agent = parse_user_agent(string!(ua), mode: "enriched")
+          if agent.browser.family != null {
+            ."user_agent.name" = agent.browser.family
+            version = join(compact([agent.browser.major, agent.browser.minor, agent.browser.patch]), ".") ?? ""
+            if version != "" { ."user_agent.version" = version }
+          }
+          if agent.os.family != null {
+            ."user_agent.os.name" = agent.os.family
+            version = join(compact([agent.os.major, agent.os.minor, agent.os.patch]), ".") ?? ""
+            if version != "" {
+              ."user_agent.os.version" = version
+              ."user_agent.os.full" = string!(agent.os.family) + " " + version
+            }
+          }
+          if agent.device.family != null && agent.device.brand != "Generic" {
+            ."user_agent.device.name" = agent.device.family
+          }
+        }
         id = get!(v, ["x-request-id"])
         if id != null { ."http.request.id" = id }
         # Body bytes (Envoy's BYTES_RECEIVED and BYTES_SENT for HTTP).
@@ -196,6 +221,53 @@ transforms:
         sni = string(.requested_server_name) ?? "-"
         if sni != "-" && sni != "" { ."tls.client.server_name" = sni }
         if exists(.requested_server_name) { del(.requested_server_name) }
+        # The backend Envoy sent the request to, as Elastic's Envoy integration. One that isn't
+        # <ip>:<port> is the address alone.
+        upstream = string(.upstream_host) ?? "-"
+        if upstream != "-" && upstream != "" {
+          ."destination.address" = upstream
+          addr, err = parse_regex(upstream, r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+          if err == null {
+            ."destination.address" = addr.ip
+            ."destination.ip" = addr.ip
+            ."destination.port" = to_int(addr.port) ?? null
+          }
+        }
+        if exists(.upstream_host) { del(.upstream_host) }
+        ips = compact([get!(., ["source.ip"]), get!(., ["destination.ip"])])
+        if ips != [] { ."related.ip" = unique(ips) }
+        # Why Envoy answered as it did (via_upstream, ext_authz_denied, route_not_found, ...).
+        details = string(.response_code_details) ?? "-"
+        if details != "-" && details != "" { ."event.reason" = details }
+        if exists(.response_code_details) { del(.response_code_details) }
+        ."event.category" = ["network", "web"]
+        ."event.type" = ["access"]
+        ."network.protocol" = "http"
+        # No ECS field for these: Proxy.*, capitalised as ECS recommends for custom fields, so
+        # they can't clash with a future ECS field. Dropped when "-" (no value).
+        for_each({
+          "response_flags": "ResponseFlags",
+          "route_name": "RouteName",
+          "downstream_local_address": "ListenerAddress",
+          "x-forwarded-for": "ForwardedFor",
+          "connection_termination_details": "ConnectionTerminationDetails",
+          "upstream_transport_failure_reason": "UpstreamTransportFailureReason",
+          "x-envoy-upstream-service-time": "UpstreamServiceTime",
+        }) -> |key, name| {
+          s = get!(., [key])
+          . = remove!(., [key])
+          if s != null && s != "-" && s != "" { . = set!(., ["Proxy." + name], s) }
+        }
+        # Flags as a list (UF,URX: two), as Elastic's; the upstream's time in nanoseconds, as
+        # event.duration.
+        flags = string(get!(., ["Proxy.ResponseFlags"])) ?? null
+        if flags != null { ."Proxy.ResponseFlags" = split!(flags, ",") }
+        upstream_ms = to_int(get!(., ["Proxy.UpstreamServiceTime"])) ?? -1
+        if upstream_ms >= 0 { ."Proxy.UpstreamServiceTime" = upstream_ms * 1000000 }
+        # Envoy's own names for the upstream connection: Proxy.RouteName and destination.* say
+        # where the request went, and the local side is this pod.
+        del(.upstream_cluster)
+        del(.upstream_local_address)
       }
 
   # Authelia (JSON: level, msg, remote_ip, method, path). It logs failed logins, not successful
