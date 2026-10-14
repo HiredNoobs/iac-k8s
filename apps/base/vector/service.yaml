@@ -1,0 +1,16 @@
+# Where rsyslog (apps/base/rsyslog) sends the LAN's syslog: any node's Vector takes it, so a node
+# going away doesn't stop it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: syslog
+  labels:
+    app.kubernetes.io/name: vector
+spec:
+  selector:
+    app.kubernetes.io/name: vector
+  ports:
+    - name: syslog
+      port: 5514
+      targetPort: syslog
+      protocol: TCP

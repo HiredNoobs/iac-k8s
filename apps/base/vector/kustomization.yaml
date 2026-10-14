@@ -1,8 +1,9 @@
-# Logs into VictoriaLogs (apps/base/monitoring): every pod's log lines with their namespace, pod,
-# container and labels, and kube-apiserver's audit log (source="kube-audit") for the security
-# detections (apps/base/monitoring/vmalert-logs/rules/kube-audit.yml). What gets audited is the
-# audit policy in iac-homelab (terraform/modules/talos-cluster/audit-policy.yaml). Syslog from the
-# LAN still goes through rsyslog (apps/base/rsyslog).
+# Logs into VictoriaLogs (apps/base/monitoring), mapped to ECS fields (vector.yaml): every pod's
+# log lines with their namespace, pod, container and labels; kube-apiserver's audit log
+# (event.dataset kubernetes.audit) for the security detections
+# (apps/base/monitoring/vmalert-logs/rules/kube-audit.yml), what gets audited being the audit
+# policy in iac-homelab (terraform/modules/talos-cluster/audit-policy.yaml); and the LAN's syslog,
+# relayed by rsyslog (apps/base/rsyslog) to service.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: vector
@@ -11,6 +12,7 @@ resources:
   - certificate.yaml
   - rbac.yaml
   - daemonset.yaml
+  - service.yaml
 # A change rolls the pods (the name gets a hash). tests.yaml is for CI only.
 configMapGenerator:
   - name: vector
