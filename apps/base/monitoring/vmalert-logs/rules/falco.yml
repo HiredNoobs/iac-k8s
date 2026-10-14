@@ -3,7 +3,9 @@
 # (apps/base/vector): rule.name, log.level (Falco's priority: Emergency, Alert and Critical are
 # critical), threat.tactic.name and threat.technique.id (the first mitre_<tactic> and T<id> in
 # its tags), host.hostname (the node), orchestrator.namespace and orchestrator.resource.name (the
-# pod), and process.*, file.path, user.name from output_fields.*, which stay as well.
+# pod), event.category (from the tags), event.module (Falco's event source, syscall), and
+# process.*, file.path, user.*, container.*, source.* and destination.* from output_fields.*
+# (what has no ECS field stays there).
 #
 # One alert for all of Falco's rules: its ATT&CK tactic and technique come from the event, its
 # severity from the level (critical stays critical, error and warning are warning). Notice-level
@@ -37,7 +39,7 @@ groups:
           tested: "2026-10-11"
           runbook: >-
             The events: {event.dataset="falco.alert"} rule.name:="{{ $labels.rule }}" in
-            VictoriaLogs (process.command_line, output_fields.proc.pname, file.path, user.name).
+            VictoriaLogs (process.command_line, process.parent.name, file.path, user.name).
             If it's expected (a tool that really does this), add an exception in the
             HelmRelease's customRules rather than silencing it. Trigger (Read sensitive file
             untrusted, a root process opening /etc/shadow): kubectl -n falco run siem-test --rm

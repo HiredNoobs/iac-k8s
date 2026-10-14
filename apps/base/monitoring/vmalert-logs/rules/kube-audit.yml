@@ -1,9 +1,10 @@
 # kube-apiserver's audit log (iac-homelab's audit policy, shipped by apps/base/vector),
 # event.dataset kubernetes.audit. Each event is one log line with the event's fields
 # (objectRef.resource, objectRef.namespace, objectRef.name, objectRef.subresource,
-# responseStatus.code, requestURI, auditID, requestObject.* for RBAC changes and directly created
-# pods) plus Vector's ECS fields: user.name (the event's user.username), event.action (its verb)
-# and source.ip, the client (sourceIPs[0]).
+# requestObject.* for RBAC changes and directly created pods) plus Vector's ECS fields: user.name
+# (the event's user.username), event.action (its verb), source.ip (the client, sourceIPs[0]),
+# http.response.status_code, error.message (responseStatus.message), url.original, url.path and
+# url.query (requestURI) and event.id (auditID).
 #
 # The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
 # deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
@@ -17,14 +18,14 @@ groups:
     type: vlogs
     interval: 5m
     rules:
-      # A session logs ResponseStarted and ResponseComplete under one auditID.
+      # A session logs ResponseStarted and ResponseComplete under one auditID (event.id).
       - alert: KubeExecIntoPod
         expr: >-
           {event.dataset="kubernetes.audit"} objectRef.resource:=pods
           objectRef.subresource:in("exec", "attach", "portforward")
           | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace,
           objectRef.name as pod, objectRef.subresource as action
-          | stats by (user, remote_ip, namespace, pod, action) count_uniq(auditID) as sessions
+          | stats by (user, remote_ip, namespace, pod, action) count_uniq(event.id) as sessions
         labels:
           severity: warning
           source: kube-audit
@@ -37,7 +38,7 @@ groups:
             workload. Normal for debugging, so this asks "was this you?".
           tested: "2026-10-13"
           runbook: >-
-            The command is in the event's requestURI (?command=...). If it wasn't you, look at
+            The command is in the event's url.query (command=...). If it wasn't you, look at
             the user's other requests in the audit log and the client in Investigation.
             Trigger: kubectl -n homepage exec deploy/homepage -- true
 
@@ -46,7 +47,7 @@ groups:
       - alert: KubeSecretRead
         expr: >-
           {event.dataset="kubernetes.audit"} objectRef.resource:=secrets event.action:in("get", "list", "watch")
-          responseStatus.code:=200
+          http.response.status_code:=200
           | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as reads
         labels:
@@ -69,7 +70,7 @@ groups:
         expr: >-
           {event.dataset="kubernetes.audit"} objectRef.apiGroup:="rbac.authorization.k8s.io"
           event.action:in("create", "update", "patch", "delete", "deletecollection")
-          -user.name:~"^system:serviceaccount:(flux-system|kube-system):" -requestURI:~"dryRun="
+          -user.name:~"^system:serviceaccount:(flux-system|kube-system):" -url.query:~"dryRun="
           | copy user.name as user, source.ip as remote_ip, event.action as verb,
           objectRef.resource as resource, objectRef.namespace as namespace, objectRef.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
@@ -98,7 +99,7 @@ groups:
           objectRef.resource:in("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs")
           event.action:in("create", "update", "patch", "delete", "deletecollection") objectRef.subresource:=""
           -user.name:~"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$"
-          -requestURI:~"dryRun="
+          -url.query:~"dryRun="
           | copy user.name as user, source.ip as remote_ip, event.action as verb,
           objectRef.resource as resource, objectRef.namespace as namespace, objectRef.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
@@ -121,7 +122,7 @@ groups:
       - alert: KubePrivilegedPodCreated
         expr: >-
           {event.dataset="kubernetes.audit"} objectRef.resource:=pods event.action:=create objectRef.subresource:=""
-          responseStatus.code:<300
+          http.response.status_code:<300
           (requestObject.spec.hostNetwork:=true or requestObject.spec.hostPID:=true
           or requestObject.spec.hostIPC:=true or requestObject.spec.volumes:~"hostPath"
           or requestObject.spec.containers:~"\"privileged\":true")
@@ -147,7 +148,7 @@ groups:
 
       - alert: KubePodSecurityViolation
         expr: >-
-          {event.dataset="kubernetes.audit"} responseStatus.code:=403 responseStatus.message:~"violates PodSecurity"
+          {event.dataset="kubernetes.audit"} http.response.status_code:=403 error.message:~"violates PodSecurity"
           | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as rejected
         labels:
@@ -163,12 +164,12 @@ groups:
             namespace's level.
           tested: "2026-10-11"
           runbook: >-
-            responseStatus.message has what was refused. Trigger: kubectl -n homepage run
+            error.message has what was refused. Trigger: kubectl -n homepage run
             siem-test --image=busybox:1.37 --privileged (refused, nothing runs).
 
       - alert: KubeForbiddenBurst
         expr: >-
-          {event.dataset="kubernetes.audit"} responseStatus.code:=403
+          {event.dataset="kubernetes.audit"} http.response.status_code:=403
           | copy user.name as user, source.ip as remote_ip
           | stats by (user, remote_ip) count() as forbidden
           | filter forbidden:>=10
