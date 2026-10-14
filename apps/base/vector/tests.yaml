@@ -365,8 +365,8 @@ tests:
               assert_eq!(get!(., ["destination.ip"]), "10.244.3.7")
               assert_eq!(get!(., ["destination.port"]), 9091)
               assert_eq!(get!(., ["related.ip"]), ["192.168.50.10", "10.244.3.7"])
-              assert_eq!(get!(., ["event.category"]), ["network", "web"])
-              assert_eq!(get!(., ["event.type"]), ["access"])
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["connection", "protocol"])
               assert_eq!(get!(., ["network.protocol"]), "http")
               assert_eq!(get!(., ["Proxy.RouteName"]), "httproute/authelia/authelia/rule/0/match/0/auth_hirednoobs_com")
               # No upstream time header: none, not 0.
@@ -547,8 +547,9 @@ tests:
               assert_eq!(get!(., ["log.level"]), "error")
               assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
               assert_eq!(get!(., ["user.name"]), "bob")
-              assert_eq!(get!(., ["event.category"]), "authentication")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
               assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.type"]), ["start"])
               assert_eq!(get!(., ["event.outcome"]), "failure")
               assert_eq!(get!(., ["event.reason"]), "banned")
               assert_eq!(get!(., ["http.request.method"]), "POST")
@@ -611,6 +612,10 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["event.action"]), "authorization")
+              # A refused request to a site, not a login.
+              assert_eq!(get!(., ["event.category"]), ["web"])
+              assert_eq!(get!(., ["event.type"]), ["access", "denied"])
+              assert_eq!(get!(., ["event.outcome"]), "failure")
               assert_eq!(get!(., ["url.full"]), "https://victoriametrics.hirednoobs.com/")
               assert_eq!(get!(., ["url.domain"]), "victoriametrics.hirednoobs.com")
               assert_eq!(get!(., ["url.path"]), "/")
@@ -910,8 +915,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.category"]), "authentication")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
               assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.type"]), ["start"])
               assert_eq!(get!(., ["event.outcome"]), "unknown")
               assert_eq!(get!(., ["user.name"]), "hirednoobs")
               assert_eq!(get!(., ["log.level"]), "info")
@@ -950,8 +956,9 @@ tests:
             source: |
               assert_eq!(get!(., ["event.dataset"]), "lldap.bootstrap")
               assert_eq!(get!(., ["event.provider"]), "lldap-bootstrap")
-              assert_eq!(get!(., ["event.category"]), "iam")
+              assert_eq!(get!(., ["event.category"]), ["iam"])
               assert_eq!(get!(., ["event.action"]), "removed-from-group")
+              assert_eq!(get!(., ["event.type"]), ["group", "change"])
               assert_eq!(get!(., ["user.name"]), "mallory")
               assert_eq!(get!(., ["group.name"]), "lldap_admin")
 
@@ -971,6 +978,7 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["event.action"]), "group-deleted")
+              assert_eq!(get!(., ["event.type"]), ["group", "deletion"])
               assert_eq!(get!(., ["group.name"]), "extra")
               assert!(!exists(."user.name"))
 
@@ -993,6 +1001,7 @@ tests:
               assert_eq!(get!(., ["log.level"]), "error")
               assert_eq!(get!(., ["log.logger"]), "vaultwarden::api::identity")
               assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.type"]), ["start"])
               assert_eq!(get!(., ["event.outcome"]), "failure")
               assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
               assert_eq!(get!(., ["user.name"]), "bob@example.com")
@@ -1044,6 +1053,9 @@ tests:
               assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
               assert_eq!(get!(., ["destination.port"]), 53)
               assert_eq!(get!(., ["related.ip"]), ["169.254.116.108"])
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["protocol"])
+              assert_eq!(get!(., ["network.protocol"]), "dns")
 
   - name: CoreDNS consolidated errors line
     inputs:
@@ -1119,6 +1131,8 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["event.dataset"]), "mealie.access")
+              assert_eq!(get!(., ["event.category"]), ["web"])
+              assert_eq!(get!(., ["event.type"]), ["access"])
               assert_eq!(get!(., ["log.level"]), "info")
               assert_eq!(get!(., ["source.ip"]), "10.244.1.1")
               assert_eq!(get!(., ["source.port"]), 48410)

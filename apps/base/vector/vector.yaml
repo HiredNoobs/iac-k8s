@@ -245,8 +245,9 @@ transforms:
         details = string(.response_code_details) ?? "-"
         if details != "-" && details != "" { ."event.reason" = details }
         if exists(.response_code_details) { del(.response_code_details) }
-        ."event.category" = ["network", "web"]
-        ."event.type" = ["access"]
+        # As Elastic's Envoy integration.
+        ."event.category" = ["network"]
+        ."event.type" = ["connection", "protocol"]
         ."network.protocol" = "http"
         # No ECS field for these: Proxy.*, capitalised as ECS recommends for custom fields, so
         # they can't clash with a future ECS field. Dropped when "-" (no value).
@@ -291,7 +292,8 @@ transforms:
 
       login, err = parse_regex(msg, r'^Unsuccessful (?P<factor>1FA|TOTP|WebAuthn|Duo) authentication attempt by user \'(?P<user>[^\']*)\'(?P<banned> and they are banned)?')
       if err == null {
-        ."event.category" = "authentication"
+        ."event.category" = ["authentication"]
+        ."event.type" = ["start"]
         ."event.action" = if login.factor == "1FA" { "password-login" } else { downcase(string!(login.factor)) + "-login" }
         ."event.outcome" = "failure"
         if login.user != "" { ."user.name" = login.user }
@@ -299,7 +301,8 @@ transforms:
       }
       unknown, err = parse_regex(msg, r'username input \'(?P<user>[^\']*)\' which usually indicates they do not exist')
       if err == null {
-        ."event.category" = "authentication"
+        ."event.category" = ["authentication"]
+        ."event.type" = ["start"]
         ."event.action" = "password-login"
         ."event.outcome" = "failure"
         ."event.reason" = "unknown user"
@@ -310,7 +313,9 @@ transforms:
       # endpoint), so they go when they're that; anything else stays.
       access, err = parse_regex(msg, r'^Access to (?P<url>\S+) \(method (?P<method>[A-Z]+)\) is not authorized to user (?P<user>.+?), responding with status code (?P<code>\d+)')
       if err == null {
-        ."event.category" = "authentication"
+        # A request to a site refused (401: not logged in, 403: not allowed), not a login.
+        ."event.category" = ["web"]
+        ."event.type" = ["access", "denied"]
         ."event.action" = "authorization"
         ."event.outcome" = "failure"
         ."url.full" = access.url
@@ -545,7 +550,8 @@ transforms:
         # A login to its UI: whether it worked isn't logged.
         login, err = parse_regex(msg, r'login attempt for "(?P<user>[^"]+)"')
         if err == null {
-          ."event.category" = "authentication"
+          ."event.category" = ["authentication"]
+          ."event.type" = ["start"]
           ."event.action" = "password-login"
           ."event.outcome" = "unknown"
           ."user.name" = login.user
@@ -557,13 +563,21 @@ transforms:
         # A group is named with its id: Group "<name>" (<id>) successfully deleted.
         change, err = parse_regex(msg, r'(?P<kind>User|Group) "(?P<name>[^"]+)"(?: \(\d+\))? successfully (?P<what>created|deleted|added to the group|removed from the group)(?: "(?P<group>[^"]+)")?')
         if err == null {
-          ."event.category" = "iam"
+          ."event.category" = ["iam"]
           ."event.outcome" = "success"
           if change.kind == "User" {
             ."user.name" = change.name
             if change.group != null { ."group.name" = change.group }
           } else {
             ."group.name" = change.name
+          }
+          # ECS's iam types: what changed, and how (a membership is a change to the group).
+          ."event.type" = if change.what == "created" {
+            [downcase(string!(change.kind)), "creation"]
+          } else if change.what == "deleted" {
+            [downcase(string!(change.kind)), "deletion"]
+          } else {
+            ["group", "change"]
           }
           ."event.action" = if change.what == "added to the group" {
             "added-to-group"
@@ -597,7 +611,8 @@ transforms:
       }
       login, err = parse_regex(msg, r'Username or password is incorrect\..* IP: (?P<ip>\S+)\. Username: (?P<user>.*)\.$')
       if err == null {
-        ."event.category" = "authentication"
+        ."event.category" = ["authentication"]
+        ."event.type" = ["start"]
         ."event.action" = "password-login"
         ."event.outcome" = "failure"
         ."source.ip" = login.ip
@@ -619,6 +634,9 @@ transforms:
     reroute_dropped: true
     source: |
       %dataset = "coredns.log"
+      ."event.category" = ["network"]
+      ."event.type" = ["protocol"]
+      ."network.protocol" = "dns"
       msg = string(._msg) ?? ""
       line, err = parse_regex(msg, r'^\[(?P<level>[A-Z]+)\] (?:(?P<plugin>plugin/[a-z0-9_]+): )?(?P<rest>.*)$')
       if err != null && starts_with(msg, "[") {
@@ -680,6 +698,9 @@ transforms:
         access, err = parse_regex(string!(line.rest), r'^\[(?P<ip>[^\]]+?):(?P<port>\d+)\] (?P<code>\d{3}) [^"]*"(?P<method>[A-Z]+) (?P<path>\S+) HTTP/(?P<version>[0-9.]+)"$')
         if err == null {
           %dataset = "mealie.access"
+          # As Elastic's web server access logs (nginx, apache).
+          ."event.category" = ["web"]
+          ."event.type" = ["access"]
           ."source.ip" = access.ip
           ."source.port" = to_int(access.port) ?? null
           code = to_int(access.code) ?? 0
