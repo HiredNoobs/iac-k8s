@@ -1288,6 +1288,11 @@ transforms:
 
       if !exists(."log.logger") && is_string(.logger) { ."log.logger" = del(.logger) }
 
+      # Flux's kustomize-controller lists every object it applied in output, {"<Kind>/<namespace>/
+      # <name>": "unchanged", ...}: one JSON text field (a field name per object in the repo
+      # otherwise); unpack_json from it at query time.
+      if .kubernetes.namespace == "flux-system" && is_object(.output) { .output = encode_json(.output) }
+
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
       # (anything else as it is, lower case). From a JSON line's level, lvl or severity, else
       # from the text formats several apps share. The JSON field it came from goes.

@@ -819,6 +819,44 @@ tests:
               }
               assert!(!exists(.output_fields))
 
+  - name: Flux's applied objects (output) as one JSON text field
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":\"2026-10-14T20:00:00.000Z\",\"msg\":\"server-side apply completed\",\"controller\":\"kustomization\",\"Kustomization\":{\"name\":\"apps\",\"namespace\":\"flux-system\"},\"revision\":\"master@sha1:e24edef\",\"output\":{\"ExternalSecret/lldap/lldap-bootstrap\":\"unchanged\",\"HelmRelease/monitoring/blackbox-exporter\":\"configured\"}}",
+            "timestamp": t'2026-10-14T20:00:00.100Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "flux-system", "pod_name": "kustomize-controller-1", "container_name": "manager", "container_image": "ghcr.io/fluxcd/kustomize-controller:v1.9.1", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "flux-system.manager")
+              assert!(is_string(.output))
+              assert_eq!(parse_json!(.output), {"ExternalSecret/lldap/lldap-bootstrap": "unchanged", "HelmRelease/monitoring/blackbox-exporter": "configured"})
+              # Its other fields stay as Flux writes them.
+              assert_eq!(.Kustomization, {"name": "apps", "namespace": "flux-system"})
+
+  - name: another namespace's output field stays as it is
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"msg\":\"done\",\"output\":{\"a\":1}}",
+            "timestamp": t'2026-10-14T20:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.output, {"a": 1})
+
   - name: a JSON line's error and zap's caller
     inputs:
       - insert_at: pods
