@@ -2316,6 +2316,27 @@ tests:
               assert_eq!(get!(., ["Secrets.Audit.Response.Data"]), {"error": "invalid username or password"})
               assert_eq!(._msg, "response update auth/userpass/login/nobody failed: invalid username or password")
 
+  - name: Vault audit, a Kubernetes login (the token's metadata keeps its keys in the response too)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"kubernetes-external-secrets\",\"policies\":[\"default\"],\"metadata\":{\"role\":\"eso\",\"service_account_uid\":\"sa-1\"}},\"request\":{\"id\":\"r-3\",\"operation\":\"update\",\"path\":\"auth/kubernetes/login\",\"remote_address\":\"192.168.111.22\",\"remote_port\":51002},\"response\":{\"auth\":{\"client_token\":\"hmac-sha256:dd\",\"metadata\":{\"role\":\"eso\",\"service_account_uid\":\"sa-1\"}},\"mount_accessor\":\"auth_kubernetes_1\"},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"response\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["Secrets.Audit.Auth.Metadata"]), {"role": "eso", "service_account_uid": "sa-1"})
+              assert_eq!(get!(., ["Secrets.Audit.Response.Auth.Metadata"]), {"role": "eso", "service_account_uid": "sa-1"})
+              assert_eq!(get!(., ["Secrets.Audit.Response", "Auth", "ClientToken"]), "hmac-sha256:dd")
+              assert_eq!(get!(., ["Secrets.Audit.Response", "MountAccessor"]), "auth_kubernetes_1")
+              assert!(get!(., ["Secrets.Audit.Response", "Auth", "Metadata"]) == null)
+
   - name: Vault's own line
     inputs:
       - insert_at: journald
