@@ -180,10 +180,11 @@ transforms:
         if ua != null { ."user_agent.original" = ua }
         id = get!(v, ["x-request-id"])
         if id != null { ."http.request.id" = id }
+        # Body bytes (Envoy's BYTES_RECEIVED and BYTES_SENT for HTTP).
         received = to_int(.bytes_received) ?? null
-        if received != null { ."http.request.bytes" = received; del(.bytes_received) }
+        if received != null { ."http.request.body.bytes" = received; del(.bytes_received) }
         sent = to_int(.bytes_sent) ?? null
-        if sent != null { ."http.response.bytes" = sent; del(.bytes_sent) }
+        if sent != null { ."http.response.body.bytes" = sent; del(.bytes_sent) }
         # ECS durations are in nanoseconds.
         ms = to_int(.duration) ?? -1
         if ms >= 0 { ."event.duration" = ms * 1000000; del(.duration) }
