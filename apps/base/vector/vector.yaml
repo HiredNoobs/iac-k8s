@@ -118,6 +118,8 @@ transforms:
         if value != null { . = set!(., ["container." + key], value) }
       }
       ."Log.Stream" = output_stream
+      # When Vector read it (_time is when it happened, or was written).
+      ."event.created" = now()
 
   # Each source with its own fields to its remap (by namespace and container, which the pod can't
   # choose), the rest straight to ecs.
@@ -239,8 +241,6 @@ transforms:
           }
         }
         if exists(.upstream_host) { del(.upstream_host) }
-        ips = compact([get!(., ["source.ip"]), get!(., ["destination.ip"])])
-        if ips != [] { ."related.ip" = unique(ips) }
         # Why Envoy answered as it did (via_upstream, ext_authz_denied, route_not_found, ...).
         details = string(.response_code_details) ?? "-"
         if details != "-" && details != "" { ."event.reason" = details }
@@ -616,6 +616,7 @@ transforms:
         . = {
           "_msg": .message,
           "_time": .timestamp,
+          "event.created": now(),
           "Log.Stream": .stream,
           "container.image.name": .kubernetes.container_image,
           "kubernetes": {
@@ -774,6 +775,7 @@ transforms:
     reroute_dropped: true
     source: |
       . = object!(parse_json!(.message))
+      ."event.created" = now()
       ._time = .stageTimestamp || .requestReceivedTimestamp
       node = get_env_var!("NODE_NAME")
       code = ""
@@ -834,6 +836,8 @@ transforms:
       . = {
         "_msg": .message,
         "_time": .timestamp,
+        "event.created": now(),
+        "ecs.version": "9.5.0",
         "event.dataset": "kubernetes.audit",
         "event.provider": "kube-apiserver",
         "host.hostname": node,
@@ -843,11 +847,33 @@ transforms:
         "error.message": .metadata.dropped.message,
       }
 
+  # The last fields every event gets: the ECS version the fields follow, and as Elastic's
+  # integrations every IP address and user an event names, in related.ip and related.user, to
+  # find all of an address's or user's events in one field (an audit event's proxy chain is
+  # already there).
+  final:
+    type: remap
+    inputs: [ecs, events]
+    source: |
+      ."ecs.version" = "9.5.0"
+      ips = array(get!(., ["related.ip"])) ?? []
+      for_each(["source.ip", "destination.ip", "client.ip", "server.ip"]) -> |_i, key| {
+        ip = get!(., [key])
+        if is_string(ip) { ips = push(ips, ip) }
+      }
+      if ips != [] { ."related.ip" = unique(ips) }
+      users = []
+      for_each(["user.name", "user.id"]) -> |_i, key| {
+        u = get!(., [key])
+        if is_string(u) { users = push(users, u) }
+      }
+      if users != [] { ."related.user" = unique(users) }
+
 sinks:
   # Pod logs and audit events alike; audit events have no kubernetes.* stream fields.
   victorialogs:
     type: http
-    inputs: [ecs, events, audit_unparsed]
+    inputs: [final, audit_unparsed]
     uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,event.kind,host.name,kubernetes.namespace,kubernetes.pod.name,kubernetes.container.name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
