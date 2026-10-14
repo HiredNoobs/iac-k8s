@@ -1,4 +1,4 @@
-# In the cluster for Grafana and rsyslog (syslog on 514).
+# In the cluster for Grafana, Vector and vmalert-logs.
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,12 +12,4 @@ spec:
     - name: https
       port: 9428
       targetPort: https
-      protocol: TCP
-    - name: syslog-udp
-      port: 514
-      targetPort: syslog-udp
-      protocol: UDP
-    - name: syslog-tcp
-      port: 514
-      targetPort: syslog-tcp
       protocol: TCP
