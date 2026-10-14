@@ -1,12 +1,14 @@
 # Vector on every node, sending to VictoriaLogs.
 #
 # Pod logs: every container's log lines (kubernetes_logs), with their namespace, pod, container,
-# node, image and the pod's labels (kubernetes.*). A JSON line is split into its fields: the first
-# of message, msg, log becomes _msg and the first of time, timestamp, ts that parses becomes
-# _time (otherwise the time the container runtime wrote the line). Any other line is _msg as it
-# is. Then the common fields, ECS names (https://www.elastic.co/guide/en/ecs/current/) written as
-# flat dotted keys, so they can't clash with an app's own field of the same top-level name (the
-# same field in VictoriaLogs either way):
+# node and the pod's labels under Elastic's names (kubernetes.namespace, kubernetes.pod.name,
+# kubernetes.pod.ip, kubernetes.container.name, kubernetes.node.name, kubernetes.labels.*), the
+# container's image, id and runtime (container.*), and stdout or stderr (Log.Stream). A JSON line
+# is split into its fields: the first of message, msg, log becomes _msg and the first of time,
+# timestamp, ts that parses becomes _time (otherwise the time the container runtime wrote the
+# line). Any other line is _msg as it is. Then the common fields, ECS names
+# (https://www.elastic.co/guide/en/ecs/current/) written as flat dotted keys, so they can't clash
+# with an app's own field of the same top-level name (the same field in VictoriaLogs either way):
 #   event.dataset   which source: its own name (envoy.access, ...) or <namespace>.<container>
 #   event.provider  what wrote it: the dataset's first part (envoy, ...) or the image's name
 #                   (source-controller, ...), else the container's
@@ -16,30 +18,35 @@
 #   event.kind      event, alert (Falco's), or pipeline_error: a line Vector couldn't parse
 #                   (error.type remap_error or format_mismatch, error.message why), kept as it is
 #   tags            "generic" added for a line without a parser of its own
-# Stream fields: event.dataset, event.kind, host.name, kubernetes.pod_namespace,
-# kubernetes.pod_name, kubernetes.container_name.
+#   related.ip, related.user  every address and user the event names
+# Stream fields: event.dataset, event.kind, host.name, kubernetes.namespace, kubernetes.pod.name,
+# kubernetes.container.name.
 #
-# kube-apiserver's audit log, on the control planes: each event as one JSON line. The event's
-# own fields stay (nested ones become objectRef.resource, requestObject.spec..., ... in
-# VictoriaLogs), plus:
+# kube-apiserver's audit log, on the control planes: each event as one JSON line, with
 #   _msg       "<verb> <requestURI> <code> by <user>", a summary to read in lists
 #   _time      when the response completed (stageTimestamp)
-# and the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
-# event.kind, host.hostname, host.name, source.ip (the client, sourceIPs[0]), user.name,
-# user_agent.original, event.action (the verb), event.outcome and http.response.status_code
-# (from the response code), error.message (the response's message), url.original, url.path and
-# url.query (requestURI), event.id (auditID), event.start and event.end (when it was received and
-# completed). A line that isn't JSON is kept as a pipeline_error.
+# the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
+# event.kind, host.hostname, host.name, related.*, and as Elastic's Kubernetes audit integration
+# source.ip and client.ip (the client, sourceIPs[0]), user.name, user.id, user_agent.original,
+# event.action (the verb), event.outcome (the authorizer's decision), orchestrator.* (the object),
+# plus user.group.name, http.response.status_code, error.message (the response's message),
+# url.original, url.path and url.query (requestURI), event.id (auditID), event.start and
+# event.end (when it was received and completed). The rest under Orchestrator.Resource.* and
+# Orchestrator.Audit.*. A line that isn't JSON is kept as a pipeline_error.
+#
+# Each source with an Elastic integration (Envoy, Falco, CoreDNS, the audit log) is mapped as it
+# maps it, unless noted. The level is the exception: log.level is always one vocabulary.
 #
 # A source's own field that has an ECS field is dropped once it's been moved (Envoy's
 # downstream_remote_address, :authority, ...; Authelia's remote_ip; Falco's rule, priority and
 # output_fields with an ECS home; the audit event's verb, requestURI, ...; a JSON line's level,
-# logger, error and zap's caller). A value that doesn't parse stays where it was, as does
-# sourceIPs when it has more than the client (a proxy's chain).
+# logger, error and zap's caller). A value that doesn't parse stays where it was.
 #
-# A field a parser adds that has no ECS field is capitalised under a generic concept (Envoy's
-# response flags as Proxy.ResponseFlags, ...), as ECS recommends for custom fields: ECS names are
-# lower case, so these can't clash with a future ECS field.
+# A field with no ECS field is a custom field: capitalised under a generic concept (Envoy's
+# response flags as Proxy.ResponseFlags, the audit event's stage as Orchestrator.Audit.Stage,
+# ...), as ECS recommends: ECS names are lower case, so these can't clash with a future ECS
+# field. Maps that are a source's own data (Falco's leftover output fields under Sensor.Fields,
+# the audit event's request and response bodies and annotations) keep their keys.
 data_dir: /var/lib/vector
 
 sources:
