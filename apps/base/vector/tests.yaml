@@ -2365,6 +2365,34 @@ tests:
               assert!(get!(., ["source.port"]) == null)
               assert_eq!(get!(., ["event.reason"]), "user does not exist [uid: 0, name: admin]")
 
+  - name: Forgejo failed login as the journal has it (no console prefix, port 0)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Failed authentication attempt for hirednoobs from 192.168.50.140:0: user's password is invalid [uid: 1, name: HiredNoobs]",
+            "timestamp": "2026-10-14T18:46:37Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "forgejo.service", "SYSLOG_IDENTIFIER": "forgejo", "PRIORITY": "4",
+            "CODE_FILE": "routers/web/auth/auth.go", "CODE_LINE": "220", "CODE_FUNC": "SignInPost"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "forgejo.log")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["user.name"]), "hirednoobs")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert!(get!(., ["source.port"]) == null)
+              assert_eq!(get!(., ["event.reason"]), "user's password is invalid [uid: 1, name: HiredNoobs]")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.origin.file.name"]), "routers/web/auth/auth.go")
+              assert_eq!(get!(., ["log.origin.function"]), "SignInPost")
+
   - name: Forgejo failed login straight to it (with a port)
     inputs:
       - insert_at: journald

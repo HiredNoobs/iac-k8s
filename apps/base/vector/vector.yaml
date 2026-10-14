@@ -1126,35 +1126,39 @@ transforms:
           if m.user != "" { ."user.name" = m.user }
         }
       } else if unit == "forgejo.service" {
-        # "<date> <file>:<line>:<function>() [<L>] <message>".
+        # Under systemd the journal has the message alone (the code and level are the entry's
+        # CODE_* and PRIORITY); its console format adds "<date> <file>:<line>:<function>() [<L>] ".
         %dataset = "forgejo.log"
         %provider = "forgejo"
+        text = msg
         line, err = parse_regex(msg, r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (?P<file>[^:\s]+):(?P<line>\d+):(?P<func>[^\s(]+)\(\) \[(?P<level>[TDIWECF])\] (?P<message>.*)$')
         if err == null {
           ."log.origin.file.name" = line.file
           ."log.origin.file.line" = to_int(line.line) ?? null
           ."log.origin.function" = line.func
           ."log.level" = get!({"T": "debug", "D": "debug", "I": "info", "W": "warning", "E": "error", "C": "critical", "F": "critical"}, [line.level])
-          # A failed web login: the address is the client's, with a port when it came straight
-          # rather than through a proxy.
-          fail, err = parse_regex(string!(line.message), r'^Failed authentication attempt for (?P<user>.*?) from (?P<addr>\S+?): (?P<reason>.*)$')
-          if err == null {
-            ."event.category" = ["authentication"]
-            ."event.type" = ["start"]
-            ."event.action" = "password-login"
-            ."event.outcome" = "failure"
-            ."event.reason" = fail.reason
-            if fail.user != "" { ."user.name" = fail.user }
-            addr, err = parse_regex(string!(fail.addr), r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
-            if err == null {
-              ."source.ip" = addr.ip
-              ."source.port" = to_int(addr.port) ?? null
-            } else {
-              ."source.ip" = fail.addr
-            }
-          }
+          text = string!(line.message)
         } else if match(msg, r'^\d{4}/\d\d/\d\d ') {
           %mismatch = "a dated line without Forgejo's <file>:<line>:<function>() [<L>]"
+        }
+        # A failed web login: the client's address, with its port when it came straight rather
+        # than through a proxy (a port of 0 is none).
+        fail, err = parse_regex(text, r'^Failed authentication attempt for (?P<user>.*?) from (?P<addr>\S+?): (?P<reason>.*)$')
+        if err == null {
+          ."event.category" = ["authentication"]
+          ."event.type" = ["start"]
+          ."event.action" = "password-login"
+          ."event.outcome" = "failure"
+          ."event.reason" = fail.reason
+          if fail.user != "" { ."user.name" = fail.user }
+          addr, err = parse_regex(string!(fail.addr), r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+          if err == null {
+            ."source.ip" = addr.ip
+            port = to_int(addr.port) ?? 0
+            if port > 0 { ."source.port" = port }
+          } else {
+            ."source.ip" = fail.addr
+          }
         }
       }
 
