@@ -1,0 +1,15 @@
+# Kubernetes events (Pulled, BackOff, FailedMount, Flux's reconciliations, ...) into VictoriaLogs.
+# The API server keeps them for an hour; kubectl watches them and prints each one, as it's
+# created or updated (a repeat raises its count), as a JSON line on stdout, where Vector reads it
+# like any pod's log and maps it (event.dataset kubernetes.event, apps/base/vector).
+#
+# --watch-only: no replay of the existing events when it starts. The API server ends a watch
+# after 30 to 60 minutes, so kubectl exits and the container restarts: events in those few
+# seconds are missed (a repeat of one comes through with its count).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kubectl
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - deployment.yaml

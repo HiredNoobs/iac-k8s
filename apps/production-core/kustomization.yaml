@@ -13,6 +13,7 @@ resources:
   - ../base/node-exporter
   - ../base/rsyslog
   - ../base/vector
+  - ../base/kubectl
   - ../base/falco
   - ../base/vaultwarden
   - ../base/mealie

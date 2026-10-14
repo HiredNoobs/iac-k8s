@@ -1,0 +1,59 @@
+# One watcher: two would log every event twice. The image is kubectl alone (no shell), so the
+# arguments are kubectl's. jsonpath={@} prints each event as one line of JSON.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: events
+  labels:
+    app.kubernetes.io/name: kubectl
+    app.kubernetes.io/component: events
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubectl
+      app.kubernetes.io/component: events
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubectl
+        app.kubernetes.io/component: events
+    spec:
+      serviceAccountName: events
+      # The image runs as root by default; kubectl needs no user of its own.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: events
+          image: registry.k8s.io/kubectl:v1.37.1@sha256:b7cab618e281b1ee7484e7b706a96e2135fbb6e072c2a573a7dab4e87d7f2385
+          args:
+            - get
+            - events
+            - --all-namespaces
+            - --watch-only
+            - --output=jsonpath={@}{"\n"}
+            # Its discovery cache, on the writable /tmp.
+            - --cache-dir=/tmp/kube-cache
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
