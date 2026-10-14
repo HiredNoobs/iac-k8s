@@ -1819,3 +1819,137 @@ tests:
               assert_eq!(get!(., ["Orchestrator.Audit.ImpersonatedUser.Groups"]), ["system:serviceaccounts"])
               assert!(!exists(.impersonatedUser))
               assert!(!exists(.objectRef))
+
+  - name: Kubernetes event from the kubelet, repeated
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"apiVersion\":\"v1\",\"count\":5,\"firstTimestamp\":\"2026-10-14T09:00:00Z\",\"involvedObject\":{\"apiVersion\":\"v1\",\"fieldPath\":\"spec.containers{app}\",\"kind\":\"Pod\",\"name\":\"app-7d9f-x2\",\"namespace\":\"homepage\",\"resourceVersion\":\"812\",\"uid\":\"p-1\"},\"kind\":\"Event\",\"lastTimestamp\":\"2026-10-14T09:04:00Z\",\"message\":\"Back-off restarting failed container app in pod app-7d9f-x2_homepage(p-1)\",\"metadata\":{\"creationTimestamp\":\"2026-10-14T09:00:00Z\",\"name\":\"app-7d9f-x2.17fe1\",\"namespace\":\"homepage\",\"resourceVersion\":\"990\",\"uid\":\"e-1\"},\"reason\":\"BackOff\",\"reportingComponent\":\"kubelet\",\"reportingInstance\":\"worker-3\",\"source\":{\"component\":\"kubelet\",\"host\":\"worker-3\"},\"type\":\"Warning\"}",
+            "timestamp": t'2026-10-14T09:04:00.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "kubernetes.event")
+              assert_eq!(get!(., ["event.provider"]), "kubelet")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(._msg, "Back-off restarting failed container app in pod app-7d9f-x2_homepage(p-1)")
+              # When it last happened.
+              assert_eq!(._time, t'2026-10-14T09:04:00Z')
+              assert_eq!(get!(., ["event.start"]), "2026-10-14T09:00:00Z")
+              assert_eq!(get!(., ["event.end"]), "2026-10-14T09:04:00Z")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["event.reason"]), "BackOff")
+              assert_eq!(get!(., ["event.id"]), "e-1")
+              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "pod")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "app-7d9f-x2")
+              assert_eq!(get!(., ["orchestrator.namespace"]), "homepage")
+              assert_eq!(get!(., ["orchestrator.resource.id"]), "p-1")
+              assert_eq!(get!(., ["orchestrator.api_version"]), "v1")
+              assert_eq!(get!(., ["container.name"]), "app")
+              assert_eq!(get!(., ["Orchestrator.Event.Count"]), 5)
+              assert_eq!(get!(., ["Orchestrator.Resource.ResourceVersion"]), "812")
+              # The node it happened on, not kubectl's.
+              assert_eq!(get!(., ["host.hostname"]), "worker-3")
+              assert_eq!(get!(., ["host.name"]), "worker-3.hirednoobs.com")
+              assert_eq!(.kubernetes.node.name, "worker-1")
+              for_each(["apiVersion", "kind", "metadata", "involvedObject", "reason", "type", "source", "firstTimestamp", "lastTimestamp", "count", "reportingComponent", "reportingInstance"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert!(!exists(."Orchestrator.Resource.FieldPath"))
+
+  - name: Kubernetes event from the scheduler (events.k8s.io's fields)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"action\":\"Binding\",\"apiVersion\":\"v1\",\"eventTime\":\"2026-10-14T09:00:00.123456Z\",\"firstTimestamp\":null,\"involvedObject\":{\"apiVersion\":\"v1\",\"kind\":\"Pod\",\"name\":\"app-7d9f-x2\",\"namespace\":\"homepage\",\"uid\":\"p-1\"},\"kind\":\"Event\",\"lastTimestamp\":null,\"message\":\"Successfully assigned homepage/app-7d9f-x2 to worker-3\",\"metadata\":{\"name\":\"app-7d9f-x2.17fe0\",\"namespace\":\"homepage\",\"uid\":\"e-2\"},\"reason\":\"Scheduled\",\"reportingComponent\":\"default-scheduler\",\"reportingInstance\":\"default-scheduler-cp-1\",\"source\":{},\"type\":\"Normal\"}",
+            "timestamp": t'2026-10-14T09:00:00.300Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "default-scheduler")
+              assert_eq!(get!(., ["event.action"]), "Binding")
+              assert_eq!(get!(., ["event.reason"]), "Scheduled")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(._time, t'2026-10-14T09:00:00.123456Z')
+              assert_eq!(get!(., ["event.start"]), "2026-10-14T09:00:00.123456Z")
+              assert!(get!(., ["event.end"]) == null)
+              assert!(get!(., ["Orchestrator.Event.Count"]) == null)
+              assert_eq!(get!(., ["Orchestrator.Event.ReportingInstance"]), "default-scheduler-cp-1")
+              # Not a kubelet's: no node of its own, and not kubectl's.
+              assert!(get!(., ["host.hostname"]) == null)
+              assert!(get!(., ["host.name"]) == null)
+
+  - name: Kubernetes event from Flux, with its annotations
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"apiVersion\":\"v1\",\"count\":1,\"firstTimestamp\":\"2026-10-14T09:00:00Z\",\"involvedObject\":{\"apiVersion\":\"kustomize.toolkit.fluxcd.io/v1\",\"kind\":\"Kustomization\",\"name\":\"apps\",\"namespace\":\"flux-system\",\"uid\":\"k-1\"},\"kind\":\"Event\",\"lastTimestamp\":\"2026-10-14T09:00:00Z\",\"message\":\"Reconciliation finished in 2.1s, next run in 10m0s\",\"metadata\":{\"annotations\":{\"kustomize.toolkit.fluxcd.io/revision\":\"master@sha1:e24edef\"},\"name\":\"apps.17fe2\",\"namespace\":\"flux-system\",\"uid\":\"e-3\"},\"reason\":\"ReconciliationSucceeded\",\"reportingComponent\":\"kustomize-controller\",\"source\":{\"component\":\"kustomize-controller\"},\"type\":\"Normal\"}",
+            "timestamp": t'2026-10-14T09:00:00.300Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "kustomize-controller")
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "kustomization")
+              assert_eq!(get!(., ["orchestrator.api_version"]), "kustomize.toolkit.fluxcd.io/v1")
+              assert_eq!(get!(., ["Orchestrator.Event.Annotations"]), {"kustomize.toolkit.fluxcd.io/revision": "master@sha1:e24edef"})
+              assert_eq!(get!(., ["Orchestrator.Event.Name"]), "apps.17fe2")
+              assert!(get!(., ["container.name"]) == null)
+              assert!(get!(., ["host.hostname"]) == null)
+
+  - name: kubectl's own message isn't an event
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "error: watch closed before UntilWithoutRetry timeout",
+            "timestamp": t'2026-10-14T09:30:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "kubectl.log")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["host.hostname"]), "worker-1")
+              assert!(get!(., ["orchestrator.type"]) == null)
+
+  - name: "format mismatch: JSON from kubectl that isn't an event"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"kind\":\"Status\",\"message\":\"too old resource version\"}",
+            "timestamp": t'2026-10-14T09:30:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "kubectl.log")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
