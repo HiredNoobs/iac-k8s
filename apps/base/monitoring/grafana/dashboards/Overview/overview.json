@@ -1680,7 +1680,7 @@
       "type": "timeseries",
       "title": "Syslog events per second",
       "id": 23,
-      "description": "Syslog received by rsyslog (rsyslog.hirednoobs.com) per sending host.\n\nIn VictoriaLogs: `kubernetes.namespace:\"\" hostname:<host>`. Test the path: `logger -n 192.168.111.104 -P 514 -d test`",
+      "description": "Syslog received by rsyslog (rsyslog.hirednoobs.com) per sending host (the hostname in the message; host.ip is the address it came from).\n\nIn VictoriaLogs: `{event.dataset=\"syslog.log\"} host.hostname:<host>`. Test the path: `logger -n 192.168.111.104 -P 514 -d test`",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -1700,8 +1700,8 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "kubernetes.namespace:\"\" | stats by (hostname) rate() as eps",
-          "legendFormat": "{{hostname}}"
+          "expr": "{event.dataset=\"syslog.log\"} | stats by (host.hostname) rate() as eps",
+          "legendFormat": "{{host.hostname}}"
         }
       ],
       "fieldConfig": {
