@@ -1019,7 +1019,7 @@
       "type": "timeseries",
       "title": "Requests by status",
       "id": 20,
-      "description": "Requests through the Gateway to the backends, by status class.\n\nLogs: `kubectl -n envoy-gateway logs -l gateway.envoyproxy.io/owning-gateway-name=public -c envoy --tail=50`, or in VictoriaLogs: `kubernetes.pod_namespace:envoy-gateway kubernetes.container_name:envoy`",
+      "description": "Requests through the Gateway to the backends, by status class.\n\nLogs: `kubectl -n envoy-gateway logs -l gateway.envoyproxy.io/owning-gateway-name=public -c envoy --tail=50`, or in VictoriaLogs: `kubernetes.namespace:envoy-gateway kubernetes.container.name:envoy`",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1075,7 +1075,7 @@
       "type": "timeseries",
       "title": "Busiest routes",
       "id": 21,
-      "description": "Requests per second per backend (Envoy's cluster names: <kind>/<namespace>/<name>/rule/<n>).\n\nLogs: `kubectl -n envoy-gateway logs -l gateway.envoyproxy.io/owning-gateway-name=public -c envoy --tail=50`, or in VictoriaLogs: `kubernetes.pod_namespace:envoy-gateway kubernetes.container_name:envoy`",
+      "description": "Requests per second per backend (Envoy's cluster names: <kind>/<namespace>/<name>/rule/<n>).\n\nLogs: `kubectl -n envoy-gateway logs -l gateway.envoyproxy.io/owning-gateway-name=public -c envoy --tail=50`, or in VictoriaLogs: `kubernetes.namespace:envoy-gateway kubernetes.container.name:envoy`",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1680,7 +1680,7 @@
       "type": "timeseries",
       "title": "Syslog events per second",
       "id": 23,
-      "description": "Syslog received by rsyslog (rsyslog.hirednoobs.com) per sending host.\n\nIn VictoriaLogs: `kubernetes.pod_namespace:\"\" hostname:<host>`. Test the path: `logger -n 192.168.111.104 -P 514 -d test`",
+      "description": "Syslog received by rsyslog (rsyslog.hirednoobs.com) per sending host.\n\nIn VictoriaLogs: `kubernetes.namespace:\"\" hostname:<host>`. Test the path: `logger -n 192.168.111.104 -P 514 -d test`",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -1700,7 +1700,7 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "kubernetes.pod_namespace:\"\" | stats by (hostname) rate() as eps",
+          "expr": "kubernetes.namespace:\"\" | stats by (hostname) rate() as eps",
           "legendFormat": "{{hostname}}"
         }
       ],
@@ -1737,7 +1737,7 @@
       "type": "timeseries",
       "title": "Pod log lines per second",
       "id": 24,
-      "description": "Container log lines collected by Vector, per namespace. Explore them in VictoriaLogs: `{kubernetes.pod_namespace=\"<ns>\"}` for a namespace's stream.\n\nCLI: `kubectl -n <ns> logs <pod> [-c <container>] --tail=100`",
+      "description": "Container log lines collected by Vector, per namespace. Explore them in VictoriaLogs: `{kubernetes.namespace=\"<ns>\"}` for a namespace's stream.\n\nCLI: `kubectl -n <ns> logs <pod> [-c <container>] --tail=100`",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -1757,8 +1757,8 @@
           },
           "editorMode": "code",
           "queryType": "statsRange",
-          "expr": "kubernetes.pod_namespace:* | stats by (kubernetes.pod_namespace) rate() as lps",
-          "legendFormat": "{{kubernetes.pod_namespace}}"
+          "expr": "kubernetes.namespace:* | stats by (kubernetes.namespace) rate() as lps",
+          "legendFormat": "{{kubernetes.namespace}}"
         }
       ],
       "fieldConfig": {

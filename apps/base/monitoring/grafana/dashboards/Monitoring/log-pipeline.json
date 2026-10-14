@@ -251,7 +251,7 @@
           },
           "editorMode": "code",
           "queryType": "stats",
-          "expr": "_time:$__range {event.kind=\"event\"} kubernetes.pod_namespace:* | stats count() if (tags:generic) as generic, count() as lines | math generic / lines * 100 as share | fields share"
+          "expr": "_time:$__range {event.kind=\"event\"} kubernetes.namespace:* | stats count() if (tags:generic) as generic, count() as lines | math generic / lines * 100 as share | fields share"
         }
       ],
       "fieldConfig": {

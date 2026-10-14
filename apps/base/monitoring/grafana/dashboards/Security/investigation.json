@@ -154,7 +154,7 @@
       "type": "logs",
       "title": "Events",
       "id": 50,
-      "description": "Every pod log line and audit event with this client (source.ip) or user (user.name), whatever its source: the Gateway, Authelia, Vaultwarden, lldap, the Kubernetes API, ... The source is in brackets (event.dataset). The prx-999 hosts' journals aren't normalised yet: they're further down.",
+      "description": "Every pod log line and audit event with this client (source.ip, or client.ip for a connection Falco saw) or user (user.name), whatever its source: the Gateway, Authelia, Vaultwarden, lldap, the Kubernetes API, Falco, ... The source is in brackets (event.dataset). The prx-999 hosts' journals aren't normalised yet: they're further down.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -174,7 +174,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "(source.ip:* or user.name:*) source.ip:~\"^${ip}$\" user.name:~\"^${user}$\" -url.path:~\"^/static/\" | format \"[<event.dataset>] <_msg>\" as _msg",
+          "expr": "(source.ip:* or client.ip:* or user.name:*) (source.ip:~\"^${ip}$\" or client.ip:~\"^${ip}$\") user.name:~\"^${user}$\" -url.path:~\"^/static/\" | format \"[<event.dataset>] <_msg>\" as _msg",
           "maxLines": 500
         }
       ],
@@ -568,7 +568,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{event.dataset=\"lldap.bootstrap\"} (event.category:=iam or log.level:=warning) user.name:~\"^${user}$\"",
+          "expr": "{event.dataset=\"lldap.bootstrap\"} (event.category:iam or log.level:=warning) user.name:~\"^${user}$\"",
           "maxLines": 500
         }
       ],
