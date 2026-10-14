@@ -1673,7 +1673,7 @@ tests:
       - insert_at: events
         type: vrl
         source: |
-          . = {"message": "{\"auditID\":\"a1\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x?resourceVersion=0\",\"userAgent\":\"kubectl/v1.37.0\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"objectRef\":{\"resource\":\"secrets\",\"namespace\":\"default\",\"name\":\"x\"},\"responseStatus\":{\"metadata\":{},\"code\":200},\"requestReceivedTimestamp\":\"2026-10-13T11:59:59.990000Z\",\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+          . = {"message": "{\"kind\":\"Event\",\"apiVersion\":\"audit.k8s.io/v1\",\"level\":\"Metadata\",\"auditID\":\"a1\",\"stage\":\"ResponseComplete\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x?resourceVersion=0\",\"userAgent\":\"kubectl/v1.37.0\",\"user\":{\"username\":\"admin\",\"uid\":\"u-1\",\"groups\":[\"system:masters\",\"system:authenticated\"],\"extra\":{\"authentication.kubernetes.io/credential-id\":[\"X509SHA256=ab\"]}},\"sourceIPs\":[\"192.168.111.254\"],\"objectRef\":{\"resource\":\"secrets\",\"namespace\":\"default\",\"name\":\"x\",\"apiVersion\":\"v1\"},\"responseStatus\":{\"metadata\":{},\"code\":200},\"requestReceivedTimestamp\":\"2026-10-13T11:59:59.990000Z\",\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\",\"annotations\":{\"authorization.k8s.io/decision\":\"allow\",\"authorization.k8s.io/reason\":\"\"}}"}
     outputs:
       - extract_from: final
         conditions:
@@ -1689,34 +1689,50 @@ tests:
               assert_eq!(get!(., ["url.query"]), "resourceVersion=0")
               assert_eq!(get!(., ["http.response.status_code"]), 200)
               assert!(!exists(."error.message"))
-              for_each(["auditID", "requestURI", "requestReceivedTimestamp", "stageTimestamp", "responseStatus"]) -> |_i, k| {
-                assert!(get!(., [k]) == null, "still there: " + k)
-              }
-              assert_eq!(.objectRef, {"resource": "secrets", "namespace": "default", "name": "x"})
-              assert!(!exists(.source))
-              assert!(!exists(.node))
-              assert!(!exists(.remote_ip))
-              # The event's copies of the ECS fields below.
-              assert!(!exists(.sourceIPs))
-              assert!(!exists(.verb))
-              assert!(!exists(.userAgent))
-              assert!(!exists(.user))
               assert_eq!(get!(., ["event.dataset"]), "kubernetes.audit")
               assert_eq!(get!(., ["event.provider"]), "kube-apiserver")
+              assert_eq!(get!(., ["ecs.version"]), "9.5.0")
+              assert!(is_timestamp(get!(., ["event.created"])))
               assert_eq!(get!(., ["host.hostname"]), "cp-1")
               assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
               assert_eq!(get!(., ["source.ip"]), "192.168.111.254")
+              assert_eq!(get!(., ["client.ip"]), "192.168.111.254")
+              assert_eq!(get!(., ["related.ip"]), ["192.168.111.254"])
               assert_eq!(get!(., ["user.name"]), "admin")
+              assert_eq!(get!(., ["user.id"]), "u-1")
+              assert_eq!(get!(., ["related.user"]), ["admin", "u-1"])
+              assert_eq!(get!(., ["user.group.name"]), ["system:masters", "system:authenticated"])
               assert_eq!(get!(., ["user_agent.original"]), "kubectl/v1.37.0")
               assert_eq!(get!(., ["event.action"]), "get")
+              # The authorizer's decision, as Elastic's.
               assert_eq!(get!(., ["event.outcome"]), "success")
+              # The object, as Elastic's.
+              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "secrets")
+              assert_eq!(get!(., ["orchestrator.namespace"]), "default")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "x")
+              assert_eq!(get!(., ["orchestrator.api_version"]), "v1")
+              # The rest, capitalised; Kubernetes' own maps keep their keys.
+              assert_eq!(get!(., ["Orchestrator.Audit.Level"]), "Metadata")
+              assert_eq!(get!(., ["Orchestrator.Audit.Stage"]), "ResponseComplete")
+              assert_eq!(get!(., ["Orchestrator.Audit.Annotations"]), {"authorization.k8s.io/decision": "allow", "authorization.k8s.io/reason": ""})
+              assert_eq!(get!(., ["Orchestrator.Audit.UserExtra"]), {"authentication.kubernetes.io/credential-id": ["X509SHA256=ab"]})
+              # Moved, or the audit event's own type.
+              for_each(["auditID", "requestURI", "requestReceivedTimestamp", "stageTimestamp", "responseStatus", "objectRef", "sourceIPs", "verb", "userAgent", "user", "kind", "apiVersion", "level", "stage", "annotations"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              # Every field is ECS, VictoriaLogs' own or capitalised.
+              for_each(keys(.)) -> |_i, k| {
+                assert!(starts_with(k, "_") || match(k, r'^[A-Z]') || includes(["ecs", "event", "url", "http", "host", "source", "client", "related", "user", "user_agent", "orchestrator"], split(k, ".")[0]), "not ECS: " + k)
+              }
+              assert!(!exists(.objectRef))
 
   - name: audit event, refused
     inputs:
       - insert_at: events
         type: vrl
         source: |
-          . = {"message": "{\"auditID\":\"a2\",\"verb\":\"list\",\"requestURI\":\"/api/v1/secrets\",\"user\":{\"username\":\"system:serviceaccount:default:x\"},\"sourceIPs\":[\"10.244.2.9\"],\"responseStatus\":{\"code\":403},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+          . = {"message": "{\"auditID\":\"a2\",\"verb\":\"list\",\"requestURI\":\"/api/v1/secrets\",\"user\":{\"username\":\"system:serviceaccount:default:x\"},\"sourceIPs\":[\"10.244.2.9\"],\"objectRef\":{\"resource\":\"secrets\",\"apiVersion\":\"v1\"},\"responseStatus\":{\"code\":403},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\",\"annotations\":{\"authorization.k8s.io/decision\":\"forbid\",\"authorization.k8s.io/reason\":\"\"}}"}
     outputs:
       - extract_from: final
         conditions:
@@ -1726,13 +1742,14 @@ tests:
               assert_eq!(get!(., ["user.name"]), "system:serviceaccount:default:x")
               assert!(!exists(.user.username))
               assert_eq!(get!(., ["http.response.status_code"]), 403)
+              assert!(get!(., ["orchestrator.namespace"]) == null)
 
   - name: audit event refused by Pod Security
     inputs:
       - insert_at: events
         type: vrl
         source: |
-          . = {"message": "{\"auditID\":\"a6\",\"verb\":\"create\",\"requestURI\":\"/api/v1/namespaces/vaultwarden/pods\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"responseStatus\":{\"metadata\":{},\"status\":\"Failure\",\"message\":\"pods \\\"debug\\\" is forbidden: violates PodSecurity \\\"restricted:latest\\\"\",\"reason\":\"Forbidden\",\"code\":403},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+          . = {"message": "{\"auditID\":\"a6\",\"verb\":\"create\",\"requestURI\":\"/api/v1/namespaces/vaultwarden/pods\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"objectRef\":{\"resource\":\"pods\",\"namespace\":\"vaultwarden\",\"name\":\"debug\",\"apiVersion\":\"v1\"},\"requestObject\":{\"kind\":\"Pod\",\"spec\":{\"hostNetwork\":true,\"containers\":[{\"name\":\"debug\",\"image\":\"busybox\"}]}},\"responseStatus\":{\"metadata\":{},\"status\":\"Failure\",\"message\":\"pods \\\"debug\\\" is forbidden: violates PodSecurity \\\"restricted:latest\\\"\",\"reason\":\"Forbidden\",\"code\":403},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\",\"annotations\":{\"authorization.k8s.io/decision\":\"allow\"}}"}
     outputs:
       - extract_from: final
         conditions:
@@ -1740,8 +1757,14 @@ tests:
             source: |
               assert_eq!(get!(., ["error.message"]), "pods \"debug\" is forbidden: violates PodSecurity \"restricted:latest\"")
               assert_eq!(get!(., ["http.response.status_code"]), 403)
+              # RBAC allowed it; Pod Security refused it afterwards.
+              assert_eq!(get!(., ["event.outcome"]), "success")
               # Its status and reason have no ECS field.
-              assert_eq!(.responseStatus, {"metadata": {}, "status": "Failure", "reason": "Forbidden"})
+              assert_eq!(get!(., ["Orchestrator.Audit.ResponseStatus.Status"]), "Failure")
+              assert_eq!(get!(., ["Orchestrator.Audit.ResponseStatus.Reason"]), "Forbidden")
+              assert!(get!(., ["Orchestrator.Audit.ResponseStatus.Metadata"]) == null)
+              # The request body keeps its keys.
+              assert_eq!(get!(., ["Orchestrator.Audit.RequestObject"]), {"kind": "Pod", "spec": {"hostNetwork": true, "containers": [{"name": "debug", "image": "busybox"}]}})
 
   - name: audit event through a proxy keeps sourceIPs
     inputs:
@@ -1755,5 +1778,30 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
-              assert_eq!(.sourceIPs, ["192.168.50.140", "10.244.0.1"])
-              assert_eq!(.user, {"groups": ["system:masters"]})
+              assert_eq!(get!(., ["Orchestrator.Audit.SourceIPs"]), ["192.168.50.140", "10.244.0.1"])
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.140", "10.244.0.1"])
+              assert!(!exists(.sourceIPs))
+              assert!(!exists(.user))
+              # No decision annotation: no outcome.
+              assert!(get!(., ["event.outcome"]) == null)
+
+  - name: audit event on a subresource of a grouped API, impersonated
+    inputs:
+      - insert_at: events
+        type: vrl
+        source: |
+          . = {"message": "{\"auditID\":\"a7\",\"verb\":\"update\",\"requestURI\":\"/apis/apps/v1/namespaces/homepage/deployments/homepage/scale\",\"user\":{\"username\":\"admin\"},\"impersonatedUser\":{\"username\":\"system:serviceaccount:homepage:default\",\"groups\":[\"system:serviceaccounts\"]},\"sourceIPs\":[\"192.168.111.254\"],\"objectRef\":{\"resource\":\"deployments\",\"namespace\":\"homepage\",\"name\":\"homepage\",\"uid\":\"d-1\",\"apiGroup\":\"apps\",\"apiVersion\":\"v1\",\"subresource\":\"scale\",\"resourceVersion\":\"42\"},\"responseStatus\":{\"code\":200},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["orchestrator.api_version"]), "apps/v1")
+              assert_eq!(get!(., ["orchestrator.resource.id"]), "d-1")
+              assert_eq!(get!(., ["Orchestrator.Resource.ApiGroup"]), "apps")
+              assert_eq!(get!(., ["Orchestrator.Resource.Subresource"]), "scale")
+              assert_eq!(get!(., ["Orchestrator.Resource.ResourceVersion"]), "42")
+              assert_eq!(get!(., ["Orchestrator.Audit.ImpersonatedUser.Username"]), "system:serviceaccount:homepage:default")
+              assert_eq!(get!(., ["Orchestrator.Audit.ImpersonatedUser.Groups"]), ["system:serviceaccounts"])
+              assert!(!exists(.impersonatedUser))
+              assert!(!exists(.objectRef))

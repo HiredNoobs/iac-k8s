@@ -910,8 +910,15 @@ transforms:
       ."user.name" = .user.username
       ."user_agent.original" = .userAgent
       ."event.action" = .verb
+      # As Elastic's Kubernetes audit integration: whether the authorizer allowed it (a request
+      # it allowed can still be refused later, e.g. by Pod Security: http.response.status_code).
+      decision = get!(.annotations, ["authorization.k8s.io/decision"])
+      if decision == "allow" {
+        ."event.outcome" = "success"
+      } else if decision == "forbid" {
+        ."event.outcome" = "failure"
+      }
       status = to_int(.responseStatus.code) ?? 0
-      ."event.outcome" = if status == 0 { "unknown" } else if status < 400 { "success" } else { "failure" }
       if status > 0 { ."http.response.status_code" = status }
       # Why it was refused (e.g. Pod Security's "violates PodSecurity ...").
       if is_string(.responseStatus.message) { ."error.message" = .responseStatus.message }
@@ -924,16 +931,66 @@ transforms:
         ."url.path" = parts[0]
         if length(parts) > 1 { ."url.query" = parts[1] }
       }
-      # The event's own copies of those. sourceIPs stays when it has more than the client (a
-      # proxy's chain).
-      del(.verb)
-      del(.userAgent)
-      del(.user.username)
-      if .user == {} { del(.user) }
-      if length(array(.sourceIPs) ?? []) == 1 { del(.sourceIPs) }
-      if status > 0 { del(.responseStatus.code) }
-      del(.responseStatus.message)
-      if .responseStatus == {} || .responseStatus == {"metadata": {}} { del(.responseStatus) }
+      ips = array(.sourceIPs) ?? []
+      if ips != [] { ."client.ip" = ips[0]; ."related.ip" = ips }
+      if is_string(.user.uid) { ."user.id" = .user.uid }
+      if is_array(.user.groups) { ."user.group.name" = .user.groups }
+      # The object, as Elastic's: its resource (pods, secrets, ...), namespace and name, and
+      # orchestrator.api_version the resource's API (rbac.authorization.k8s.io/v1, v1), not the
+      # audit event's own.
+      ."orchestrator.type" = "kubernetes"
+      ref = object(.objectRef) ?? {}
+      if is_string(ref.resource) { ."orchestrator.resource.type" = ref.resource }
+      if is_string(ref.namespace) { ."orchestrator.namespace" = ref.namespace }
+      if is_string(ref.name) { ."orchestrator.resource.name" = ref.name }
+      if is_string(ref.uid) { ."orchestrator.resource.id" = ref.uid }
+      if is_string(ref.apiVersion) {
+        group = string(ref.apiGroup) ?? ""
+        ."orchestrator.api_version" = if group == "" { ref.apiVersion } else { group + "/" + string!(ref.apiVersion) }
+      }
+
+      # The rest has no ECS field: under Orchestrator.Resource (the object's) and
+      # Orchestrator.Audit (the event's), the event's names capitalised. The objects that are
+      # Kubernetes' own data (the request and response bodies, annotations, user extras) keep
+      # their keys.
+      for_each(ref) -> |key, value| {
+        if !includes(["resource", "namespace", "name", "uid", "apiVersion"], key) {
+          . = set!(., ["Orchestrator.Resource." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+      user = object(.user) ?? {}
+      for_each(user) -> |key, value| {
+        if key == "extra" {
+          ."Orchestrator.Audit.UserExtra" = value
+        } else if !includes(["username", "uid", "groups"], key) {
+          . = set!(., ["Orchestrator.Audit.User." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+      response = object(.responseStatus) ?? {}
+      for_each(response) -> |key, value| {
+        if !includes(["code", "message"], key) && value != {} {
+          . = set!(., ["Orchestrator.Audit.ResponseStatus." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+      impersonated = object(.impersonatedUser) ?? {}
+      for_each(impersonated) -> |key, value| {
+        name = if key == "extra" { "Extra" } else { upcase(slice!(key, 0, 1)) + slice!(key, 1) }
+        . = set!(., ["Orchestrator.Audit.ImpersonatedUser." + name], value)
+      }
+      # sourceIPs when it has more than the client (a proxy's chain).
+      if length(ips) > 1 { ."Orchestrator.Audit.SourceIPs" = ips }
+      # The audit event's own type (Event, audit.k8s.io/v1) says nothing.
+      del(.kind)
+      del(.apiVersion)
+      for_each(["verb", "userAgent", "user", "sourceIPs", "objectRef", "responseStatus", "impersonatedUser"]) -> |_i, key| {
+        . = remove!(., [key])
+      }
+      for_each(.) -> |key, value| {
+        if !starts_with(key, "_") && !contains(key, ".") {
+          . = remove!(., [key])
+          . = set!(., ["Orchestrator.Audit." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
 
   # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
   # the audit log that can't be read is worth seeing.
