@@ -1,5 +1,5 @@
-# rsyslog: receives syslog from the LAN (UDP/TCP 514) and forwards it to VictoriaLogs. Stateless,
-# messages are queued in memory while VictoriaLogs is unreachable. Two replicas on different
+# rsyslog: receives syslog from the LAN (UDP/TCP 514) and relays it to Vector. Stateless, messages
+# are queued in memory while Vector is unreachable. Two replicas on different
 # Proxmox hosts (zones): with externalTrafficPolicy: Local only the pod on the node announcing .104
 # receives, the other is a standby for when that host goes.
 apiVersion: apps/v1
