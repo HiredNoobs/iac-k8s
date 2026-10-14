@@ -40,7 +40,7 @@ groups:
           description: >-
             An SSH login to a prx-999 VM that didn't come from mgmt (nor git over SSH, nor you
             into mgmt from the LAN): someone moving between machines with a key they found.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             Who: the key's fingerprint is in the line (Ssh.Signature). Check ~/.ssh/authorized_keys
             on that VM and what the session did (sudo lines, the user's shell history).
@@ -65,7 +65,7 @@ groups:
           description: >-
             Repeated failed SSH logins (unknown users, wrong keys): guessing, usually stopped by
             fail2ban after three.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             The users tried are in the events (user.name). fail2ban-client status sshd on the VM
             shows bans.
@@ -111,7 +111,7 @@ groups:
           description: >-
             sudo refused (not allowed, or a wrong password): someone on the VM trying to become
             root.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             Who was logged in then (sshd.log). Trigger: sudo -u nobody sudo true, and
             Enter at the three password prompts (with -n sudo stops before logging anything).

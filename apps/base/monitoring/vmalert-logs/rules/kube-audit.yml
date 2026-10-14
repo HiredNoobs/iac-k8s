@@ -38,7 +38,7 @@ groups:
           description: >-
             kubectl exec, attach or port-forward into a pod: a shell or a tunnel inside a
             workload. Normal for debugging, so this asks "was this you?".
-          tested: "2026-10-13"
+          tested: "2026-10-14"
           runbook: >-
             The command is in the event's url.query (command=...). If it wasn't you, look at
             the user's other requests in the audit log and the client in Investigation.
@@ -62,7 +62,7 @@ groups:
           description: >-
             Secrets read through the API by someone other than the controllers deployed from git:
             a person with kubectl, or a service account looking for credentials.
-          tested: "2026-10-13"
+          tested: "2026-10-14"
           runbook: >-
             Which Secrets: orchestrator.resource.name in the events (a list has none). A service
             account reading Secrets it doesn't use means its pod is compromised or
@@ -118,7 +118,7 @@ groups:
           description: >-
             A workload created, changed or deleted by a person or an unexpected service account
             rather than Flux: a restart by hand, or something deploying its own containers.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             A service account doing this is the worrying case: check its pod. Flux reverts
             changes to objects it manages at the next reconcile, not ones it doesn't know.
@@ -167,7 +167,7 @@ groups:
             A pod the namespace's Pod Security level doesn't allow (privileged, host access, root)
             was refused: an attempt to get onto the node, or a workload changed without its
             namespace's level.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             error.message has what was refused. Trigger: kubectl -n homepage run
             siem-test --image=busybox:1.37 --privileged (refused, nothing runs).
@@ -188,7 +188,7 @@ groups:
           description: >-
             One identity refused again and again: something probing what its credentials can
             reach (often a stolen service account token), or a misconfigured app.
-          tested: "2026-10-13"
+          tested: "2026-10-14"
           runbook: >-
             The resources it tried are in its events (orchestrator.*). Trigger: kubectl auth
             can-i --list --as=system:serviceaccount:homepage:default, then a loop of kubectl

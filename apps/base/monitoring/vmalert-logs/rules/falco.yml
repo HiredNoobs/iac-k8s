@@ -41,7 +41,7 @@ groups:
             Falco saw something in a running container or on the node that its rule
             "{{ $labels.rule }}" ({{ $labels.level }}) flags: what it did is in the event
             (process, file, connection).
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             The events: {event.dataset="falco.alert"} rule.name:="{{ $labels.rule }}" in
             VictoriaLogs (process.command_line, process.parent.name, file.path,
