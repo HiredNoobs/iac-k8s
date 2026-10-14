@@ -252,7 +252,7 @@ groups:
           description: >-
             Repeated wrong passwords on git.hirednoobs.com: guessing, or a client with an old
             password or token.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             The usernames tried are in the events (user.name). Trigger: five wrong passwords at
             https://git.hirednoobs.com/user/login.
