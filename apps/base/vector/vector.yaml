@@ -335,6 +335,9 @@ transforms:
       %dataset = "authelia.log"
       if !exists(.level) { %mismatch = "not Authelia's JSON (no level)" }
       if is_string(.remote_ip) { ."source.ip" = del(.remote_ip) }
+      # The response's status (a request that timed out: 408).
+      status = to_int(.status_code) ?? -1
+      if .status_code != null && status > 0 { ."http.response.status_code" = status; del(.status_code) }
       msg = string(._msg) ?? ""
 
       login, err = parse_regex(msg, r'^Unsuccessful (?P<factor>1FA|TOTP|WebAuthn|Duo) authentication attempt by user \'(?P<user>[^\']*)\'(?P<banned> and they are banned)?')

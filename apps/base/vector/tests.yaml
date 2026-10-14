@@ -596,6 +596,27 @@ tests:
               assert_eq!(get!(., ["event.reason"]), "unknown user")
               assert_eq!(get!(., ["event.outcome"]), "failure")
 
+  - name: Authelia request timeout (its own status_code)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"method\":\"GET\",\"path\":\"/\",\"remote_ip\":\"10.244.10.27\",\"status_code\":408,\"error\":\"read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout\",\"time\":\"2026-10-14T20:45:29Z\",\"msg\":\"Request timeout occurred while handling request from client.\"}",
+            "timestamp": t'2026-10-14T20:45:29.600Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia", "pod_node_name": "worker-2"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["http.response.status_code"]), 408)
+              assert!(!exists(.status_code))
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(get!(., ["url.path"]), "/")
+              assert_eq!(get!(., ["error.message"]), "read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout")
+
   - name: Authelia access decision (the sample line)
     inputs:
       - insert_at: pods
