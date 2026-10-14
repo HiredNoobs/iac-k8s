@@ -2,7 +2,8 @@
 # planes kube-apiserver's audit log (/var/log/audit/kube, as its own user, 65534). Root with only
 # CAP_DAC_READ_SEARCH: it can read those files and write its read positions and buffer to the
 # node (/var/lib/vector), nothing else. Its service account reads pods, namespaces and nodes
-# (rbac.yaml) for the logs' metadata.
+# (rbac.yaml) for the logs' metadata. Any node's Vector also takes the LAN's syslog from rsyslog
+# and the prx-999 VMs' journals from the Gateway (service.yaml).
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -55,6 +56,10 @@ spec:
             - name: syslog
               containerPort: 5514
               protocol: TCP
+            # The prx-999 VMs' journals, through the Gateway (journald-route.yaml).
+            - name: journald
+              containerPort: 8686
+              protocol: TCP
           securityContext:
             runAsUser: 0
             runAsGroup: 0
@@ -84,6 +89,9 @@ spec:
             - name: tls
               mountPath: /etc/vector/tls
               readOnly: true
+            - name: journald-tls
+              mountPath: /etc/vector/journald-tls
+              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -106,3 +114,6 @@ spec:
         - name: tls
           secret:
             secretName: vector-tls
+        - name: journald-tls
+          secret:
+            secretName: vector-journald-tls

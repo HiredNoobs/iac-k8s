@@ -2,8 +2,9 @@
 # log lines with their namespace, pod, container and labels; kube-apiserver's audit log
 # (event.dataset kubernetes.audit) for the security detections
 # (apps/base/monitoring/vmalert-logs/rules/kube-audit.yml), what gets audited being the audit
-# policy in iac-homelab (terraform/modules/talos-cluster/audit-policy.yaml); and the LAN's syslog,
-# relayed by rsyslog (apps/base/rsyslog) to service.yaml.
+# policy in iac-homelab (terraform/modules/talos-cluster/audit-policy.yaml); the LAN's syslog,
+# relayed by rsyslog (apps/base/rsyslog) to service.yaml; and the prx-999 VMs' journals, sent by
+# their own Vector (iac-homelab's vector role) through journald-route.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: vector
@@ -13,6 +14,8 @@ resources:
   - rbac.yaml
   - daemonset.yaml
   - service.yaml
+  - journald-certificate.yaml
+  - journald-route.yaml
 # A change rolls the pods (the name gets a hash). tests.yaml is for CI only.
 configMapGenerator:
   - name: vector

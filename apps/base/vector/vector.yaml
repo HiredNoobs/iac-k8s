@@ -39,6 +39,11 @@
 # host.ip its address), log.syslog.*, process.name/pid, log.level from the severity. A line
 # that isn't syslog is kept as a pipeline_error.
 #
+# The prx-999 VMs' journals, from their own Vector through the Gateway: event.dataset
+# journald.log, or the parsed units' own (vault.audit, vault.log, sshd.log, sudo.log,
+# forgejo.log), the VM as host.* (host.ip the address it came from), process.*, log.syslog.*,
+# log.level from the priority, the unit as Systemd.Unit.
+#
 # Each source with an Elastic integration (Envoy, Falco, CoreDNS, the audit log) is mapped as it
 # maps it, unless noted. The level is the exception: log.level is always one vocabulary.
 #
@@ -81,6 +86,24 @@ sources:
       codec: json
     framing:
       method: newline_delimited
+  # The prx-999 VMs' journals, from the Vector on each VM (iac-homelab's vector role) through the
+  # Gateway (journald-route.yaml, only the VMs' addresses): each entry as the journald source
+  # gives it, with event.created (when that Vector read it), newline-delimited JSON. Envoy's
+  # X-Forwarded-For ends with the VM's own address. TLS from Envoy (journald-certificate.yaml).
+  journald_relay:
+    type: http_server
+    address: 0.0.0.0:8686
+    path: /journald
+    method: POST
+    headers: ["X-Forwarded-For"]
+    decoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    tls:
+      enabled: true
+      crt_file: /etc/vector/journald-tls/tls.crt
+      key_file: /etc/vector/journald-tls/tls.key
   # Vector's own metrics (lines read, sent, errors), scraped by vmagent's pods job.
   internal:
     type: internal_metrics
@@ -845,7 +868,7 @@ transforms:
       } else {
         ._msg = s.message
         if is_integer(s.version) {
-          ."log.syslog.version" = to_string!(s.version)
+          ."log.syslog.version" = to_string(s.version)
           ._time = s.timestamp
         }
         severities = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"]
@@ -884,12 +907,255 @@ transforms:
         if is_string(s.msgid) { ."log.syslog.msgid" = s.msgid }
         # Anything else is RFC 5424 structured data: {<SD-ID>: {<name>: <value>}}.
         sd = {}
-        for_each(object!(s)) -> |key, value| {
+        for_each(s) -> |key, value| {
           if !includes(["message", "hostname", "appname", "procid", "msgid", "facility", "severity", "timestamp", "version"], key) {
             sd = set!(sd, [key], value)
           }
         }
         if sd != {} { ."log.syslog.structured_data" = sd }
+      }
+
+  # The VMs' journal entries. ECS fields where there's one (further than Elastic's journald input,
+  # which keeps most under its own journald.*): the process (_PID, _COMM, _EXE, _CMDLINE, _UID,
+  # _GID), the host (_HOSTNAME, _MACHINE_ID, _BOOT_ID; host.ip the address it came from), the
+  # code (CODE_*), log.syslog.* (SYSLOG_*; PRIORITY is the severity, not syslog's priority). The
+  # unit and transport as Systemd.Unit/Systemd.Transport, the journal's other fields as
+  # Systemd.Journal.<Name> (its bookkeeping, the cursor and monotonic times, dropped). Then the
+  # units with a parser: Vault (its audit log, vault.audit, as Elastic's HashiCorp Vault
+  # integration; its own lines, vault.log), sshd and sudo (as Elastic's system auth logs) and
+  # Forgejo; the rest is journald.log.
+  journald:
+    type: remap
+    inputs: [journald_relay]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      j = .
+      %dataset = "journald.log"
+      # When it was logged (@timestamp: the listener stamps timestamp with when it arrived).
+      t = parse_timestamp(string(get!(j, ["@timestamp"])) ?? "", "%+") ?? (parse_timestamp(string(j.timestamp) ?? "", "%+") ?? now())
+      . = {"_msg": string(j.message) ?? "", "_time": t}
+      created = parse_timestamp(string(get!(j, ["event.created"])) ?? "", "%+") ?? null
+      ."event.created" = if created != null { created } else { now() }
+      # The address Envoy saw: the last in X-Forwarded-For.
+      forwarded = split(string(get!(j, ["X-Forwarded-For"])) ?? "", ",")
+      sender = strip_whitespace(string(forwarded[-1]) ?? "")
+      if sender != "" { ."host.ip" = sender }
+      hostname = string(get!(j, ["_HOSTNAME"])) ?? (string(j.host) ?? "")
+      if hostname != "" { %host = hostname }
+
+      for_each({
+        "_PID": "process.pid", "_COMM": "process.name", "_EXE": "process.executable",
+        "_CMDLINE": "process.command_line", "_UID": "process.user.id", "_GID": "process.group.id",
+        "_MACHINE_ID": "host.id", "_BOOT_ID": "host.boot.id",
+        "CODE_FILE": "log.origin.file.name", "CODE_LINE": "log.origin.file.line", "CODE_FUNC": "log.origin.function",
+        "SYSLOG_IDENTIFIER": "log.syslog.appname", "SYSLOG_PID": "log.syslog.procid",
+        "_SYSTEMD_UNIT": "Systemd.Unit", "_TRANSPORT": "Systemd.Transport",
+      }) -> |from, to| {
+        x = get!(j, [from])
+        if x != null {
+          if includes(["process.pid", "log.origin.file.line"], to) { x = to_int(x) ?? x }
+          . = set!(., [to], x)
+        }
+      }
+      severities = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational", "Debug"]
+      levels = ["critical", "critical", "critical", "error", "warning", "notice", "info", "debug"]
+      facilities = ["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"]
+      sev = to_int(get!(j, ["PRIORITY"])) ?? -1
+      if get!(j, ["PRIORITY"]) == null { sev = -1 }
+      if sev >= 0 && sev <= 7 {
+        ."log.syslog.severity.code" = sev
+        ."log.syslog.severity.name" = get!(severities, [sev])
+        ."log.level" = get!(levels, [sev])
+      }
+      fac = to_int(get!(j, ["SYSLOG_FACILITY"])) ?? -1
+      if get!(j, ["SYSLOG_FACILITY"]) == null { fac = -1 }
+      if fac >= 0 && fac <= 23 {
+        ."log.syslog.facility.code" = fac
+        ."log.syslog.facility.name" = get!(facilities, [fac])
+        if sev >= 0 && sev <= 7 { ."log.syslog.priority" = fac * 8 + sev }
+      }
+      # The rest of the journal's fields, as Systemd.Journal.<Name> (_SYSTEMD_INVOCATION_ID is
+      # Systemd.Journal.SystemdInvocationId).
+      for_each(j) -> |key, value| {
+        if !includes(["message", "timestamp", "@timestamp", "host", "source_type", "path", "X-Forwarded-For", "event.created", "MESSAGE", "PRIORITY", "SYSLOG_FACILITY", "_HOSTNAME", "_PID", "_COMM", "_EXE", "_CMDLINE", "_UID", "_GID", "_MACHINE_ID", "_BOOT_ID", "CODE_FILE", "CODE_LINE", "CODE_FUNC", "SYSLOG_IDENTIFIER", "SYSLOG_PID", "_SYSTEMD_UNIT", "_TRANSPORT", "__CURSOR", "__MONOTONIC_TIMESTAMP", "__REALTIME_TIMESTAMP", "__SEQNUM", "__SEQNUM_ID", "_SOURCE_REALTIME_TIMESTAMP", "_SOURCE_MONOTONIC_TIMESTAMP", "_STREAM_ID"], key) {
+          parts = filter(split(downcase(key), "_")) -> |_i, p| { p != "" }
+          name = join!(map_values(parts) -> |p| { s = string!(p); upcase(slice!(s, 0, 1)) + slice!(s, 1) })
+          if name != "" { . = set!(., ["Systemd.Journal." + name], value) }
+        }
+      }
+
+      unit = string(get!(j, ["_SYSTEMD_UNIT"])) ?? ""
+      ident = string(get!(j, ["SYSLOG_IDENTIFIER"])) ?? ""
+      provider = ident
+      if provider == "" { provider = string(get!(j, ["_COMM"])) ?? "" }
+      if provider == "" { provider = replace(unit, r'\.service$', "") }
+      if provider != "" { %provider = provider }
+      msg = ._msg
+
+      if unit == "vault.service" {
+        %provider = "vault"
+        audit, err = parse_json(msg)
+        if err == null && is_object(audit) && is_string(audit.type) {
+          # Vault's audit device (stdout): one JSON object per request and per response, secrets
+          # and tokens HMAC'd. As Elastic's integration, plus user.name/roles from the token.
+          %dataset = "vault.audit"
+          a = object!(audit)
+          op = string(a.request.operation) ?? ""
+          path = string(a.request.path) ?? ""
+          name = string(a.auth.display_name) ?? ""
+          ."event.category" = ["authentication"]
+          ."event.type" = if op == "delete" { ["info", "end"] } else if includes(["read", "list", "create"], op) { ["info", "start"] } else { ["info"] }
+          if op != "" { ."event.action" = op }
+          if is_string(a.request.id) { ."event.id" = a.request.id }
+          if is_string(a.request.remote_address) { ."source.ip" = a.request.remote_address }
+          if a.request.remote_port != null { ."source.port" = to_int(a.request.remote_port) ?? null }
+          if name != "" { ."user.name" = name }
+          if is_array(a.auth.policies) { ."user.roles" = a.auth.policies }
+          if is_string(a.auth.metadata.email) { ."user.email" = a.auth.metadata.email }
+          # A wrong userpass password is only in the response's data.
+          problem = string(a.error) ?? ""
+          if problem == "" { problem = string(a.response.data.error) ?? "" }
+          if problem != "" { ."error.message" = problem }
+          if a.type == "response" { ."event.outcome" = if problem == "" { "success" } else { "failure" } }
+          vt = parse_timestamp(string(a.time) ?? "", "%+") ?? null
+          if vt != null { ._time = vt }
+          by = if name != "" { "by " + name } else { "" }
+          failed = if problem != "" { "failed: " + problem } else { "" }
+          ._msg = join!(compact([string(a.type) ?? "", op, path, by, failed]), " ")
+          # The rest as Secrets.Audit.*, Vault's names capitalised; the request's and response's
+          # data and the token's metadata (the secrets' own keys) keep theirs.
+          keep = {}
+          for_each([["request", "data"], ["response", "data"], ["auth", "metadata"]]) -> |_i, p| {
+            v = get!(a, p)
+            if v != null {
+              keep = set!(keep, [join(map_values(p) -> |s| { upcase(slice!(s, 0, 1)) + slice!(s, 1) }, ".")], v)
+              a = remove!(a, p)
+            }
+          }
+          a = remove!(a, ["time"])
+          renamed = map_keys(a, recursive: true) -> |k| {
+            join(map_values(split(k, "_")) -> |p| { if p == "" { "" } else { upcase(slice!(p, 0, 1)) + slice!(p, 1) } })
+          }
+          for_each(renamed) -> |k, v| { . = set!(., ["Secrets.Audit." + k], v) }
+          for_each(keep) -> |k, v| { . = set!(., ["Secrets.Audit." + k], v) }
+        } else {
+          # Vault's own lines: "<time> [LEVEL]  <logger>: <message>".
+          %dataset = "vault.log"
+          line, err = parse_regex(msg, r'^\S+ \[(?P<level>[A-Z]+)\]\s+(?:(?P<logger>[^:\s]+): )?')
+          if err == null {
+            l = downcase(string!(line.level))
+            ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+            if line.logger != null { ."log.logger" = line.logger }
+          }
+        }
+      } else if includes(["sshd", "sshd-session"], ident) {
+        # As Elastic's system auth logs: logins and their failures as ssh_login with an outcome.
+        %dataset = "sshd.log"
+        %provider = "sshd"
+        login = null
+        m, err = parse_regex(msg, r'^(?P<event>Accepted|Failed) (?P<method>\S+) for (?:invalid user )?(?P<user>\S*) from (?P<ip>\S+) port (?P<port>\d+)(?: ssh2(?:: (?P<signature>.*))?)?$')
+        if err == null {
+          login = {"user": m.user, "ip": m.ip, "port": m.port, "ok": m.event == "Accepted"}
+          ."Ssh.Method" = m.method
+          if m.signature != null { ."Ssh.Signature" = m.signature }
+          if m.event == "Failed" { ."event.reason" = "failed " + string!(m.method) }
+        }
+        m, err = parse_regex(msg, r'^Invalid user (?P<user>\S*) from (?P<ip>\S+) port (?P<port>\d+)')
+        if err == null {
+          login = {"user": m.user, "ip": m.ip, "port": m.port, "ok": false}
+          ."event.reason" = "invalid user"
+        }
+        # A failed key: only this line (an invalid user's close repeats its Invalid user line).
+        m, err = parse_regex(msg, r'^Connection closed by authenticating user (?P<user>\S*) (?P<ip>\S+) port (?P<port>\d+) \[preauth\]')
+        if err == null {
+          login = {"user": m.user, "ip": m.ip, "port": m.port, "ok": false}
+          ."event.reason" = "closed before authentication"
+        }
+        # PAM's own line for a wrong password, as Elastic's: an authentication_failure, beside
+        # the Failed password line's ssh_login.
+        m, err = parse_regex(msg, r'authentication failure;.*\brhost=(?P<ip>\S+)(?:\s+user=(?P<user>\S+))?')
+        if err == null {
+          ."event.category" = ["authentication"]
+          ."event.action" = "authentication_failure"
+          ."event.outcome" = "failure"
+          ."source.ip" = m.ip
+          if m.user != null && m.user != "" { ."user.name" = m.user }
+        }
+        if login != null {
+          ."event.category" = ["authentication"]
+          ."event.type" = ["start"]
+          ."event.action" = "ssh_login"
+          ."event.outcome" = if login.ok == true { "success" } else { "failure" }
+          if is_string(login.user) && login.user != "" { ."user.name" = login.user }
+          ."source.ip" = login.ip
+          if login.port != null { ."source.port" = to_int(login.port) ?? null }
+        }
+      } else if ident == "sudo" {
+        # As Elastic's system auth logs: "<user> : [<error> ; ]TTY=... ; PWD=... ; USER=... ;
+        # COMMAND=...". The command started is the process, sudo itself its parent.
+        %dataset = "sudo.log"
+        m, err = parse_regex(msg, r'^\s*(?P<user>\S+) : (?:(?P<error>[^;=]+?) ; )?(?:TTY=(?P<tty>\S+) ; )?PWD=(?P<pwd>.*?) ; USER=(?P<target>\S+) ; COMMAND=(?P<command>.*)$')
+        if err == null {
+          for_each(["pid", "name", "executable", "command_line"]) -> |_i, f| {
+            v = get!(., ["process." + f])
+            if v != null {
+              . = set!(., ["process.parent." + f], v)
+              . = remove!(., ["process." + f])
+            }
+          }
+          ."event.category" = ["process"]
+          ."event.type" = ["start"]
+          ."user.name" = m.user
+          ."user.effective.name" = m.target
+          ."process.command_line" = m.command
+          ."process.working_directory" = m.pwd
+          if m.tty != null { ."Terminal.Name" = m.tty }
+          if m.error != null {
+            ."event.outcome" = "failure"
+            ."error.message" = m.error
+          } else {
+            ."event.outcome" = "success"
+          }
+        }
+        m, err = parse_regex(msg, r'^pam_unix\(sudo:auth\): authentication failure;.*\bruser=(?P<user>\S*)')
+        if err == null {
+          ."event.category" = ["authentication"]
+          ."event.action" = "authentication_failure"
+          ."event.outcome" = "failure"
+          if m.user != "" { ."user.name" = m.user }
+        }
+      } else if unit == "forgejo.service" {
+        # "<date> <file>:<line>:<function>() [<L>] <message>".
+        %dataset = "forgejo.log"
+        %provider = "forgejo"
+        line, err = parse_regex(msg, r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (?P<file>[^:\s]+):(?P<line>\d+):(?P<func>[^\s(]+)\(\) \[(?P<level>[TDIWECF])\] (?P<message>.*)$')
+        if err == null {
+          ."log.origin.file.name" = line.file
+          ."log.origin.file.line" = to_int(line.line) ?? null
+          ."log.origin.function" = line.func
+          ."log.level" = get!({"T": "debug", "D": "debug", "I": "info", "W": "warning", "E": "error", "C": "critical", "F": "critical"}, [line.level])
+          # A failed web login: the address is the client's, with a port when it came straight
+          # rather than through a proxy.
+          fail, err = parse_regex(string!(line.message), r'^Failed authentication attempt for (?P<user>.*?) from (?P<addr>\S+?): (?P<reason>.*)$')
+          if err == null {
+            ."event.category" = ["authentication"]
+            ."event.type" = ["start"]
+            ."event.action" = "password-login"
+            ."event.outcome" = "failure"
+            ."event.reason" = fail.reason
+            if fail.user != "" { ."user.name" = fail.user }
+            addr, err = parse_regex(string!(fail.addr), r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+            if err == null {
+              ."source.ip" = addr.ip
+              ."source.port" = to_int(addr.port) ?? null
+            } else {
+              ."source.ip" = fail.addr
+            }
+          }
+        } else if match(msg, r'^\d{4}/\d\d/\d\d ') {
+          %mismatch = "a dated line without Forgejo's <file>:<line>:<function>() [<L>]"
+        }
       }
 
   # A line one of the remaps above failed on (a runtime error: none is expected, VRL makes every
@@ -898,7 +1164,7 @@ transforms:
   # come here, so a line can't claim to be one.
   unparsed:
     type: remap
-    inputs: [pods.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped]
+    inputs: [pods.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, journald.dropped]
     source: |
       dropped = object(.metadata.dropped) ?? {}
       . = remove!(., ["metadata", "dropped"])
@@ -929,6 +1195,20 @@ transforms:
           "host.ip": .fromhost_ip,
         }
         %dataset = "syslog.log"
+      } else if component == "journald" {
+        # As the VM's Vector sent it: the message, its time, the VM.
+        forwarded = split(string(get!(., ["X-Forwarded-For"])) ?? "", ",")
+        sender = strip_whitespace(string(forwarded[-1]) ?? "")
+        hostname = string(get!(., ["_HOSTNAME"])) ?? ""
+        . = {
+          "_msg": .message,
+          "_time": get!(., ["@timestamp"]) || .timestamp,
+          "event.created": now(),
+          "Systemd.Unit": get!(., ["_SYSTEMD_UNIT"]),
+        }
+        if sender != "" { ."host.ip" = sender }
+        if hostname != "" { %host = hostname }
+        %dataset = "journald.log"
       } else if component != "" {
         %dataset = component + ".log"
       }
@@ -940,7 +1220,7 @@ transforms:
   # found in metadata (%dataset, %provider, %kind, %mismatch, %error_*), which a line can't set.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, ghostunnel, kubectl, syslog, unparsed]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, ghostunnel, kubectl, syslog, journald, unparsed]
     source: |
       # event.kind: pipeline_error for a line a remap failed on (remap_error) or one that looked
       # like its source's format but didn't parse (format_mismatch), the reason in error.message;
