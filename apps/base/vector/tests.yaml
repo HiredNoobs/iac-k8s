@@ -369,6 +369,8 @@ tests:
               assert_eq!(get!(., ["event.type"]), ["access"])
               assert_eq!(get!(., ["network.protocol"]), "http")
               assert_eq!(get!(., ["Proxy.RouteName"]), "httproute/authelia/authelia/rule/0/match/0/auth_hirednoobs_com")
+              # No upstream time header: none, not 0.
+              assert!(get!(., ["Proxy.UpstreamServiceTime"]) == null)
               assert_eq!(get!(., ["event.start"]), "2026-10-13T08:00:00.000Z")
               assert_eq!(get!(., ["http.version"]), "2")
               # Moved to their ECS or Proxy.* fields, or only "-" or null.

@@ -267,7 +267,8 @@ transforms:
         # event.duration.
         flags = string(get!(., ["Proxy.ResponseFlags"])) ?? null
         if flags != null { ."Proxy.ResponseFlags" = split!(flags, ",") }
-        upstream_ms = to_int(get!(., ["Proxy.UpstreamServiceTime"])) ?? -1
+        upstream = get!(., ["Proxy.UpstreamServiceTime"])
+        upstream_ms = if upstream != null { to_int(upstream) ?? -1 } else { -1 }
         if upstream_ms >= 0 { ."Proxy.UpstreamServiceTime" = upstream_ms * 1000000 }
         # Envoy's own names for the upstream connection: Proxy.RouteName and destination.* say
         # where the request went, and the local side is this pod.
