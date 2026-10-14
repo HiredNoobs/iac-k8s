@@ -202,6 +202,41 @@ tests:
               assert_eq!(get!(., ["log.level"]), "info")
               assert!(!exists(.level))
 
+  - name: a generic line's provider is its image's name
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"msg\":\"artifact up-to-date\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "flux-system", "pod_name": "source-controller-1", "container_name": "manager", "container_image": "ghcr.io/fluxcd/source-controller:v1.9.6@sha256:0123abcd", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "source-controller")
+              assert_eq!(get!(., ["event.dataset"]), "flux-system.manager")
+
+  - name: an image with a registry port and no tag
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "hello",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "main", "container_image": "registry.local:5000/team/my-app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "my-app")
+
   - name: a level that isn't a string stays where it is
     inputs:
       - insert_at: pods
@@ -325,7 +360,10 @@ tests:
               }
               assert_eq!(.upstream_host, "10.244.3.7:9091")
               assert_eq!(.response_flags, "-")
-              assert_eq!(.start_time, "2026-10-13T08:00:00.000Z")
+              assert_eq!(get!(., ["event.start"]), "2026-10-13T08:00:00.000Z")
+              assert_eq!(get!(., ["http.version"]), "2")
+              assert!(!exists(.start_time))
+              assert!(!exists(.protocol))
 
   - name: Envoy access log line as it arrives (strings, "-")
     inputs:
@@ -353,6 +391,13 @@ tests:
               assert_eq!(get!(., ["url.query"]), "os=ugospro")
               assert_eq!(get!(., ["host.hostname"]), "prx-003-srv-prod-core-worker-001")
               assert_eq!(get!(., ["host.name"]), "prx-003-srv-prod-core-worker-001.hirednoobs.com")
+              assert_eq!(get!(., ["http.version"]), "1.1")
+              assert_eq!(get!(., ["tls.client.server_name"]), "nas.hirednoobs.com")
+              assert_eq!(get!(., ["event.start"]), "2026-10-13T12:08:05.863Z")
+              assert!(!exists(.requested_server_name))
+              # No ECS field for these.
+              assert_eq!(.upstream_host, "192.168.111.6:9999")
+              assert_eq!(get!(., ["x-forwarded-for"]), "10.244.6.37")
 
   - name: Envoy access log line, IPv6 client, no response sent
     inputs:
@@ -506,7 +551,31 @@ tests:
               assert_eq!(get!(., ["url.domain"]), "victoriametrics.hirednoobs.com")
               assert_eq!(get!(., ["url.path"]), "/")
               assert_eq!(get!(., ["http.response.status_code"]), 302)
+              assert_eq!(get!(., ["http.request.method"]), "GET")
               assert!(!exists(."user.name"))
+              # The check request's copies.
+              assert!(!exists(.method))
+              assert!(!exists(.path))
+
+  - name: Authelia access decision whose own request isn't the check request keeps it
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"method\":\"POST\",\"msg\":\"Access to https://grafana.hirednoobs.com/x (method GET) is not authorized to user <anonymous>, responding with status code 401\",\"path\":\"/somewhere/else\",\"remote_ip\":\"10.244.6.37\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(get!(., ["url.path"]), "/x")
+              assert_eq!(.method, "POST")
+              assert_eq!(.path, "/somewhere/else")
 
   - name: Falco alert, ECS fields
     inputs:
@@ -529,6 +598,7 @@ tests:
               assert_eq!(get!(., ["log.level"]), "notice")
               assert_eq!(get!(., ["threat.tactic.name"]), "execution")
               assert_eq!(get!(., ["threat.technique.id"]), "T1059")
+              assert_eq!(get!(., ["event.category"]), ["process"])
               assert_eq!(get!(., ["process.name"]), "sh")
               assert_eq!(get!(., ["process.command_line"]), "sh -i")
               assert_eq!(get!(., ["process.executable"]), "/bin/sh")
@@ -543,9 +613,79 @@ tests:
               assert_eq!(get!(., ["orchestrator.resource.name"]), "shell-pod")
               assert!(!exists(.priority))
               assert!(!exists(.rule))
-              assert_eq!(.source, "syscall")
+              assert_eq!(get!(., ["event.module"]), "syscall")
+              assert!(!exists(.source))
               # Only what has no ECS field stays in output_fields, <NA>s included.
               assert_eq!(.output_fields, {"fd.name": "<NA>"})
+
+  - name: Falco alert about a connection, with the parent process
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"Outbound connection\",\"priority\":\"Warning\",\"rule\":\"Unexpected outbound connection\",\"source\":\"syscall\",\"tags\":[\"T1041\",\"container\",\"network\",\"process\",\"mitre_exfiltration\"],\"time\":\"2026-10-13T08:20:41.123456789Z\",\"output_fields\":{\"proc.name\":\"curl\",\"proc.pname\":\"sh\",\"proc.ppid\":100,\"proc.pcmdline\":\"sh -c curl x\",\"container.id\":\"abc123\",\"container.image.tag\":\"1.37\",\"user.uid\":0,\"fd.cip\":\"10.244.3.9\",\"fd.cport\":40000,\"fd.sip\":\"203.0.113.5\",\"fd.sport\":443,\"evt.type\":\"connect\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco", "pod_node_name": "worker-2"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["process.parent.name"]), "sh")
+              assert_eq!(get!(., ["process.parent.pid"]), 100)
+              assert_eq!(get!(., ["process.parent.command_line"]), "sh -c curl x")
+              assert_eq!(get!(., ["container.id"]), "abc123")
+              assert_eq!(get!(., ["container.image.tag"]), "1.37")
+              assert_eq!(get!(., ["user.id"]), 0)
+              assert_eq!(get!(., ["source.ip"]), "10.244.3.9")
+              assert_eq!(get!(., ["source.port"]), 40000)
+              assert_eq!(get!(., ["destination.ip"]), "203.0.113.5")
+              assert_eq!(get!(., ["destination.port"]), 443)
+              assert_eq!(.output_fields, {"evt.type": "connect"})
+              assert_eq!(get!(., ["event.category"]), ["network", "process"])
+
+  - name: a JSON line's error and zap's caller
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"ts\":1760345309.948,\"caller\":\"controller/controller.go:316\",\"msg\":\"Reconciler error\",\"error\":\"context deadline exceeded\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "cert-manager", "pod_name": "cert-manager-1", "container_name": "cert-manager-controller", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["error.message"]), "context deadline exceeded")
+              assert_eq!(get!(., ["log.origin.file.name"]), "controller/controller.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 316)
+              assert!(!exists(.error))
+              assert!(!exists(.caller))
+              assert!(!exists(.level))
+
+  - name: an error that isn't a string stays
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"failed\",\"err\":{\"code\":5}}",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: ecs
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."error.message"))
+              assert_eq!(.err, {"code": 5})
 
   - name: Falco critical alert with a sub-technique and a two-word tactic
     inputs:
@@ -566,6 +706,7 @@ tests:
               assert_eq!(get!(., ["threat.tactic.name"]), "defense-evasion")
               assert_eq!(get!(., ["threat.technique.id"]), "T1036.005")
               assert!(!exists(."orchestrator.type"))
+              assert!(!exists(."event.category"))
 
   - name: Falco's own log line
     inputs:
@@ -1333,19 +1474,31 @@ tests:
             source: |
               assert_eq!(get!(., ["event.kind"]), "event")
 
-  - name: audit event (unchanged)
+  - name: audit event
     inputs:
       - insert_at: events
         type: vrl
         source: |
-          . = {"message": "{\"auditID\":\"a1\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x\",\"userAgent\":\"kubectl/v1.37.0\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"responseStatus\":{\"code\":200},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+          . = {"message": "{\"auditID\":\"a1\",\"verb\":\"get\",\"requestURI\":\"/api/v1/namespaces/default/secrets/x?resourceVersion=0\",\"userAgent\":\"kubectl/v1.37.0\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"objectRef\":{\"resource\":\"secrets\",\"namespace\":\"default\",\"name\":\"x\"},\"responseStatus\":{\"metadata\":{},\"code\":200},\"requestReceivedTimestamp\":\"2026-10-13T11:59:59.990000Z\",\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
     outputs:
       - extract_from: events
         conditions:
           - type: vrl
             source: |
-              assert_eq!(._msg, "get /api/v1/namespaces/default/secrets/x 200 by admin")
+              assert_eq!(._msg, "get /api/v1/namespaces/default/secrets/x?resourceVersion=0 200 by admin")
               assert_eq!(._time, "2026-10-13T12:00:00.000000Z")
+              assert_eq!(get!(., ["event.id"]), "a1")
+              assert_eq!(get!(., ["event.start"]), "2026-10-13T11:59:59.990000Z")
+              assert_eq!(get!(., ["event.end"]), "2026-10-13T12:00:00.000000Z")
+              assert_eq!(get!(., ["url.original"]), "/api/v1/namespaces/default/secrets/x?resourceVersion=0")
+              assert_eq!(get!(., ["url.path"]), "/api/v1/namespaces/default/secrets/x")
+              assert_eq!(get!(., ["url.query"]), "resourceVersion=0")
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              assert!(!exists(."error.message"))
+              for_each(["auditID", "requestURI", "requestReceivedTimestamp", "stageTimestamp", "responseStatus"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert_eq!(.objectRef, {"resource": "secrets", "namespace": "default", "name": "x"})
               assert!(!exists(.source))
               assert!(!exists(.node))
               assert!(!exists(.remote_ip))
@@ -1378,6 +1531,23 @@ tests:
               assert_eq!(get!(., ["event.outcome"]), "failure")
               assert_eq!(get!(., ["user.name"]), "system:serviceaccount:default:x")
               assert!(!exists(.user.username))
+              assert_eq!(get!(., ["http.response.status_code"]), 403)
+
+  - name: audit event refused by Pod Security
+    inputs:
+      - insert_at: events
+        type: vrl
+        source: |
+          . = {"message": "{\"auditID\":\"a6\",\"verb\":\"create\",\"requestURI\":\"/api/v1/namespaces/vaultwarden/pods\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"responseStatus\":{\"metadata\":{},\"status\":\"Failure\",\"message\":\"pods \\\"debug\\\" is forbidden: violates PodSecurity \\\"restricted:latest\\\"\",\"reason\":\"Forbidden\",\"code\":403},\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
+    outputs:
+      - extract_from: events
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.message"]), "pods \"debug\" is forbidden: violates PodSecurity \"restricted:latest\"")
+              assert_eq!(get!(., ["http.response.status_code"]), 403)
+              # Its status and reason have no ECS field.
+              assert_eq!(.responseStatus, {"metadata": {}, "status": "Failure", "reason": "Forbidden"})
 
   - name: audit event through a proxy keeps sourceIPs
     inputs:

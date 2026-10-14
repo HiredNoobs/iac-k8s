@@ -8,7 +8,8 @@
 # flat dotted keys, so they can't clash with an app's own field of the same top-level name (the
 # same field in VictoriaLogs either way):
 #   event.dataset   which source: its own name (envoy.access, ...) or <namespace>.<container>
-#   event.provider  what wrote it: the dataset's first part (envoy, ...) or the container
+#   event.provider  what wrote it: the dataset's first part (envoy, ...) or the image's name
+#                   (source-controller, ...), else the container's
 #   host.hostname   the node's hostname (its name)
 #   host.name       the node's FQDN, <hostname>.<NODE_DOMAIN> (daemonset.yaml)
 #   log.level       the app's level as debug, info, notice, warning, error or critical
@@ -19,18 +20,22 @@
 # kubernetes.pod_name, kubernetes.container_name.
 #
 # kube-apiserver's audit log, on the control planes: each event as one JSON line. The event's
-# fields stay as they are (nested ones become user.username, objectRef.resource,
-# responseStatus.code, ... in VictoriaLogs), plus:
+# own fields stay (nested ones become objectRef.resource, requestObject.spec..., ... in
+# VictoriaLogs), plus:
 #   _msg       "<verb> <requestURI> <code> by <user>", a summary to read in lists
 #   _time      when the response completed (stageTimestamp)
 # and the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
-# event.kind, host.hostname, host.name, source.ip (the client, sourceIPs[0]; sourceIPs itself is
-# an array, stored as JSON text), user.name, user_agent.original, event.action (the verb) and
-# event.outcome (from the response code). A line that isn't JSON is kept as a pipeline_error.
+# event.kind, host.hostname, host.name, source.ip (the client, sourceIPs[0]), user.name,
+# user_agent.original, event.action (the verb), event.outcome and http.response.status_code
+# (from the response code), error.message (the response's message), url.original, url.path and
+# url.query (requestURI), event.id (auditID), event.start and event.end (when it was received and
+# completed). A line that isn't JSON is kept as a pipeline_error.
 #
 # A source's own field that has an ECS field is dropped once it's been moved (Envoy's
 # downstream_remote_address, :authority, ...; Authelia's remote_ip; Falco's rule, priority and
-# output_fields with an ECS home). A value that doesn't parse stays where it was.
+# output_fields with an ECS home; the audit event's verb, requestURI, ...; a JSON line's level,
+# logger, error and zap's caller). A value that doesn't parse stays where it was, as does
+# sourceIPs when it has more than the client (a proxy's chain).
 data_dir: /var/lib/vector
 
 sources:
@@ -182,6 +187,14 @@ transforms:
         # ECS durations are in nanoseconds.
         ms = to_int(.duration) ?? -1
         if ms >= 0 { ."event.duration" = ms * 1000000; del(.duration) }
+        if is_string(.start_time) { ."event.start" = del(.start_time) }
+        # "HTTP/1.1", "HTTP/2": the version alone.
+        proto, err = parse_regex(string(.protocol) ?? "", r'^HTTP/(?P<version>[0-9.]+)$')
+        if err == null { ."http.version" = proto.version; del(.protocol) }
+        # The SNI the client asked for (the TLS connection's, not the request's site).
+        sni = string(.requested_server_name) ?? "-"
+        if sni != "-" && sni != "" { ."tls.client.server_name" = sni }
+        if exists(.requested_server_name) { del(.requested_server_name) }
       }
 
   # Authelia (JSON: level, msg, remote_ip, method, path). It logs failed logins, not successful
@@ -213,8 +226,9 @@ transforms:
         ."event.reason" = "unknown user"
         if unknown.user != "" { ."user.name" = unknown.user }
       }
-      # An access decision for a site behind Authelia: the site's URL, not Authelia's own path
-      # (method and path, which stay as they are on these lines).
+      # An access decision for a site behind Authelia: the site's URL and method. The line's own
+      # method and path are the proxy's check request to Authelia (its method, an authz
+      # endpoint), so they go when they're that; anything else stays.
       access, err = parse_regex(msg, r'^Access to (?P<url>\S+) \(method (?P<method>[A-Z]+)\) is not authorized to user (?P<user>.+?), responding with status code (?P<code>\d+)')
       if err == null {
         ."event.category" = "authentication"
@@ -226,6 +240,8 @@ transforms:
         ."http.request.method" = access.method
         ."http.response.status_code" = to_int(access.code) ?? null
         if access.user != "<anonymous>" { ."user.name" = access.user }
+        if .method == access.method { del(.method) }
+        if match(string(.path) ?? "", r'^/api/(authz/[a-z-]+|verify)/?$') { del(.path) }
       } else {
         if is_string(.method) { ."http.request.method" = del(.method) }
         if is_string(.path) { ."url.path" = del(.path) }
@@ -248,6 +264,8 @@ transforms:
         ."rule.name" = del(.rule)
         # The node, which host.hostname already is.
         del(.hostname)
+        # Falco's event source: syscall (its own drivers) or a source plugin's (k8saudit, ...).
+        if is_string(.source) { ."event.module" = del(.source) }
         p = downcase(string(.priority) ?? "")
         if is_string(.priority) { del(.priority) }
         ."log.level" = if includes(["emergency", "alert", "critical"], p) {
@@ -270,6 +288,14 @@ transforms:
         }
         if tactic != null { ."threat.tactic.name" = tactic }
         if technique != null { ."threat.technique.id" = technique }
+        # What kind of event, from the rule's tags: ECS categories, as many as it has (container
+        # and host say where, not what).
+        categories = []
+        for_each(array(.tags) ?? []) -> |_i, t| {
+          c = get!({"process": "process", "shell": "process", "filesystem": "file", "network": "network", "users": "iam", "k8s": "api"}, [string(t) ?? ""])
+          if c != null && !includes(categories, c) { categories = push(categories, c) }
+        }
+        if categories != [] { ."event.category" = categories }
         # The event's own fields (output_fields keys have dots in them). Each one with an ECS
         # field moves there; the rest (and <NA>s, Falco's "no value") stay in output_fields.
         f = object(.output_fields) ?? {}
@@ -283,6 +309,18 @@ transforms:
           "container.name": "container.name",
           "container.image.repository": "container.image.name",
           "fd.name": "file.path",
+          "proc.pname": "process.parent.name",
+          "proc.ppid": "process.parent.pid",
+          "proc.pcmdline": "process.parent.command_line",
+          "container.id": "container.id",
+          "container.image.tag": "container.image.tag",
+          "user.uid": "user.id",
+          # A connection: the client and the server end (fd.cip is the container's own address
+          # for an outbound one).
+          "fd.cip": "source.ip",
+          "fd.cport": "source.port",
+          "fd.sip": "destination.ip",
+          "fd.sport": "destination.port",
         }) -> |from, to| {
           x = get!(f, [from])
           if x != null && x != "<NA>" {
@@ -557,6 +595,11 @@ transforms:
       }
       if dataset == "" {
         dataset = (string(.kubernetes.pod_namespace) ?? "") + "." + (string(.kubernetes.container_name) ?? "")
+        # The software: the image's name without its registry, path, tag or digest
+        # (ghcr.io/fluxcd/source-controller:v1.9.6 is source-controller; containers are often
+        # named something generic like manager), else the container's name.
+        image, err = parse_regex(string(.kubernetes.container_image) ?? "", r'^(?:[^@]*/)?(?P<name>[^/:@]+)(?::[^/@]*)?(?:@\S+)?$')
+        if provider == "" && err == null { provider = image.name }
         if provider == "" { provider = string(.kubernetes.container_name) ?? "" }
       } else if provider == "" {
         provider = split(dataset, ".")[0]
@@ -625,6 +668,27 @@ transforms:
         }
       }
 
+      # The app's error, a JSON line's error or err (zap, logrus, Go's slog, Authelia). On a
+      # pipeline_error, error.message is Vector's reason, so the app's field stays as it is.
+      if kind != "pipeline_error" {
+        for_each(["error", "err"]) -> |_i, key| {
+          e = get!(., [key])
+          if !exists(."error.message") && is_string(e) && e != "" {
+            ."error.message" = e
+            . = remove!(., [key])
+          }
+        }
+      }
+      # Where it was logged from, zap JSON's caller ("<file>.go:<line>").
+      if !exists(."log.origin.file.name") && is_string(.caller) {
+        caller, err = parse_regex(string!(.caller), r'^(?P<file>[^\s:]+):(?P<line>\d+)$')
+        if err == null {
+          ."log.origin.file.name" = caller.file
+          ."log.origin.file.line" = to_int(caller.line) ?? null
+          del(.caller)
+        }
+      }
+
   events:
     type: remap
     inputs: [audit]
@@ -658,6 +722,18 @@ transforms:
       ."event.action" = .verb
       status = to_int(.responseStatus.code) ?? 0
       ."event.outcome" = if status == 0 { "unknown" } else if status < 400 { "success" } else { "failure" }
+      if status > 0 { ."http.response.status_code" = status }
+      # Why it was refused (e.g. Pod Security's "violates PodSecurity ...").
+      if is_string(.responseStatus.message) { ."error.message" = .responseStatus.message }
+      if .auditID != null { ."event.id" = del(.auditID) }
+      if .requestReceivedTimestamp != null { ."event.start" = del(.requestReceivedTimestamp) }
+      if .stageTimestamp != null { ."event.end" = del(.stageTimestamp) }
+      if is_string(.requestURI) {
+        ."url.original" = del(.requestURI)
+        parts = split(string!(."url.original"), "?", limit: 2)
+        ."url.path" = parts[0]
+        if length(parts) > 1 { ."url.query" = parts[1] }
+      }
       # The event's own copies of those. sourceIPs stays when it has more than the client (a
       # proxy's chain).
       del(.verb)
@@ -665,6 +741,9 @@ transforms:
       del(.user.username)
       if .user == {} { del(.user) }
       if length(array(.sourceIPs) ?? []) == 1 { del(.sourceIPs) }
+      if status > 0 { del(.responseStatus.code) }
+      del(.responseStatus.message)
+      if .responseStatus == {} || .responseStatus == {"metadata": {}} { del(.responseStatus) }
 
   # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
   # the audit log that can't be read is worth seeing.
