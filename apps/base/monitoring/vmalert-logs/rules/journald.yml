@@ -182,7 +182,7 @@ groups:
           description: >-
             A policy, auth method, role or user changed: who can read which secrets. Only
             terraform/vault (and you adding userpass users by hand) should do this.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             Compare with terraform/vault (a plan shows drift). Trigger: an apply of
             terraform/vault that changes something.

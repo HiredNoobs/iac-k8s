@@ -139,7 +139,7 @@ groups:
           description: >-
             A silence stops matching alerts reaching ntfy, which is how detections are quietly
             switched off.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             Check what the silence matches at https://alertmanager.hirednoobs.com/#/silences and
             expire it if it isn't yours. Trigger: create a short silence in the Alertmanager UI.
@@ -187,7 +187,7 @@ groups:
           description: >-
             A Grafana user was created, deleted, or had its role or admin flag changed. Grafana
             users aren't provisioned from git, so this is a change by hand.
-          tested: "2026-10-11"
+          tested: "2026-10-14"
           runbook: >-
             Check Administration -> Users in Grafana. Trigger: change a user's role (e.g.
             homepage's, Viewer -> Editor -> back) in Grafana.
