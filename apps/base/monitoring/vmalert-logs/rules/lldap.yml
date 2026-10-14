@@ -47,7 +47,7 @@ groups:
       - alert: LldapDirectoryDrift
         expr: >-
           {event.dataset="lldap.bootstrap"}
-          (event.category:=iam or log.level:=warning)
+          (event.category:iam or log.level:=warning)
           -(event.action:=removed-from-group
           group.name:in("lldap_admin", "lldap_password_manager", "admins"))
           | copy _msg as change

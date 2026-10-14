@@ -1,16 +1,19 @@
 # Falco's alerts (apps/base/falco), one JSON line each on its pods' stdout, collected by Vector:
 # event.dataset falco.alert (its own log lines are falco.log), with Vector's ECS fields
-# (apps/base/vector): rule.name, log.level (Falco's priority: Emergency, Alert and Critical are
-# critical), threat.tactic.name and threat.technique.id (the first mitre_<tactic> and T<id> in
-# its tags), host.hostname (the node), orchestrator.namespace and orchestrator.resource.name (the
-# pod), event.category (from the tags), event.module (Falco's event source, syscall), and
-# process.*, file.path, user.*, container.*, source.* and destination.* from output_fields.*
-# (what has no ECS field stays there).
+# (apps/base/vector, as Elastic's Falco integration): rule.name, log.level (Falco's priority:
+# Emergency, Alert and Critical are critical) and event.severity, threat.tactic.name (ATT&CK's
+# name, Privilege Escalation) and threat.technique.id / threat.technique.subtechnique.id (the
+# first mitre_<tactic> and T<id> in its tags), host.hostname (the node), orchestrator.namespace
+# and orchestrator.resource.name (the pod), event.category (from the tags), event.provider
+# (Falco's event source, syscall), and process.* (process.user.* is the process's user), file.*,
+# container.*, client.*/server.* (fd.cip/fd.sip) and source.*/destination.* (fd.lip/fd.rip)
+# from output_fields.* (what has no ECS field is Sensor.Fields.*).
 #
-# One alert for all of Falco's rules: its ATT&CK tactic and technique come from the event, its
-# severity from the level (critical stays critical, error and warning are warning). Notice-level
-# events (a shell in a container, a pod talking to the API) aren't alerted: they're in
-# VictoriaLogs and the Security dashboards.
+# One alert for all of Falco's rules: its ATT&CK tactic (as the other rules' labels: lower case,
+# hyphens) and technique (the sub-technique when there is one) come from the event, its severity
+# from the level (critical stays critical, error and warning are warning). Notice-level events (a
+# shell in a container, a pod talking to the API) aren't alerted: they're in VictoriaLogs and the
+# Security dashboards.
 #
 # Each group's interval is also the window its queries count over.
 groups:
@@ -21,9 +24,11 @@ groups:
       - alert: FalcoRuntimeAlert
         expr: >-
           {event.dataset="falco.alert"} log.level:in("critical", "error", "warning")
-          | copy rule.name as rule, log.level as level, threat.tactic.name as tactic,
-          threat.technique.id as technique, host.hostname as node,
-          orchestrator.namespace as namespace, orchestrator.resource.name as pod
+          | copy rule.name as rule, log.level as level, threat.technique.id as technique,
+          host.hostname as node, orchestrator.namespace as namespace,
+          orchestrator.resource.name as pod
+          | format if (threat.technique.subtechnique.id:*) "<threat.technique.subtechnique.id>" as technique
+          | format "<lc:threat.tactic.name>" as tactic | replace (" ", "-") at tactic
           | stats by (rule, level, tactic, technique, node, namespace, pod) count() as events
         labels:
           severity: '{{ if eq $labels.level "critical" }}critical{{ else }}warning{{ end }}'
@@ -39,7 +44,8 @@ groups:
           tested: "2026-10-11"
           runbook: >-
             The events: {event.dataset="falco.alert"} rule.name:="{{ $labels.rule }}" in
-            VictoriaLogs (process.command_line, process.parent.name, file.path, user.name).
+            VictoriaLogs (process.command_line, process.parent.name, file.path,
+            process.user.name).
             If it's expected (a tool that really does this), add an exception in the
             HelmRelease's customRules rather than silencing it. Trigger (Read sensitive file
             untrusted, a root process opening /etc/shadow): kubectl -n falco run siem-test --rm

@@ -156,7 +156,7 @@ groups:
           severity: info
         annotations:
           summary: Deprecated API in use ({{ $labels.group }}/{{ $labels.version }} {{ $labels.resource }})
-          description: "{{ $labels.resource }} in {{ $labels.group }}/{{ $labels.version }} was requested and goes in Kubernetes {{ $labels.removed_release }}. The audit log has who asked (objectRef.apiVersion)."
+          description: "{{ $labels.resource }} in {{ $labels.group }}/{{ $labels.version }} was requested and goes in Kubernetes {{ $labels.removed_release }}. The audit log has who asked (orchestrator.api_version)."
           tested: "2026-10-11"
 
       - alert: CoreDNSErrors

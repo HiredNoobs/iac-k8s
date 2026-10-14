@@ -1,10 +1,12 @@
 # kube-apiserver's audit log (iac-homelab's audit policy, shipped by apps/base/vector),
-# event.dataset kubernetes.audit. Each event is one log line with the event's fields
-# (objectRef.resource, objectRef.namespace, objectRef.name, objectRef.subresource,
-# requestObject.* for RBAC changes and directly created pods) plus Vector's ECS fields: user.name
-# (the event's user.username), event.action (its verb), source.ip (the client, sourceIPs[0]),
-# http.response.status_code, error.message (responseStatus.message), url.original, url.path and
-# url.query (requestURI) and event.id (auditID).
+# event.dataset kubernetes.audit. Each event is one log line with Vector's ECS fields: the object
+# as orchestrator.resource.type (pods, secrets, ...), orchestrator.namespace and
+# orchestrator.resource.name (objectRef), user.name (the event's user.username), event.action
+# (its verb), source.ip (the client, sourceIPs[0]), http.response.status_code, error.message
+# (responseStatus.message), url.original, url.path and url.query (requestURI) and event.id
+# (auditID); and the rest as custom fields: Orchestrator.Resource.Subresource and .ApiGroup,
+# Orchestrator.Audit.RequestObject.* (the request body, for RBAC changes and directly created
+# pods).
 #
 # The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
 # deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
@@ -21,10 +23,10 @@ groups:
       # A session logs ResponseStarted and ResponseComplete under one auditID (event.id).
       - alert: KubeExecIntoPod
         expr: >-
-          {event.dataset="kubernetes.audit"} objectRef.resource:=pods
-          objectRef.subresource:in("exec", "attach", "portforward")
-          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace,
-          objectRef.name as pod, objectRef.subresource as action
+          {event.dataset="kubernetes.audit"} orchestrator.resource.type:=pods
+          Orchestrator.Resource.Subresource:in("exec", "attach", "portforward")
+          | copy user.name as user, source.ip as remote_ip, orchestrator.namespace as namespace,
+          orchestrator.resource.name as pod, Orchestrator.Resource.Subresource as action
           | stats by (user, remote_ip, namespace, pod, action) count_uniq(event.id) as sessions
         labels:
           severity: warning
@@ -46,9 +48,9 @@ groups:
       # person's or an app's.
       - alert: KubeSecretRead
         expr: >-
-          {event.dataset="kubernetes.audit"} objectRef.resource:=secrets event.action:in("get", "list", "watch")
+          {event.dataset="kubernetes.audit"} orchestrator.resource.type:=secrets event.action:in("get", "list", "watch")
           http.response.status_code:=200
-          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
+          | copy user.name as user, source.ip as remote_ip, orchestrator.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as reads
         labels:
           severity: warning
@@ -62,17 +64,19 @@ groups:
             a person with kubectl, or a service account looking for credentials.
           tested: "2026-10-13"
           runbook: >-
-            Which Secrets: objectRef.name in the events (a list has none). A service account
-            reading Secrets it doesn't use means its pod is compromised or over-privileged.
+            Which Secrets: orchestrator.resource.name in the events (a list has none). A service
+            account reading Secrets it doesn't use means its pod is compromised or
+            over-privileged.
             Trigger: kubectl -n homepage get secrets
 
       - alert: KubeRBACChange
         expr: >-
-          {event.dataset="kubernetes.audit"} objectRef.apiGroup:="rbac.authorization.k8s.io"
+          {event.dataset="kubernetes.audit"} Orchestrator.Resource.ApiGroup:="rbac.authorization.k8s.io"
           event.action:in("create", "update", "patch", "delete", "deletecollection")
           -user.name:~"^system:serviceaccount:(flux-system|kube-system):" -url.query:~"dryRun="
           | copy user.name as user, source.ip as remote_ip, event.action as verb,
-          objectRef.resource as resource, objectRef.namespace as namespace, objectRef.name as name
+          orchestrator.resource.type as resource, orchestrator.namespace as namespace,
+          orchestrator.resource.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
         labels:
           severity: warning
@@ -86,22 +90,23 @@ groups:
             plane): permissions granted by hand stay until someone notices.
           tested: "2026-10-11"
           runbook: >-
-            The event's requestObject has what was granted to whom (roleRef, subjects, rules).
-            Flux doesn't remove objects it didn't create, so delete it by hand if it isn't
-            wanted. Trigger: kubectl create rolebinding siem-test --clusterrole=view
-            --user=nobody -n homepage, then delete it.
+            The event's Orchestrator.Audit.RequestObject has what was granted to whom (roleRef,
+            subjects, rules). Flux doesn't remove objects it didn't create, so delete it by
+            hand if it isn't wanted. Trigger: kubectl create rolebinding siem-test
+            --clusterrole=view --user=nobody -n homepage, then delete it.
 
       # Anything but the control plane and the controllers that manage workloads (Reloader
       # restarts them, Envoy Gateway runs its proxies, Longhorn its managers).
       - alert: KubeWorkloadChangeOutsideFlux
         expr: >-
           {event.dataset="kubernetes.audit"}
-          objectRef.resource:in("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs")
-          event.action:in("create", "update", "patch", "delete", "deletecollection") objectRef.subresource:=""
+          orchestrator.resource.type:in("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs")
+          event.action:in("create", "update", "patch", "delete", "deletecollection") Orchestrator.Resource.Subresource:=""
           -user.name:~"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$"
           -url.query:~"dryRun="
           | copy user.name as user, source.ip as remote_ip, event.action as verb,
-          objectRef.resource as resource, objectRef.namespace as namespace, objectRef.name as name
+          orchestrator.resource.type as resource, orchestrator.namespace as namespace,
+          orchestrator.resource.name as name
           | stats by (user, remote_ip, verb, resource, namespace, name) count() as changes
         labels:
           severity: warning
@@ -121,14 +126,14 @@ groups:
 
       - alert: KubePrivilegedPodCreated
         expr: >-
-          {event.dataset="kubernetes.audit"} objectRef.resource:=pods event.action:=create objectRef.subresource:=""
+          {event.dataset="kubernetes.audit"} orchestrator.resource.type:=pods event.action:=create Orchestrator.Resource.Subresource:=""
           http.response.status_code:<300
-          (requestObject.spec.hostNetwork:=true or requestObject.spec.hostPID:=true
-          or requestObject.spec.hostIPC:=true or requestObject.spec.volumes:~"hostPath"
-          or requestObject.spec.containers:~"\"privileged\":true")
-          -objectRef.namespace:in("kube-system", "longhorn-system", "kube-vip", "node-exporter", "vector", "falco")
-          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace,
-          objectRef.name as pod
+          (Orchestrator.Audit.RequestObject.spec.hostNetwork:=true or Orchestrator.Audit.RequestObject.spec.hostPID:=true
+          or Orchestrator.Audit.RequestObject.spec.hostIPC:=true or Orchestrator.Audit.RequestObject.spec.volumes:~"hostPath"
+          or Orchestrator.Audit.RequestObject.spec.containers:~"\"privileged\":true")
+          -orchestrator.namespace:in("kube-system", "longhorn-system", "kube-vip", "node-exporter", "vector", "falco")
+          | copy user.name as user, source.ip as remote_ip, orchestrator.namespace as namespace,
+          orchestrator.resource.name as pod
           | stats by (user, remote_ip, namespace, pod) count() as pods
         labels:
           severity: critical
@@ -149,7 +154,7 @@ groups:
       - alert: KubePodSecurityViolation
         expr: >-
           {event.dataset="kubernetes.audit"} http.response.status_code:=403 error.message:~"violates PodSecurity"
-          | copy user.name as user, source.ip as remote_ip, objectRef.namespace as namespace
+          | copy user.name as user, source.ip as remote_ip, orchestrator.namespace as namespace
           | stats by (user, remote_ip, namespace) count() as rejected
         labels:
           severity: warning
@@ -185,7 +190,7 @@ groups:
             reach (often a stolen service account token), or a misconfigured app.
           tested: "2026-10-13"
           runbook: >-
-            The resources it tried are in its events (objectRef). Trigger: kubectl auth
+            The resources it tried are in its events (orchestrator.*). Trigger: kubectl auth
             can-i --list --as=system:serviceaccount:homepage:default, then a loop of kubectl
             get secrets -A --as=system:serviceaccount:homepage:default.
 
