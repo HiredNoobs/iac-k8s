@@ -672,7 +672,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{_SYSTEMD_UNIT=\"vault.service\"} \"\\\"type\\\":\\\"response\\\"\" | unpack_json fields (request.remote_address, auth.display_name) | filter request.remote_address:~\"^${ip}$\" auth.display_name:~\"${user}\"",
+          "expr": "{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response source.ip:~\"^${ip}$\" user.name:~\"${user}\"",
           "maxLines": 500
         }
       ],
@@ -711,7 +711,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "{_HOSTNAME=~\"prx-999-.*\"} -_SYSTEMD_UNIT:=\"vault.service\" _msg:~\"${ip}\" _msg:~\"${user}\"",
+          "expr": "{host.name=~\"prx-999-.*\"} -Systemd.Unit:=\"vault.service\" _msg:~\"${ip}\" _msg:~\"${user}\"",
           "maxLines": 500
         }
       ],

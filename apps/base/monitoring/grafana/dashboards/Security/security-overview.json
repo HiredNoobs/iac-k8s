@@ -2065,7 +2065,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {_SYSTEMD_UNIT=\"ssh.service\"} \"Accepted \" | extract_regexp \"Accepted (?P<method>\\\\S+) for (?P<user>\\\\S+) from (?P<remote_ip>\\\\S+) port\" | copy _HOSTNAME as host | stats by (host, user, remote_ip) count() as logins, max(_time) as _time | sort by (logins desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"sshd.log\"} event.action:=ssh_login event.outcome:=success | copy host.hostname as host, user.name as user, source.ip as remote_ip | stats by (host, user, remote_ip) count() as logins, max(_time) as _time | sort by (logins desc) | limit 50"
         }
       ],
       "transformations": [
@@ -2185,7 +2185,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {_HOSTNAME=~\"prx-999-.*\"} SYSLOG_IDENTIFIER:=sudo \"COMMAND=\" -\"NOT in sudoers\" -\"incorrect password attempt\" -\"a password is required\" | extract_regexp \"^\\\\s*(?P<user>\\\\S+) : \" | extract \"COMMAND=<command>\" | copy _HOSTNAME as host | stats by (host, user) count() as commands, uniq_values(command) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (commands desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"sudo.log\"} event.category:process event.outcome:=success | copy host.hostname as host, user.name as user, process.command_line as command | stats by (host, user) count() as commands, uniq_values(command) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (commands desc) | limit 50"
         }
       ],
       "transformations": [
@@ -2286,7 +2286,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {_SYSTEMD_UNIT=\"vault.service\"} \"\\\"type\\\":\\\"response\\\"\" | unpack_json fields (request.path, auth.display_name, request.remote_address, error, response.data.error) | copy auth.display_name as identity, request.remote_address as remote_ip | stats by (identity, remote_ip) count() as requests, count() if (error:~\".\" or response.data.error:~\".\") as errors, uniq_values(request.path) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response | copy user.name as identity, source.ip as remote_ip, Secrets.Audit.Request.Path as path | stats by (identity, remote_ip) count() as requests, count() if (event.outcome:=failure) as errors, uniq_values(path) limit 5 as examples, max(_time) as _time | replace_regexp (\"^\\\\[\\\\]$|^\\\\[\\\"|\\\"\\\\]$\", \"\") at examples | replace (\"\\\",\\\"\", \", \") at examples | replace (\"\\\\\\\"\", \"\\\"\") at examples | replace (\"\\\\u0027\", \"'\") at examples | replace (\"\\\\u003c\", \"<\") at examples | replace (\"\\\\u003e\", \">\") at examples | replace (\"\\\\u0026\", \"&\") at examples | sort by (requests desc) | limit 50"
         }
       ],
       "transformations": [
@@ -2411,7 +2411,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {_HOSTNAME=~\"prx-999-.*\"} PRIORITY:<=4 -_SYSTEMD_UNIT:=\"vault.service\" | collapse_nums prettify | copy _HOSTNAME as host, SYSLOG_IDENTIFIER as program | stats by (host, program, _msg) count() as lines, max(_time) as _time | sort by (lines desc) | limit 50"
+          "expr": "_time:$__range {host.name=~\"prx-999-.*\"} log.syslog.severity.code:<=4 -Systemd.Unit:=\"vault.service\" | collapse_nums prettify | copy host.hostname as host, log.syslog.appname as program | stats by (host, program, _msg) count() as lines, max(_time) as _time | sort by (lines desc) | limit 50"
         }
       ],
       "transformations": [
