@@ -38,16 +38,18 @@ tests:
               assert_eq!(.module, "https_authelia")
               assert!(!exists(.time))
               assert!(!exists(.msg))
-              assert_eq!(.output_stream, "stderr")
+              assert_eq!(."Log.Stream", "stderr")
+              # Elastic's names.
               assert_eq!(.kubernetes, {
-                "pod_namespace": "monitoring",
-                "pod_name": "blackbox-exporter-abc",
-                "container_name": "blackbox-exporter",
-                "pod_node_name": "worker-1",
-                "pod_ip": "10.244.1.5",
-                "container_image": "quay.io/prometheus/blackbox-exporter:v0.29.0",
-                "pod_labels": {"app.kubernetes.io/name": "blackbox-exporter"}
+                "namespace": "monitoring",
+                "pod": {"name": "blackbox-exporter-abc", "ip": "10.244.1.5"},
+                "container": {"name": "blackbox-exporter"},
+                "node": {"name": "worker-1"},
+                "labels": {"app.kubernetes.io/name": "blackbox-exporter"}
               })
+              assert_eq!(get!(., ["container.image.name"]), "quay.io/prometheus/blackbox-exporter:v0.29.0")
+              assert_eq!(get!(., ["container.id"]), "abc")
+              assert_eq!(get!(., ["container.runtime"]), "containerd")
               assert!(!exists(.file))
               assert!(!exists(.source_type))
               assert!(!exists(.timestamp))
@@ -74,7 +76,7 @@ tests:
               assert_eq!(.downstream_remote_address, "192.168.50.10:51234")
               assert_eq!(get!(., [":authority"]), "grafana.hirednoobs.com")
               assert_eq!(.response_code, 200)
-              assert_eq!(.kubernetes.container_name, "envoy")
+              assert_eq!(.kubernetes.container.name, "envoy")
 
   - name: plain text line stays as _msg (CoreDNS)
     inputs:
@@ -94,7 +96,7 @@ tests:
             source: |
               assert_eq!(._msg, "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
               assert_eq!(._time, t'2026-10-13T09:00:00.000Z')
-              assert_eq!(keys(.), ["_msg", "_time", "kubernetes", "output_stream"])
+              assert_eq!(keys(.), ["Log.Stream", "_msg", "_time", "kubernetes"])
 
   - name: zap JSON with ts as Unix seconds
     inputs:
@@ -1129,8 +1131,8 @@ tests:
         type: vrl
         source: |
           . = {
-            "_msg": "GET x/ 200 1ms", "_time": t'2026-10-13T08:00:00.000Z', "output_stream": "stdout",
-            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy", "pod_node_name": "worker-4"},
+            "_msg": "GET x/ 200 1ms", "_time": t'2026-10-13T08:00:00.000Z', "Log.Stream": "stdout",
+            "kubernetes": {"namespace": "envoy-gateway", "pod": {"name": "envoy-public-1"}, "container": {"name": "envoy"}, "node": {"name": "worker-4"}},
             "metadata": {"dropped": {"component_id": "envoy", "component_kind": "transform", "component_type": "remap", "message": "function call error for \"to_int\"", "reason": "error"}}
           }
     outputs:
@@ -1167,7 +1169,7 @@ tests:
             source: |
               assert_eq!(._msg, "some line")
               assert_eq!(._time, t'2026-10-13T08:00:00.000Z')
-              assert_eq!(.output_stream, "stderr")
+              assert_eq!(."Log.Stream", "stderr")
               assert_eq!(get!(., ["event.dataset"]), "default.app")
               assert_eq!(get!(., ["event.kind"]), "pipeline_error")
               assert_eq!(get!(., ["error.type"]), "remap_error")

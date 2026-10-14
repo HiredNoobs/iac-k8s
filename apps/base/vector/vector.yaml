@@ -70,14 +70,16 @@ transforms:
     reroute_dropped: true
     source: |
       meta = {
-        "pod_namespace": .kubernetes.pod_namespace,
-        "pod_name": .kubernetes.pod_name,
-        "container_name": .kubernetes.container_name,
-        "pod_node_name": .kubernetes.pod_node_name,
-        "pod_ip": .kubernetes.pod_ip,
-        "container_image": .kubernetes.container_image,
-        "pod_labels": .kubernetes.pod_labels,
+        "namespace": .kubernetes.pod_namespace,
+        "pod": {"name": .kubernetes.pod_name, "ip": .kubernetes.pod_ip},
+        "container": {"name": .kubernetes.container_name},
+        "node": {"name": .kubernetes.pod_node_name},
+        "labels": .kubernetes.pod_labels,
       }
+      container = {"image.name": .kubernetes.container_image}
+      # containerd://<id>
+      runtime, err = parse_regex(string(.kubernetes.container_id) ?? "", r'^(?P<runtime>[a-z]+)://(?P<id>\S+)$')
+      if err == null { container."id" = runtime.id; container."runtime" = runtime.runtime }
       line = string(.message) ?? ""
       written = .timestamp
       output_stream = .stream
@@ -111,8 +113,11 @@ transforms:
       } else {
         . = {"_msg": line, "_time": written}
       }
-      .kubernetes = meta
-      .output_stream = output_stream
+      .kubernetes = compact(meta)
+      for_each(container) -> |key, value| {
+        if value != null { . = set!(., ["container." + key], value) }
+      }
+      ."Log.Stream" = output_stream
 
   # Each source with its own fields to its remap (by namespace and container, which the pod can't
   # choose), the rest straight to ecs.
@@ -120,14 +125,14 @@ transforms:
     type: route
     inputs: [pods]
     route:
-      envoy: .kubernetes.pod_namespace == "envoy-gateway" && .kubernetes.container_name == "envoy"
-      authelia: .kubernetes.pod_namespace == "authelia" && .kubernetes.container_name == "authelia"
-      falco: .kubernetes.pod_namespace == "falco" && .kubernetes.container_name == "falco"
-      lldap: .kubernetes.pod_namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container_name)
-      vaultwarden: .kubernetes.pod_namespace == "vaultwarden" && .kubernetes.container_name == "vaultwarden"
-      coredns: .kubernetes.pod_namespace == "kube-system" && .kubernetes.container_name == "coredns"
-      mealie: .kubernetes.pod_namespace == "mealie" && .kubernetes.container_name == "mealie"
-      ghostunnel: .kubernetes.pod_namespace == "lldap" && .kubernetes.container_name == "ghostunnel"
+      envoy: .kubernetes.namespace == "envoy-gateway" && .kubernetes.container.name == "envoy"
+      authelia: .kubernetes.namespace == "authelia" && .kubernetes.container.name == "authelia"
+      falco: .kubernetes.namespace == "falco" && .kubernetes.container.name == "falco"
+      lldap: .kubernetes.namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container.name)
+      vaultwarden: .kubernetes.namespace == "vaultwarden" && .kubernetes.container.name == "vaultwarden"
+      coredns: .kubernetes.namespace == "kube-system" && .kubernetes.container.name == "coredns"
+      mealie: .kubernetes.namespace == "mealie" && .kubernetes.container.name == "mealie"
+      ghostunnel: .kubernetes.namespace == "lldap" && .kubernetes.container.name == "ghostunnel"
 
   # Envoy's access log (EnvoyProxy's format, infrastructure/configs/gateway/envoy-proxy.yaml).
   # Its own log lines are envoy.log. Envoy writes "-" for a value it doesn't have.
@@ -430,7 +435,7 @@ transforms:
     reroute_dropped: true
     source: |
       msg = string(._msg) ?? ""
-      if .kubernetes.container_name == "lldap" {
+      if .kubernetes.container.name == "lldap" {
         %dataset = "lldap.log"
         prefix, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\s+(?P<level>[A-Z]+)\s')
         if err == null {
@@ -611,15 +616,14 @@ transforms:
         . = {
           "_msg": .message,
           "_time": .timestamp,
-          "output_stream": .stream,
+          "Log.Stream": .stream,
+          "container.image.name": .kubernetes.container_image,
           "kubernetes": {
-            "pod_namespace": .kubernetes.pod_namespace,
-            "pod_name": .kubernetes.pod_name,
-            "container_name": .kubernetes.container_name,
-            "pod_node_name": .kubernetes.pod_node_name,
-            "pod_ip": .kubernetes.pod_ip,
-            "container_image": .kubernetes.container_image,
-            "pod_labels": .kubernetes.pod_labels,
+            "namespace": .kubernetes.pod_namespace,
+            "pod": {"name": .kubernetes.pod_name, "ip": .kubernetes.pod_ip},
+            "container": {"name": .kubernetes.container_name},
+            "node": {"name": .kubernetes.pod_node_name},
+            "labels": .kubernetes.pod_labels,
           },
         }
       } else if component != "" {
@@ -667,19 +671,19 @@ transforms:
         }
       }
       if dataset == "" {
-        dataset = (string(.kubernetes.pod_namespace) ?? "") + "." + (string(.kubernetes.container_name) ?? "")
+        dataset = (string(.kubernetes.namespace) ?? "") + "." + (string(.kubernetes.container.name) ?? "")
         # The software: the image's name without its registry, path, tag or digest
         # (ghcr.io/fluxcd/source-controller:v1.9.6 is source-controller; containers are often
         # named something generic like manager), else the container's name.
-        image, err = parse_regex(string(.kubernetes.container_image) ?? "", r'^(?:[^@]*/)?(?P<name>[^/:@]+)(?::[^/@]*)?(?:@\S+)?$')
+        image, err = parse_regex(string(get!(., ["container.image.name"])) ?? "", r'^(?:[^@]*/)?(?P<name>[^/:@]+)(?::[^/@]*)?(?:@\S+)?$')
         if provider == "" && err == null { provider = image.name }
-        if provider == "" { provider = string(.kubernetes.container_name) ?? "" }
+        if provider == "" { provider = string(.kubernetes.container.name) ?? "" }
       } else if provider == "" {
         provider = split(dataset, ".")[0]
       }
       ."event.dataset" = dataset
       ."event.provider" = provider
-      node = string(.kubernetes.pod_node_name) ?? ""
+      node = string(.kubernetes.node.name) ?? ""
       domain = get_env_var("NODE_DOMAIN") ?? ""
       ."host.hostname" = node
       ."host.name" = if node == "" || domain == "" { node } else { node + "." + domain }
@@ -844,7 +848,7 @@ sinks:
   victorialogs:
     type: http
     inputs: [ecs, events, audit_unparsed]
-    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,event.kind,host.name,kubernetes.pod_namespace,kubernetes.pod_name,kubernetes.container_name&_msg_field=_msg&_time_field=_time
+    uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,event.kind,host.name,kubernetes.namespace,kubernetes.pod.name,kubernetes.container.name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
       codec: json
