@@ -38,3 +38,8 @@ spec:
         # Backend: upstreams outside the cluster (the NAS, Proxmox), or reached by DNS name.
         extensionApis:
           enableBackend: true
+        # At info the controller logs every reconcile ("reconciling gateways", "processing ...
+        # Secret": ~30k lines a day); warnings and errors are what's worth keeping.
+        logging:
+          level:
+            default: warn
