@@ -257,6 +257,32 @@ transforms:
       # otherwise); unpack_json from it at query time.
       if .kubernetes.namespace == "flux-system" && is_object(.output) { .output = encode_json(.output) }
 
+      # A Kubernetes controller's line (controller-runtime's fields: Flux, the RabbitMQ topology
+      # operator, ESO): the object it reconciled as orchestrator.*, as Kubernetes events and the
+      # audit log have it (the kind lower case); one reconcile's lines share trace.id (its
+      # reconcileID); the controller as Orchestrator.Controller, the kind's API group as
+      # Orchestrator.Resource.ApiGroup, Flux's revision as Orchestrator.Resource.Revision.
+      # controller-runtime repeats the object as {"<Kind>": {"name", "namespace"}}: dropped when
+      # it's the same one. Without controllerKind, name and namespace can mean anything.
+      if is_string(.controllerKind) && !exists(."orchestrator.type") {
+        kind = string!(del(.controllerKind))
+        ."orchestrator.type" = "kubernetes"
+        ."orchestrator.resource.type" = downcase(kind)
+        if is_string(.name) { ."orchestrator.resource.name" = del(.name) }
+        if is_string(.namespace) { ."orchestrator.namespace" = del(.namespace) }
+        if is_string(.controllerGroup) {
+          group = del(.controllerGroup)
+          if group != "" { ."Orchestrator.Resource.ApiGroup" = group }
+        }
+        if is_string(.controller) { ."Orchestrator.Controller" = del(.controller) }
+        if is_string(.reconcileID) { ."trace.id" = del(.reconcileID) }
+        if is_string(.revision) { ."Orchestrator.Resource.Revision" = del(.revision) }
+        repeated = get!(., [kind])
+        if is_object(repeated) && keys(object!(repeated)) == ["name", "namespace"] && repeated.name == get!(., ["orchestrator.resource.name"]) && repeated.namespace == get!(., ["orchestrator.namespace"]) {
+          . = remove!(., [kind])
+        }
+      }
+
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
       # (anything else as it is, lower case). From a JSON line's level, lvl or severity, else
       # from the text formats several apps share. The JSON field it came from goes.

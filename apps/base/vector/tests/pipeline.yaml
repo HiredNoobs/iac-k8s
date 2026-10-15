@@ -623,3 +623,94 @@ tests:
           - type: vrl
             source: |
               assert_eq!(.tags, ["a", "generic"])
+
+  - name: "a controller's line: the object it reconciled (Flux)"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":\"2026-10-15T08:00:00.000Z\",\"msg\":\"Reconciliation finished in 1.37174843s, next run in 10m0s\",\"controller\":\"kustomization\",\"controllerGroup\":\"kustomize.toolkit.fluxcd.io\",\"controllerKind\":\"Kustomization\",\"Kustomization\":{\"name\":\"apps\",\"namespace\":\"flux-system\"},\"namespace\":\"flux-system\",\"name\":\"apps\",\"reconcileID\":\"6b343405-f8bb-4ecc-bcda-32608de5a5e7\",\"revision\":\"master@sha1:3951049\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "flux-system", "pod_name": "x-1", "container_name": "manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "kustomization")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "apps")
+              assert_eq!(get!(., ["orchestrator.namespace"]), "flux-system")
+              assert_eq!(get!(., ["Orchestrator.Resource.ApiGroup"]), "kustomize.toolkit.fluxcd.io")
+              assert_eq!(get!(., ["Orchestrator.Controller"]), "kustomization")
+              assert_eq!(get!(., ["Orchestrator.Resource.Revision"]), "master@sha1:3951049")
+              assert_eq!(get!(., ["trace.id"]), "6b343405-f8bb-4ecc-bcda-32608de5a5e7")
+              assert_eq!(.tags, ["generic"])
+              for_each(["controller", "controllerGroup", "controllerKind", "Kustomization", "namespace", "name", "reconcileID", "revision"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert_eq!(get!(., ["log.level"]), "info")
+
+  - name: a controller's line (the RabbitMQ topology operator)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":\"2026-10-15T08:00:00.000Z\",\"msg\":\"Finished reconciling\",\"controller\":\"user\",\"controllerGroup\":\"rabbitmq.com\",\"controllerKind\":\"User\",\"User\":{\"name\":\"contentbot\",\"namespace\":\"rabbitmq\"},\"namespace\":\"rabbitmq\",\"name\":\"contentbot\",\"reconcileID\":\"aa\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "rabbitmq-system", "pod_name": "x-1", "container_name": "manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "user")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "contentbot")
+              assert_eq!(get!(., ["orchestrator.namespace"]), "rabbitmq")
+              assert_eq!(get!(., ["trace.id"]), "aa")
+              assert!(!exists(.User))
+              assert!(!exists(."Orchestrator.Resource.Revision"))
+
+  - name: "a controller's line: a core kind has no API group, another object is kept"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":\"2026-10-15T08:00:00.000Z\",\"msg\":\"reconciling\",\"controller\":\"secret\",\"controllerGroup\":\"\",\"controllerKind\":\"Secret\",\"Secret\":{\"name\":\"other\",\"namespace\":\"default\"},\"namespace\":\"default\",\"name\":\"tls\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "external-secrets", "pod_name": "x-1", "container_name": "manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "secret")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "tls")
+              assert!(!exists(."Orchestrator.Resource.ApiGroup"))
+              assert!(!exists(.controllerGroup))
+              assert_eq!(.Secret, {"name": "other", "namespace": "default"})
+
+  - name: name and namespace on a line that isn't a controller's stay
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"msg\":\"Building index\",\"namespace\":\"default\",\"name\":\"dashboards\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "x-1", "container_name": "manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.namespace, "default")
+              assert_eq!(.name, "dashboards")
+              assert!(!exists(."orchestrator.type"))
