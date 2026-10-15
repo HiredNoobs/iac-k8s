@@ -655,8 +655,9 @@ transforms:
         ."log.logger" = prefix.logger
         l = downcase(string!(prefix.level))
         ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
-      } else if starts_with(msg, "[") {
-        # Not a continuation line or the startup banner, which have no prefix.
+      } else if starts_with(msg, "[") && !starts_with(msg, "[CAUSE] ") {
+        # Not a continuation line or the startup banner, which have no prefix. An error's cause
+        # follows it on its own lines, starting "[CAUSE] <its debug output>".
         %mismatch = "no [<time>][<module>][<LEVEL>] prefix"
       }
       login, err = parse_regex(msg, r'Username or password is incorrect\..* IP: (?P<ip>\S+)\. Username: (?P<user>.*)\.$')
