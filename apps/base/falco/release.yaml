@@ -108,6 +108,22 @@ spec:
       syslog_output:
         enabled: false
       log_syslog: false
+    # Our exceptions to Falco's rules, loaded after them (/etc/falco/rules.d).
+    customRules:
+      # Drop and execute new binary in container: Pi-hole's start-up always setcaps
+      # /usr/bin/pihole-FTL (docker-pi-hole's fix_capabilities, no setting skips it), which
+      # copies the binary into the container's own layer, so every later run of it matches. That
+      # is each gravity update (sync-lists' hourly sync, Pi-hole's cron). Only that binary in
+      # that container: anything else dropped and run in Pi-hole still alerts.
+      exceptions.yaml: |-
+        - macro: known_drop_and_execute_activities
+          condition: >
+            (k8s.ns.name = pihole
+             and container.name = pihole
+             and container.image.repository in (pihole/pihole, docker.io/pihole/pihole)
+             and proc.exepath = /usr/bin/pihole-FTL)
+          override:
+            condition: replace
   # The chart mounts the host's /boot and /lib/modules (read-write) for kernel modules, which
   # the modern probe doesn't use; /boot may not even exist on Talos' read-only root.
   postRenderers:
