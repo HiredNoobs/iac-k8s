@@ -1,4 +1,5 @@
-# The prx-999 VMs' journals, from their own Vector through the Gateway: event.dataset
+# The prx-999 VMs' journals, from their own Vector through the Gateway, and the Proxmox hosts',
+# from rsyslog through the syslog relay (syslog.yaml's syslog_journal): event.dataset
 # journald.log, or the parsed units' own (vault.audit, vault.log, sshd.log, sudo.log,
 # forgejo.log), the VM as host.* (host.ip the address it came from), process.*, log.syslog.*,
 # log.level from the priority, the unit as Systemd.Unit.
@@ -24,7 +25,7 @@ sources:
       key_file: /etc/vector/journald-tls/tls.key
 
 transforms:
-  # The VMs' journal entries. ECS fields where there's one (further than Elastic's journald input,
+  # The VMs' and hosts' journal entries. ECS fields where there's one (further than Elastic's journald input,
   # which keeps most under its own journald.*): the process (_PID, _COMM, _EXE, _CMDLINE, _UID,
   # _GID), the host (_HOSTNAME, _MACHINE_ID, _BOOT_ID; host.ip the address it came from), the
   # code (CODE_*), log.syslog.* (SYSLOG_*; PRIORITY is the severity, not syslog's priority). The
@@ -35,7 +36,7 @@ transforms:
   # Forgejo; the rest is journald.log.
   journald:
     type: remap
-    inputs: [journald_relay]
+    inputs: [journald_relay, syslog_journal]
     drop_on_error: true
     reroute_dropped: true
     source: |

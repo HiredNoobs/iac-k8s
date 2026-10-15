@@ -1,6 +1,7 @@
 # The LAN's syslog, from rsyslog: event.dataset syslog.log, the sender as host.* (its hostname,
 # host.ip its address), log.syslog.*, process.name/pid, log.level from the severity. A line
-# that isn't syslog is kept as a pipeline_error.
+# that isn't syslog is kept as a pipeline_error. The Proxmox hosts' journals, sent the same way,
+# go to the journal parser (journald.yaml) instead.
 
 sources:
   # The LAN's syslog, relayed by rsyslog (apps/base/rsyslog) through service.yaml: one JSON line
@@ -16,6 +17,39 @@ sources:
       method: newline_delimited
 
 transforms:
+  # The Proxmox hosts send their journals through rsyslog (iac-homelab's proxmox/rsyslog.conf):
+  # RFC 5424 with the app name journal and each entry's journal fields as JSON. Those go to the
+  # journal parser (syslog_journal, then journald.yaml), as the prx-999 VMs' journals do; only
+  # from the hosts' addresses (the relay keeps the sender's), anything else is syslog.
+  syslog_by_sender:
+    type: route
+    inputs: [syslog_relay]
+    route:
+      journal: |
+        hosts = ["192.168.111.2", "192.168.111.3", "192.168.111.4", "192.168.111.9"]
+        s, err = parse_syslog(string(.message) ?? "")
+        err == null && s.appname == "journal" && includes(hosts, .fromhost_ip) && is_object(parse_json(string(s.message) ?? "") ?? null)
+
+  # A Proxmox host's journal entry, as the prx-999 VMs' Vector sends one: the journal's fields,
+  # message, @timestamp (when it was logged), event.created (here when the relay received it)
+  # and the sender as the last X-Forwarded-For.
+  syslog_journal:
+    type: remap
+    inputs: [syslog_by_sender.journal]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      s = parse_syslog!(string!(.message))
+      entry = object!(parse_json!(s.message))
+      sender = string(.fromhost_ip) ?? ""
+      received = .received
+      logged = timestamp(s.timestamp) ?? now()
+      . = entry
+      .message = string(entry.MESSAGE) ?? ""
+      ."@timestamp" = format_timestamp!(logged, "%+")
+      ."event.created" = received
+      ."X-Forwarded-For" = sender
+
   # Syslog, RFC 3164 or 5424 (parse_syslog), as Elastic's syslog fields: log.syslog.* and the
   # sender as the host (host.hostname from the message, host.ip the address rsyslog saw), the
   # program as process.name/process.pid, the severity as log.level too, UDP or TCP as
@@ -23,7 +57,7 @@ transforms:
   # received it; RFC 5424's is its own. Then the router's Wi-Fi and DHCP lines.
   syslog:
     type: remap
-    inputs: [syslog_relay]
+    inputs: [syslog_by_sender._unmatched]
     drop_on_error: true
     reroute_dropped: true
     source: |

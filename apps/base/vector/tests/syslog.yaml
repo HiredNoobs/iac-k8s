@@ -330,3 +330,103 @@ tests:
               assert_eq!(get!(., ["event.action"]), "wps-attempted")
               assert_eq!(get!(., ["event.category"]), ["authentication"])
               assert!(!exists(."event.outcome"))
+
+  - name: a Proxmox host's journal entry (sshd) goes to the journal parser
+    inputs:
+      - insert_at: syslog_by_sender
+        type: vrl
+        source: |
+          # As iac-homelab's proxmox/rsyslog.conf sends it (from a run of it in rsyslog 8.2001).
+          . = {
+            "message": s'<38>1 2026-10-15T18:00:00.123456+00:00 prx-001 journal - - - { "MESSAGE": "Accepted publickey for root from 192.168.50.140 port 51234 ssh2: ED25519 SHA256:abc", "PRIORITY": "6", "SYSLOG_FACILITY": "4", "SYSLOG_IDENTIFIER": "sshd-session", "_PID": "1234", "_COMM": "sshd-session", "_CMDLINE": "sshd-session: root [priv]", "_SYSTEMD_UNIT": "ssh.service", "_HOSTNAME": "prx-001", "_TRANSPORT": "syslog", "_BOOT_ID": "b00t", "_SYSTEMD_SLICE": "system.slice" }',
+            "fromhost_ip": "192.168.111.2", "received": "2026-10-15T18:00:00.200000+00:00", "transport": "imtcp",
+            "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-15T18:00:00.300Z'
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "sshd.log")
+              assert_eq!(get!(., ["event.action"]), "ssh_login")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(._msg, "Accepted publickey for root from 192.168.50.140 port 51234 ssh2: ED25519 SHA256:abc")
+              # When it was logged; when the relay got it.
+              assert_eq!(._time, t'2026-10-15T18:00:00.123456Z')
+              assert_eq!(get!(., ["event.created"]), t'2026-10-15T18:00:00.200Z')
+              assert_eq!(get!(., ["host.hostname"]), "prx-001")
+              assert_eq!(get!(., ["host.name"]), "prx-001.hirednoobs.com")
+              assert_eq!(get!(., ["host.ip"]), "192.168.111.2")
+              assert_eq!(get!(., ["host.boot.id"]), "b00t")
+              assert_eq!(get!(., ["process.pid"]), 1234)
+              assert_eq!(get!(., ["process.command_line"]), "sshd-session: root [priv]")
+              assert_eq!(get!(., ["Systemd.Unit"]), "ssh.service")
+              assert_eq!(get!(., ["Systemd.Journal.SystemdSlice"]), "system.slice")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "auth")
+              for_each(["message", "MESSAGE", "fromhost_ip", "received", "transport", "X-Forwarded-For", "@timestamp", "Log.Transport"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
+              assert!(!exists(.tags))
+
+  - name: a Proxmox host's journal entry without a parser of its own is journald.log
+    inputs:
+      - insert_at: syslog_by_sender
+        type: vrl
+        source: |
+          . = {
+            "message": s'<30>1 2026-10-15T18:05:00.000001+00:00 prx-999 journal - - - { "MESSAGE": "starting task UPID:prx-999:0001:vzdump::root@pam:", "PRIORITY": "6", "SYSLOG_FACILITY": "3", "SYSLOG_IDENTIFIER": "pvedaemon", "_PID": "999", "_COMM": "pvedaemon worke", "_SYSTEMD_UNIT": "pvedaemon.service", "_HOSTNAME": "prx-999" }',
+            "fromhost_ip": "192.168.111.9", "received": "2026-10-15T18:05:00.100000+00:00", "transport": "imtcp",
+            "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-15T18:05:00.2Z'
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "journald.log")
+              assert_eq!(get!(., ["event.provider"]), "pvedaemon")
+              assert_eq!(get!(., ["host.hostname"]), "prx-999")
+              assert_eq!(get!(., ["host.ip"]), "192.168.111.9")
+              assert_eq!(get!(., ["Systemd.Unit"]), "pvedaemon.service")
+              assert_eq!(._msg, "starting task UPID:prx-999:0001:vzdump::root@pam:")
+
+  - name: a journal entry from anywhere but the Proxmox hosts stays syslog
+    inputs:
+      - insert_at: syslog_by_sender
+        type: vrl
+        source: |
+          . = {
+            "message": s'<38>1 2026-10-15T18:00:00.123456+00:00 prx-001 journal - - - { "MESSAGE": "Accepted password for root from 192.168.50.66 port 1 ssh2", "SYSLOG_IDENTIFIER": "sshd-session", "_HOSTNAME": "prx-001" }',
+            "fromhost_ip": "192.168.50.66", "received": "2026-10-15T18:00:00.200000+00:00", "transport": "imtcp",
+            "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-15T18:00:00.300Z'
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
+              assert_eq!(get!(., ["host.ip"]), "192.168.50.66")
+              assert_eq!(get!(., ["log.syslog.appname"]), "journal")
+              assert!(!exists(."event.action"))
+              assert!(!exists(."user.name"))
+
+  - name: a Proxmox host's ordinary syslog line stays syslog
+    inputs:
+      - insert_at: syslog_by_sender
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 18:00:00 prx-002 kernel: something",
+            "fromhost_ip": "192.168.111.3", "received": "2026-10-15T18:00:00.200000+00:00", "transport": "imudp",
+            "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-15T18:00:00.300Z'
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
+              assert_eq!(._msg, "something")
+              assert_eq!(get!(., ["host.ip"]), "192.168.111.3")

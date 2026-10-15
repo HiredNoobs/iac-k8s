@@ -142,7 +142,7 @@ transforms:
   # come here, so a line can't claim to be one.
   unparsed:
     type: remap
-    inputs: [pods.dropped, generic.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, journald.dropped, talos.dropped]
+    inputs: [pods.dropped, generic.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, syslog_journal.dropped, journald.dropped, talos.dropped]
     source: |
       dropped = object(.metadata.dropped) ?? {}
       . = remove!(., ["metadata", "dropped"])
@@ -164,7 +164,7 @@ transforms:
             "labels": .kubernetes.pod_labels,
           },
         }
-      } else if component == "syslog" {
+      } else if includes(["syslog", "syslog_journal"], component) {
         # As rsyslog sent it.
         . = {
           "_msg": .message,
