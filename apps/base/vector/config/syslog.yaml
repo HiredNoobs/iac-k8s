@@ -108,8 +108,21 @@ transforms:
               ."event.action" = "disassociated"
               ."event.category" = ["network"]
               ."event.type" = ["connection", "end"]
+            } else if starts_with(what, "WPA: pairwise key handshake completed") {
+              # The 4-way handshake: the device proved the Wi-Fi password, it's connected.
+              ."event.action" = "pairwise-key-handshake-completed"
+              ."event.category" = ["authentication"]
+              ."event.type" = ["start"]
+              ."event.outcome" = "success"
+            } else if starts_with(what, "IEEE 802.1X: Supplicant used different EAP type: 254") {
+              # EAP type 254 (expanded) is WPS: a device trying push-button or PIN setup.
+              ."event.action" = "wps-attempted"
+              ."event.category" = ["authentication"]
+              ."event.type" = ["start"]
             } else if starts_with(what, "IEEE 802.1X: authentication failed") {
-              ."event.action" = "authentication-failed"
+              # The networks use a password (WPA2-PSK), not 802.1X: this follows a WPS attempt
+              # (a wrong password fails the 4-way handshake instead).
+              ."event.action" = "wps-failed"
               ."event.category" = ["authentication"]
               ."event.type" = ["start"]
               ."event.outcome" = "failure"

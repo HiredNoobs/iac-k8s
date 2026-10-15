@@ -154,7 +154,7 @@ tests:
               assert_eq!(get!(., ["event.action"]), "disassociated")
               assert_eq!(get!(., ["event.type"]), ["connection", "end"])
 
-  - name: router Wi-Fi, 802.1X authentication failed (the sample)
+  - name: router Wi-Fi, WPS failed (the sample)
     inputs:
       - insert_at: syslog
         type: vrl
@@ -168,7 +168,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "authentication-failed")
+              assert_eq!(get!(., ["event.action"]), "wps-failed")
               assert_eq!(get!(., ["event.category"]), ["authentication"])
               assert_eq!(get!(., ["event.type"]), ["start"])
               assert_eq!(get!(., ["event.outcome"]), "failure")
@@ -198,7 +198,7 @@ tests:
         type: vrl
         source: |
           . = {
-            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d6:6d:66:be:4c:3a WPA: pairwise key handshake completed (RSN)",
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl1.1: STA 06:72:3d:bf:a0:e1 RADIUS: starting accounting session 799313E0A6EA294A",
             "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
           }
     outputs:
@@ -206,7 +206,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["client.mac"]), "D6-6D-66-BE-4C-3A")
+              assert_eq!(get!(., ["client.mac"]), "06-72-3D-BF-A0-E1")
               assert!(!exists(."event.action"))
               assert!(!exists(."event.category"))
 
@@ -291,3 +291,42 @@ tests:
               assert_eq!(get!(., ["event.action"]), "dhcp-nak")
               assert_eq!(get!(., ["event.outcome"]), "failure")
               assert!(!exists(."client.domain"))
+
+  - name: "router Wi-Fi, pairwise key handshake: the device is in (the sample)"
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl1.1: STA f4:d1:08:ab:66:34 WPA: pairwise key handshake completed (RSN)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["client.mac"]), "F4-D1-08-AB-66-34")
+              assert_eq!(get!(., ["event.action"]), "pairwise-key-handshake-completed")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+
+  - name: router Wi-Fi, a WPS attempt (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d4:da:cd:7c:4c:3e IEEE 802.1X: Supplicant used different EAP type: 254 (expanded)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["client.mac"]), "D4-DA-CD-7C-4C-3E")
+              assert_eq!(get!(., ["event.action"]), "wps-attempted")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert!(!exists(."event.outcome"))
