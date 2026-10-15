@@ -1,0 +1,88 @@
+# The LAN's syslog, from rsyslog: event.dataset syslog.log, the sender as host.* (its hostname,
+# host.ip its address), log.syslog.*, process.name/pid, log.level from the severity. A line
+# that isn't syslog is kept as a pipeline_error.
+
+sources:
+  # The LAN's syslog, relayed by rsyslog (apps/base/rsyslog) through service.yaml: one JSON line
+  # per message, the message as it came (message), the sender's address (fromhost_ip), when it
+  # arrived (received) and over what (transport: imudp, imtcp).
+  syslog_relay:
+    type: socket
+    mode: tcp
+    address: 0.0.0.0:5514
+    decoding:
+      codec: json
+    framing:
+      method: newline_delimited
+
+transforms:
+  # Syslog, RFC 3164 or 5424 (parse_syslog), as Elastic's syslog fields: log.syslog.* and the
+  # sender as the host (host.hostname from the message, host.ip the address rsyslog saw), the
+  # program as process.name/process.pid, the severity as log.level too. An RFC 3164 timestamp has
+  # no year or time zone, so its _time is when rsyslog received it; RFC 5424's is its own.
+  syslog:
+    type: remap
+    inputs: [syslog_relay]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "syslog.log"
+      raw = string(.message) ?? ""
+      sender = string(.fromhost_ip) ?? ""
+      received = parse_timestamp(string(.received) ?? "", "%+") ?? now()
+      transport = string(.transport) ?? ""
+      . = {"_msg": raw, "_time": received, "event.created": now()}
+      if sender != "" { ."host.ip" = sender }
+      if transport == "imudp" { ."network.transport" = "udp" } else if transport == "imtcp" { ."network.transport" = "tcp" }
+      s, err = parse_syslog(raw)
+      if err != null {
+        %mismatch = "not syslog (RFC 3164 or 5424)"
+      } else {
+        ._msg = s.message
+        if is_integer(s.version) {
+          ."log.syslog.version" = to_string(s.version)
+          ._time = s.timestamp
+        }
+        severities = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"]
+        names = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational", "Debug"]
+        levels = ["critical", "critical", "critical", "error", "warning", "notice", "info", "debug"]
+        facilities = ["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"]
+        sev = -1
+        for_each(severities) -> |i, n| { if n == s.severity { sev = i } }
+        fac = -1
+        for_each(facilities) -> |i, n| { if n == s.facility { fac = i } }
+        if sev >= 0 {
+          ."log.syslog.severity.code" = sev
+          ."log.syslog.severity.name" = get!(names, [sev])
+          ."log.level" = get!(levels, [sev])
+        }
+        if fac >= 0 {
+          ."log.syslog.facility.code" = fac
+          ."log.syslog.facility.name" = s.facility
+        }
+        if sev >= 0 && fac >= 0 { ."log.syslog.priority" = fac * 8 + sev }
+        if is_string(s.hostname) && s.hostname != "-" {
+          ."log.syslog.hostname" = s.hostname
+          ."host.hostname" = s.hostname
+          ."host.name" = s.hostname
+        }
+        if is_string(s.appname) && s.appname != "-" {
+          ."log.syslog.appname" = s.appname
+          ."process.name" = s.appname
+          %provider = s.appname
+        }
+        if s.procid != null {
+          ."log.syslog.procid" = to_string(s.procid)
+          pid = to_int(s.procid) ?? null
+          if pid != null { ."process.pid" = pid }
+        }
+        if is_string(s.msgid) { ."log.syslog.msgid" = s.msgid }
+        # Anything else is RFC 5424 structured data: {<SD-ID>: {<name>: <value>}}.
+        sd = {}
+        for_each(s) -> |key, value| {
+          if !includes(["message", "hostname", "appname", "procid", "msgid", "facility", "severity", "timestamp", "version"], key) {
+            sd = set!(sd, [key], value)
+          }
+        }
+        if sd != {} { ."log.syslog.structured_data" = sd }
+      }

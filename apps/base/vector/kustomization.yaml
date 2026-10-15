@@ -1,4 +1,4 @@
-# Logs into VictoriaLogs (apps/base/monitoring), mapped to ECS fields (vector.yaml): every pod's
+# Logs into VictoriaLogs (apps/base/monitoring), mapped to ECS fields (config/, a file per source): every pod's
 # log lines with their namespace, pod, container and labels; kube-apiserver's audit log
 # (event.dataset kubernetes.audit) for the security detections
 # (apps/base/monitoring/vmalert-logs/rules/kube-audit.yml), what gets audited being the audit
@@ -16,8 +16,20 @@ resources:
   - service.yaml
   - journald-certificate.yaml
   - journald-route.yaml
-# A change rolls the pods (the name gets a hash). tests.yaml is for CI only.
+# A change rolls the pods (the name gets a hash). tests/ is for CI only.
 configMapGenerator:
   - name: vector
     files:
-      - vector.yaml
+      - config/authelia.yaml
+      - config/coredns.yaml
+      - config/envoy.yaml
+      - config/falco.yaml
+      - config/ghostunnel.yaml
+      - config/journald.yaml
+      - config/kubernetes-audit.yaml
+      - config/kubernetes-events.yaml
+      - config/lldap.yaml
+      - config/mealie.yaml
+      - config/pipeline.yaml
+      - config/syslog.yaml
+      - config/vaultwarden.yaml

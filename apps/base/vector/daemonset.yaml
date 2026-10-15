@@ -1,4 +1,4 @@
-# Vector (vector.yaml) on every node: every pod's log files (/var/log/pods), and on the control
+# Vector (config/) on every node: every pod's log files (/var/log/pods), and on the control
 # planes kube-apiserver's audit log (/var/log/audit/kube, as its own user, 65534). Root with only
 # CAP_DAC_READ_SEARCH: it can read those files and write its read positions and buffer to the
 # node (/var/lib/vector), nothing else. Its service account reads pods, namespaces and nodes
@@ -33,7 +33,7 @@ spec:
       containers:
         - name: vector
           image: timberio/vector:0.59.0-distroless-static@sha256:2138c72ef15477d3a60126da851407a198ec61d2ff4cd600a4e69db5f6a29ff7
-          args: ["--config", "/etc/vector/vector.yaml"]
+          args: ["--config", "/etc/vector/*.yaml"]
           env:
             - name: NODE_NAME
               valueFrom:

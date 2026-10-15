@@ -1,0 +1,389 @@
+# Unit tests for config/journald.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: journald entry, the common fields (cron)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "(root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)",
+            "@timestamp": "2026-10-14T12:00:00.123456Z", "timestamp": "2026-10-14T12:00:01.5Z",
+            "host": "prx-999-srv-mgmt-001",
+            "source_type": "http_server", "path": "/journald",
+            "X-Forwarded-For": "203.0.113.200, 192.168.111.254",
+            "event.created": "2026-10-14T12:00:00.200000Z",
+            "_HOSTNAME": "prx-999-srv-mgmt-001", "_MACHINE_ID": "a1a1", "_BOOT_ID": "b007",
+            "_SYSTEMD_UNIT": "cron.service", "_TRANSPORT": "syslog", "SYSLOG_IDENTIFIER": "CRON",
+            "SYSLOG_FACILITY": "9", "SYSLOG_PID": "4242", "PRIORITY": "6", "_PID": "4242", "_UID": "0",
+            "_GID": "0", "_COMM": "cron", "_EXE": "/usr/sbin/cron", "_CMDLINE": "/usr/sbin/CRON -f",
+            "_SYSTEMD_INVOCATION_ID": "inv1", "_SYSTEMD_SLICE": "system.slice", "_CAP_EFFECTIVE": "1ffffffffff",
+            "__CURSOR": "s=1;i=2", "__MONOTONIC_TIMESTAMP": "123", "__REALTIME_TIMESTAMP": "1791979200123456",
+            "__SEQNUM": "9", "__SEQNUM_ID": "x", "_SOURCE_REALTIME_TIMESTAMP": "1791979200123000",
+            "_STREAM_ID": "st"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "journald.log")
+              assert_eq!(get!(., ["event.provider"]), "CRON")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(._msg, "(root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)")
+              # When it was logged (@timestamp), not when it reached the listener (timestamp).
+              assert_eq!(._time, t'2026-10-14T12:00:00.123456Z')
+              # When the VM's Vector read it.
+              assert_eq!(get!(., ["event.created"]), t'2026-10-14T12:00:00.200Z')
+              assert_eq!(get!(., ["host.hostname"]), "prx-999-srv-mgmt-001")
+              assert_eq!(get!(., ["host.name"]), "prx-999-srv-mgmt-001.hirednoobs.com")
+              # The VM's own address: the last X-Forwarded-For entry (Envoy's).
+              assert_eq!(get!(., ["host.ip"]), "192.168.111.254")
+              assert_eq!(get!(., ["host.id"]), "a1a1")
+              assert_eq!(get!(., ["host.boot.id"]), "b007")
+              assert_eq!(get!(., ["process.pid"]), 4242)
+              assert_eq!(get!(., ["process.name"]), "cron")
+              assert_eq!(get!(., ["process.executable"]), "/usr/sbin/cron")
+              assert_eq!(get!(., ["process.command_line"]), "/usr/sbin/CRON -f")
+              assert_eq!(get!(., ["process.user.id"]), "0")
+              assert_eq!(get!(., ["process.group.id"]), "0")
+              assert_eq!(get!(., ["log.syslog.appname"]), "CRON")
+              assert_eq!(get!(., ["log.syslog.procid"]), "4242")
+              assert_eq!(get!(., ["log.syslog.severity.code"]), 6)
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Informational")
+              assert_eq!(get!(., ["log.syslog.facility.code"]), 9)
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "cron")
+              assert_eq!(get!(., ["log.syslog.priority"]), 78)
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["Systemd.Unit"]), "cron.service")
+              assert_eq!(get!(., ["Systemd.Transport"]), "syslog")
+              assert_eq!(get!(., ["Systemd.Journal.SystemdInvocationId"]), "inv1")
+              assert_eq!(get!(., ["Systemd.Journal.SystemdSlice"]), "system.slice")
+              assert_eq!(get!(., ["Systemd.Journal.CapEffective"]), "1ffffffffff")
+              # The journal's bookkeeping, and what was moved, is gone.
+              for_each(keys(.)) -> |_i, k| {
+                assert!(!match(k, r'^(_|[A-Z]+_)[A-Z_]+$|^(message|timestamp|@timestamp|host|path|source_type|X-Forwarded-For)$'), "still there: " + k)
+                assert!(!contains(k, "Cursor") && !contains(k, "Monotonic") && !contains(k, "Seqnum") && !contains(k, "StreamId") && !contains(k, "Realtime"), "bookkeeping: " + k)
+              }
+              assert!(!exists(.kubernetes))
+
+  - name: sshd login (Debian 13's sshd-session)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Accepted publickey for hirednoobs from 192.168.50.140 port 50004 ssh2: ED25519 SHA256:bbb",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session",
+            "PRIORITY": "6", "_PID": "900", "_COMM": "sshd-session"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "sshd.log")
+              assert_eq!(get!(., ["event.provider"]), "sshd")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["event.action"]), "ssh_login")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["user.name"]), "hirednoobs")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(get!(., ["source.port"]), 50004)
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.140"])
+              assert_eq!(get!(., ["related.user"]), ["hirednoobs"])
+              assert_eq!(get!(., ["Ssh.Method"]), "publickey")
+              assert_eq!(get!(., ["Ssh.Signature"]), "ED25519 SHA256:bbb")
+              assert_eq!(get!(., ["host.hostname"]), "prx-999-srv-vault-001")
+
+  - name: sshd failed login, invalid user
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Invalid user admin0 from 192.168.50.66 port 40000",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "ssh_login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["event.reason"]), "invalid user")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.66")
+              assert_eq!(get!(., ["source.port"]), 40000)
+              assert_eq!(get!(., ["user.name"]), "admin0")
+
+  - name: sshd failed login, closed before authentication
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Connection closed by authenticating user root 192.168.50.67 port 40011 [preauth]",
+            "timestamp": "2026-10-14T12:00:01Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "ssh_login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["event.reason"]), "closed before authentication")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.67")
+              assert_eq!(get!(., ["user.name"]), "root")
+
+  - name: sudo command (the command is the process, sudo its parent)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "www-data : PWD=/var/www ; USER=root ; COMMAND=/bin/bash",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "session-12.scope", "SYSLOG_IDENTIFIER": "sudo",
+            "PRIORITY": "5", "_PID": "5000", "_COMM": "sudo", "_EXE": "/usr/bin/sudo", "_CMDLINE": "sudo -s"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "sudo.log")
+              assert_eq!(get!(., ["event.provider"]), "sudo")
+              assert_eq!(get!(., ["event.category"]), ["process"])
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["user.name"]), "www-data")
+              assert_eq!(get!(., ["user.effective.name"]), "root")
+              assert_eq!(get!(., ["process.command_line"]), "/bin/bash")
+              assert_eq!(get!(., ["process.working_directory"]), "/var/www")
+              assert_eq!(get!(., ["process.parent.pid"]), 5000)
+              assert_eq!(get!(., ["process.parent.name"]), "sudo")
+              assert_eq!(get!(., ["process.parent.command_line"]), "sudo -s")
+              assert!(get!(., ["process.pid"]) == null)
+              assert_eq!(get!(., ["log.level"]), "notice")
+
+  - name: sudo refused (NOT in sudoers)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "eve : user NOT in sudoers ; TTY=pts/1 ; PWD=/home/eve ; USER=root ; COMMAND=/bin/bash",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "SYSLOG_IDENTIFIER": "sudo", "PRIORITY": "2"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["error.message"]), "user NOT in sudoers")
+              assert_eq!(get!(., ["user.name"]), "eve")
+              assert_eq!(get!(., ["Terminal.Name"]), "pts/1")
+              assert_eq!(get!(., ["log.level"]), "critical")
+
+  - name: Vault audit response with the root token
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"accessor\":\"hmac-sha256:aa\",\"client_token\":\"hmac-sha256:bb\",\"display_name\":\"root\",\"policies\":[\"root\"],\"token_policies\":[\"root\"],\"token_type\":\"service\"},\"request\":{\"id\":\"r-1\",\"operation\":\"update\",\"mount_type\":\"system\",\"path\":\"sys/audit/stdout\",\"remote_address\":\"192.168.111.254\",\"remote_port\":51000,\"namespace\":{\"id\":\"root\"},\"data\":{\"file_path\":\"hmac-sha256:cc\"}},\"response\":{},\"time\":\"2026-10-14T12:00:00.5Z\",\"type\":\"response\"}",
+            "timestamp": "2026-10-14T12:00:00.6Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "SYSLOG_IDENTIFIER": "vault", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "vault.audit")
+              assert_eq!(get!(., ["event.provider"]), "vault")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.type"]), ["info"])
+              assert_eq!(get!(., ["event.action"]), "update")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["event.id"]), "r-1")
+              assert_eq!(get!(., ["source.ip"]), "192.168.111.254")
+              assert_eq!(get!(., ["source.port"]), 51000)
+              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(get!(., ["user.roles"]), ["root"])
+              assert_eq!(._time, t'2026-10-14T12:00:00.5Z')
+              assert_eq!(._msg, "response update sys/audit/stdout by root")
+              # The rest, Vault's names capitalised; the request's data keeps its keys.
+              assert_eq!(get!(., ["Secrets.Audit.Request", "Path"]), "sys/audit/stdout")
+              assert_eq!(get!(., ["Secrets.Audit.Request", "MountType"]), "system")
+              assert_eq!(get!(., ["Secrets.Audit.Auth", "TokenPolicies"]), ["root"])
+              assert_eq!(get!(., ["Secrets.Audit.Type"]), "response")
+              # The data as one JSON text field.
+              assert_eq!(get!(., ["Secrets.Audit.Request.Data"]), "{\"file_path\":\"hmac-sha256:cc\"}")
+              assert!(get!(., ["Secrets.Audit.Time"]) == null)
+
+  - name: Vault audit, a failed userpass login (the error in the response's data)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"\",\"policies\":[]},\"request\":{\"id\":\"r-2\",\"operation\":\"update\",\"path\":\"auth/userpass/login/nobody\",\"remote_address\":\"192.168.50.77\",\"remote_port\":51001},\"response\":{\"data\":{\"error\":\"invalid username or password\"}},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"response\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["error.message"]), "invalid username or password")
+              assert!(get!(., ["user.name"]) == null)
+              assert_eq!(get!(., ["Secrets.Audit.Response.Data"]), "{\"error\":\"invalid username or password\"}")
+              assert_eq!(._msg, "response update auth/userpass/login/nobody failed: invalid username or password")
+
+  - name: Vault audit, a Kubernetes login (the token's metadata keeps its keys in the response too)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"kubernetes-external-secrets\",\"policies\":[\"default\"],\"metadata\":{\"role\":\"eso\",\"service_account_uid\":\"sa-1\"}},\"request\":{\"id\":\"r-3\",\"operation\":\"update\",\"path\":\"auth/kubernetes/login\",\"remote_address\":\"192.168.111.22\",\"remote_port\":51002},\"response\":{\"auth\":{\"client_token\":\"hmac-sha256:dd\",\"metadata\":{\"role\":\"eso\",\"service_account_uid\":\"sa-1\"}},\"mount_accessor\":\"auth_kubernetes_1\"},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"response\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["Secrets.Audit.Auth.Metadata"]), {"role": "eso", "service_account_uid": "sa-1"})
+              assert_eq!(get!(., ["Secrets.Audit.Response.Auth.Metadata"]), {"role": "eso", "service_account_uid": "sa-1"})
+              assert_eq!(get!(., ["Secrets.Audit.Response", "Auth", "ClientToken"]), "hmac-sha256:dd")
+              assert_eq!(get!(., ["Secrets.Audit.Response", "MountAccessor"]), "auth_kubernetes_1")
+              assert!(get!(., ["Secrets.Audit.Response", "Auth", "Metadata"]) == null)
+
+  - name: Vault audit, a secret read (its keys stay inside one data field)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"kubernetes-external-secrets\",\"policies\":[\"eso\"]},\"request\":{\"id\":\"r-4\",\"operation\":\"read\",\"path\":\"labv2/data/production/contentbot\",\"remote_address\":\"192.168.111.22\",\"remote_port\":51003},\"response\":{\"data\":{\"data\":{\"CYTUBE_USER\":\"hmac-sha256:9f2c\",\"CYTUBE_PASS\":\"hmac-sha256:1c7a\"},\"metadata\":{\"version\":3}}},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"response\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              data = get!(., ["Secrets.Audit.Response.Data"])
+              assert!(is_string(data))
+              assert_eq!(parse_json!(data), {"data": {"CYTUBE_USER": "hmac-sha256:9f2c", "CYTUBE_PASS": "hmac-sha256:1c7a"}, "metadata": {"version": 3}})
+              assert!(get!(., ["Secrets.Audit.Response", "Data"]) == null)
+              assert_eq!(get!(., ["event.action"]), "read")
+
+  - name: Vault's own line
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-14T12:00:00.000Z [WARN]  core: something odd",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "SYSLOG_IDENTIFIER": "vault", "PRIORITY": "4"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "vault.log")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.logger"]), "core")
+
+  - name: Forgejo failed login through the proxy (no port)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/10/14 12:00:00 routers/web/auth/auth.go:220:SignInPost() [W] Failed authentication attempt for admin from 192.168.50.88: user does not exist [uid: 0, name: admin]",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "forgejo.service", "SYSLOG_IDENTIFIER": "forgejo", "PRIORITY": "4"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "forgejo.log")
+              assert_eq!(get!(., ["event.provider"]), "forgejo")
+              # The line as it came, like the other sources' parsers.
+              assert_eq!(._msg, "2026/10/14 12:00:00 routers/web/auth/auth.go:220:SignInPost() [W] Failed authentication attempt for admin from 192.168.50.88: user does not exist [uid: 0, name: admin]")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.origin.file.name"]), "routers/web/auth/auth.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 220)
+              assert_eq!(get!(., ["log.origin.function"]), "SignInPost")
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["user.name"]), "admin")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.88")
+              assert!(get!(., ["source.port"]) == null)
+              assert_eq!(get!(., ["event.reason"]), "user does not exist [uid: 0, name: admin]")
+
+  - name: Forgejo failed login as the journal has it (no console prefix, port 0)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Failed authentication attempt for hirednoobs from 192.168.50.140:0: user's password is invalid [uid: 1, name: HiredNoobs]",
+            "timestamp": "2026-10-14T18:46:37Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "forgejo.service", "SYSLOG_IDENTIFIER": "forgejo", "PRIORITY": "4",
+            "CODE_FILE": "routers/web/auth/auth.go", "CODE_LINE": "220", "CODE_FUNC": "SignInPost"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "forgejo.log")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["user.name"]), "hirednoobs")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert!(get!(., ["source.port"]) == null)
+              assert_eq!(get!(., ["event.reason"]), "user's password is invalid [uid: 1, name: HiredNoobs]")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.origin.file.name"]), "routers/web/auth/auth.go")
+              assert_eq!(get!(., ["log.origin.function"]), "SignInPost")
+
+  - name: Forgejo failed login straight to it (with a port)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/10/14 12:00:10 routers/web/auth/auth.go:220:SignInPost() [W] Failed authentication attempt for hirednoobs from 127.0.0.1:44330: password mismatch",
+            "timestamp": "2026-10-14T12:00:10Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "forgejo.service", "PRIORITY": "4"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["source.ip"]), "127.0.0.1")
+              assert_eq!(get!(., ["source.port"]), 44330)
+              assert_eq!(get!(., ["event.reason"]), "password mismatch")

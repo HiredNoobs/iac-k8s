@@ -1,0 +1,16 @@
+transforms:
+  # ghostunnel (lldap's HTTPS): "[<pid>] <time> opening pipe: tcp:<client> [...] <-> tcp:<target>".
+  ghostunnel:
+    type: remap
+    inputs: [by_source.ghostunnel]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "ghostunnel.log"
+      pipe, err = parse_regex(string(._msg) ?? "", r'pipe: tcp:\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+) .*<-> tcp:\[?(?P<dip>[0-9A-Fa-f.:]+?)\]?:(?P<dport>\d+)')
+      if err == null {
+        ."source.ip" = pipe.ip
+        ."source.port" = to_int(pipe.port) ?? null
+        ."destination.ip" = pipe.dip
+        ."destination.port" = to_int(pipe.dport) ?? null
+      }

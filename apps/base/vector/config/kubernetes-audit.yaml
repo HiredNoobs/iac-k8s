@@ -1,0 +1,159 @@
+# kube-apiserver's audit log, on the control planes: each event as one JSON line, with
+#   _msg       "<verb> <requestURI> <code> by <user>", a summary to read in lists
+#   _time      when the response completed (stageTimestamp)
+# the common fields: event.dataset (kubernetes.audit), event.provider (kube-apiserver),
+# event.kind, host.hostname, host.name, related.*, and as Elastic's Kubernetes audit integration
+# source.ip and client.ip (the client, sourceIPs[0]), user.name, user.id, user_agent.original,
+# event.action (the verb), event.outcome (the authorizer's decision), orchestrator.* (the object),
+# plus user.group.name, http.response.status_code, error.message (the response's message),
+# url.original, url.path and url.query (requestURI), event.id (auditID), event.start and
+# event.end (when it was received and completed). The rest under Orchestrator.Resource.* and
+# Orchestrator.Audit.*. A line that isn't JSON is kept as a pipeline_error.
+
+sources:
+  audit:
+    type: file
+    include:
+      - /var/log/audit/kube/*.log
+    # Without a checkpoint (first start), from now: the files hold up to 30 days of the old,
+    # untrimmed policy. Files rotated in later are read from their start.
+    read_from: end
+    ignore_older_secs: 86400
+
+transforms:
+  events:
+    type: remap
+    inputs: [audit]
+    # A line that isn't JSON isn't sent half-parsed: it goes to audit_unparsed.
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      . = object!(parse_json!(.message))
+      ."event.created" = now()
+      ._time = .stageTimestamp || .requestReceivedTimestamp
+      node = get_env_var!("NODE_NAME")
+      code = ""
+      if .responseStatus.code != null { code = to_string!(.responseStatus.code) }
+      ._msg = join!(compact([
+        string(.verb) ?? "",
+        string(.requestURI) ?? "",
+        code,
+        "by",
+        string(.user.username) ?? "",
+      ]), " ")
+
+      # The common fields (ECS, as for pod logs).
+      ."event.dataset" = "kubernetes.audit"
+      ."event.provider" = "kube-apiserver"
+      ."event.kind" = "event"
+      domain = get_env_var("NODE_DOMAIN") ?? ""
+      ."host.hostname" = node
+      ."host.name" = if domain == "" { node } else { node + "." + domain }
+      ."source.ip" = .sourceIPs[0]
+      ."user.name" = .user.username
+      ."user_agent.original" = .userAgent
+      ."event.action" = .verb
+      # As Elastic's Kubernetes audit integration: whether the authorizer allowed it (a request
+      # it allowed can still be refused later, e.g. by Pod Security: http.response.status_code).
+      decision = get!(.annotations, ["authorization.k8s.io/decision"])
+      if decision == "allow" {
+        ."event.outcome" = "success"
+      } else if decision == "forbid" {
+        ."event.outcome" = "failure"
+      }
+      status = to_int(.responseStatus.code) ?? 0
+      if status > 0 { ."http.response.status_code" = status }
+      # Why it was refused (e.g. Pod Security's "violates PodSecurity ...").
+      if is_string(.responseStatus.message) { ."error.message" = .responseStatus.message }
+      if .auditID != null { ."event.id" = del(.auditID) }
+      if .requestReceivedTimestamp != null { ."event.start" = del(.requestReceivedTimestamp) }
+      if .stageTimestamp != null { ."event.end" = del(.stageTimestamp) }
+      if is_string(.requestURI) {
+        ."url.original" = del(.requestURI)
+        parts = split(string!(."url.original"), "?", limit: 2)
+        ."url.path" = parts[0]
+        if length(parts) > 1 { ."url.query" = parts[1] }
+      }
+      ips = array(.sourceIPs) ?? []
+      if ips != [] { ."client.ip" = ips[0]; ."related.ip" = ips }
+      if is_string(.user.uid) { ."user.id" = .user.uid }
+      if is_array(.user.groups) { ."user.group.name" = .user.groups }
+      # The object, as Elastic's: its resource (pods, secrets, ...), namespace and name, and
+      # orchestrator.api_version the resource's API (rbac.authorization.k8s.io/v1, v1), not the
+      # audit event's own.
+      ."orchestrator.type" = "kubernetes"
+      ref = object(.objectRef) ?? {}
+      if is_string(ref.resource) { ."orchestrator.resource.type" = ref.resource }
+      if is_string(ref.namespace) { ."orchestrator.namespace" = ref.namespace }
+      if is_string(ref.name) { ."orchestrator.resource.name" = ref.name }
+      if is_string(ref.uid) { ."orchestrator.resource.id" = ref.uid }
+      if is_string(ref.apiVersion) {
+        group = string(ref.apiGroup) ?? ""
+        ."orchestrator.api_version" = if group == "" { ref.apiVersion } else { group + "/" + string!(ref.apiVersion) }
+      }
+
+      # The rest has no ECS field: under Orchestrator.Resource (the object's) and
+      # Orchestrator.Audit (the event's), the event's names capitalised. The objects that are
+      # Kubernetes' own data (the request and response bodies, annotations, user extras) keep
+      # their keys.
+      for_each(ref) -> |key, value| {
+        if !includes(["resource", "namespace", "name", "uid", "apiVersion"], key) {
+          . = set!(., ["Orchestrator.Resource." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+      user = object(.user) ?? {}
+      for_each(user) -> |key, value| {
+        if key == "extra" {
+          ."Orchestrator.Audit.UserExtra" = value
+        } else if !includes(["username", "uid", "groups"], key) {
+          . = set!(., ["Orchestrator.Audit.User." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+      response = object(.responseStatus) ?? {}
+      for_each(response) -> |key, value| {
+        if !includes(["code", "message"], key) && value != {} {
+          . = set!(., ["Orchestrator.Audit.ResponseStatus." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+      impersonated = object(.impersonatedUser) ?? {}
+      for_each(impersonated) -> |key, value| {
+        name = if key == "extra" { "Extra" } else { upcase(slice!(key, 0, 1)) + slice!(key, 1) }
+        . = set!(., ["Orchestrator.Audit.ImpersonatedUser." + name], value)
+      }
+      # sourceIPs when it has more than the client (a proxy's chain).
+      if length(ips) > 1 { ."Orchestrator.Audit.SourceIPs" = ips }
+      # The audit event's own type (Event, audit.k8s.io/v1) says nothing.
+      del(.kind)
+      del(.apiVersion)
+      for_each(["verb", "userAgent", "user", "sourceIPs", "objectRef", "responseStatus", "impersonatedUser"]) -> |_i, key| {
+        . = remove!(., [key])
+      }
+      for_each(.) -> |key, value| {
+        if !starts_with(key, "_") && !contains(key, ".") {
+          . = remove!(., [key])
+          . = set!(., ["Orchestrator.Audit." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
+        }
+      }
+
+  # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
+  # the audit log that can't be read is worth seeing.
+  audit_unparsed:
+    type: remap
+    inputs: [events.dropped]
+    source: |
+      node = get_env_var("NODE_NAME") ?? ""
+      domain = get_env_var("NODE_DOMAIN") ?? ""
+      fqdn = if domain == "" { node } else { node + "." + domain }
+      . = {
+        "_msg": .message,
+        "_time": .timestamp,
+        "event.created": now(),
+        "ecs.version": "9.5.0",
+        "event.dataset": "kubernetes.audit",
+        "event.provider": "kube-apiserver",
+        "host.hostname": node,
+        "host.name": fqdn,
+        "event.kind": "pipeline_error",
+        "error.type": "remap_error",
+        "error.message": .metadata.dropped.message,
+      }

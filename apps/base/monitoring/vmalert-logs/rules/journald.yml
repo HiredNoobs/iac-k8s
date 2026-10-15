@@ -1,5 +1,5 @@
 # The prx-999 VMs' journals (iac-homelab's vector role, through apps/base/vector), mapped to ECS
-# fields by Vector (apps/base/vector/vector.yaml): prx-999-srv-{mgmt,git,runner,vault}-001 as
+# fields by Vector (apps/base/vector/config/journald.yaml): prx-999-srv-{mgmt,git,runner,vault}-001 as
 # host.hostname (host.name is the FQDN, a stream field). sshd's lines are event.dataset sshd.log
 # (logins as event.action ssh_login with event.outcome, user.name, source.ip, Ssh.Method), sudo's
 # sudo.log (user.name, user.effective.name, the command as process.command_line, refusals as

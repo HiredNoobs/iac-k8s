@@ -111,15 +111,15 @@ jobs:
 
           python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
 
-      # Vector's config loads, and its transforms do what tests.yaml expects.
+      # Vector's config loads, and its transforms do what tests/ expects.
       - name: Vector
         env:
           NODE_NAME: cp-1
           NODE_DOMAIN: hirednoobs.com
           VECTOR_SELF_NODE_NAME: cp-1
         run: |
-          vector validate --no-environment apps/base/vector/vector.yaml
-          vector test apps/base/vector/vector.yaml apps/base/vector/tests.yaml
+          vector validate --no-environment apps/base/vector/config/*.yaml
+          vector test apps/base/vector/config/*.yaml apps/base/vector/tests/*.yaml
 
       # The Security folder's ATT&CK coverage dashboard is generated from the alert rules' labels.
       - name: ATT&CK coverage

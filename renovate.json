@@ -107,7 +107,7 @@
       "groupName": "falco"
     },
     {
-      "description": "lint.yml tests vector.yaml with the image's version",
+      "description": "lint.yml tests Vector's config with the image's version",
       "matchPackageNames": ["timberio/vector", "vectordotdev/vector"],
       "groupName": "vector"
     },

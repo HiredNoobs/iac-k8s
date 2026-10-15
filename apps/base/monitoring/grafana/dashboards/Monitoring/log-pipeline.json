@@ -167,7 +167,7 @@
       "type": "stat",
       "title": "Remap errors",
       "id": 4,
-      "description": "Lines a remap failed on (error.type remap_error): a bug in apps/base/vector/vector.yaml.",
+      "description": "Lines a remap failed on (error.type remap_error): a bug in apps/base/vector/config/.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"

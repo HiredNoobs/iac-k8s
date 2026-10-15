@@ -1,0 +1,158 @@
+# Unit tests for config/authelia.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: Authelia failed first factor, banned
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"method\":\"POST\",\"msg\":\"Unsuccessful 1FA authentication attempt by user 'bob' and they are banned until 12:05:00PM on October 13 2026 (+00:00)\",\"path\":\"/api/firstfactor\",\"remote_ip\":\"192.168.50.140\",\"time\":\"2026-10-13T12:00:00Z\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(get!(., ["user.name"]), "bob")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["event.reason"]), "banned")
+              assert_eq!(get!(., ["http.request.method"]), "POST")
+              assert_eq!(get!(., ["url.path"]), "/api/firstfactor")
+              assert!(!exists(.remote_ip))
+              assert!(!exists(.method))
+              assert!(!exists(.path))
+
+  - name: Authelia failed TOTP, empty user stays unset
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"msg\":\"Unsuccessful TOTP authentication attempt by user ''\",\"remote_ip\":\"192.168.50.140\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "totp-login")
+              assert!(!exists(."user.name"))
+              assert!(!exists(."event.reason"))
+
+  - name: Authelia unknown user
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"msg\":\"Error occurred getting details for user with username input 'mallory' which usually indicates they do not exist\",\"remote_ip\":\"192.168.50.9\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["user.name"]), "mallory")
+              assert_eq!(get!(., ["event.reason"]), "unknown user")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+
+  - name: Authelia request timeout (its own status_code)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"method\":\"GET\",\"path\":\"/\",\"remote_ip\":\"10.244.10.27\",\"status_code\":408,\"error\":\"read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout\",\"time\":\"2026-10-14T20:45:29Z\",\"msg\":\"Request timeout occurred while handling request from client.\"}",
+            "timestamp": t'2026-10-14T20:45:29.600Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia", "pod_node_name": "worker-2"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["http.response.status_code"]), 408)
+              assert!(!exists(.status_code))
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(get!(., ["url.path"]), "/")
+              assert_eq!(get!(., ["error.message"]), "read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout")
+
+  - name: Authelia access decision (the sample line)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"method\":\"GET\",\"msg\":\"Access to https://victoriametrics.hirednoobs.com/ (method GET) is not authorized to user <anonymous>, responding with status code 302 with location redirect to https://auth.hirednoobs.com/?rd=https%3A%2F%2Fvictoriametrics.hirednoobs.com%2F&rm=GET\",\"path\":\"/api/authz/ext-authz\",\"remote_ip\":\"10.244.6.37\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "authorization")
+              # A refused request to a site, not a login.
+              assert_eq!(get!(., ["event.category"]), ["web"])
+              assert_eq!(get!(., ["event.type"]), ["access", "denied"])
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["url.full"]), "https://victoriametrics.hirednoobs.com/")
+              assert_eq!(get!(., ["url.domain"]), "victoriametrics.hirednoobs.com")
+              assert_eq!(get!(., ["url.path"]), "/")
+              assert_eq!(get!(., ["http.response.status_code"]), 302)
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert!(!exists(."user.name"))
+              # The check request's copies.
+              assert!(!exists(.method))
+              assert!(!exists(.path))
+
+  - name: Authelia access decision whose own request isn't the check request keeps it
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"method\":\"POST\",\"msg\":\"Access to https://grafana.hirednoobs.com/x (method GET) is not authorized to user <anonymous>, responding with status code 401\",\"path\":\"/somewhere/else\",\"remote_ip\":\"10.244.6.37\"}",
+            "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(get!(., ["url.path"]), "/x")
+              assert_eq!(.method, "POST")
+              assert_eq!(.path, "/somewhere/else")
+
+  - name: "format mismatch: Authelia line that isn't its JSON"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "time=2026-10-13T08:00:00Z level=info msg=hello",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")

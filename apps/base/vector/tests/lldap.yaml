@@ -1,0 +1,136 @@
+# Unit tests for config/lldap.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: lldap's own line (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T08:48:31.145935991+00:00  INFO     ｉ [info]: LDAP session start: b7181dbe-3cf0-4a51-b71c-0d74e82428e7",
+            "timestamp": t'2026-10-13T08:48:31.146Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "lldap.log")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert!(!exists(.level))
+
+  - name: lldap login attempt (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T13:39:42.707344684+00:00  INFO     ｉ [info]: OPAQUE login attempt for \"hirednoobs\"",
+            "timestamp": t'2026-10-13T13:39:42.707Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.action"]), "password-login")
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["event.outcome"]), "unknown")
+              assert_eq!(get!(., ["user.name"]), "hirednoobs")
+              assert_eq!(get!(., ["log.level"]), "info")
+
+  - name: lldap's WARN line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T08:48:31.145935991+00:00  WARN     ┕━ 🚧 [warn]: something",
+            "timestamp": t'2026-10-13T08:48:31.146Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+
+  - name: lldap-bootstrap removed a user from a group
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "User \"mallory\" successfully removed from the group \"lldap_admin\" (1)",
+            "timestamp": t'2026-10-13T09:17:02.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-bootstrap-29340000-abcde", "container_name": "bootstrap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "lldap.bootstrap")
+              assert_eq!(get!(., ["event.provider"]), "lldap-bootstrap")
+              assert_eq!(get!(., ["event.category"]), ["iam"])
+              assert_eq!(get!(., ["event.action"]), "removed-from-group")
+              assert_eq!(get!(., ["event.type"]), ["group", "change"])
+              assert_eq!(get!(., ["user.name"]), "mallory")
+              assert_eq!(get!(., ["group.name"]), "lldap_admin")
+
+  - name: lldap-bootstrap deleted a group
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "Group \"extra\" (7) successfully deleted",
+            "timestamp": t'2026-10-13T09:17:02.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-bootstrap-29340000-abcde", "container_name": "bootstrap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "group-deleted")
+              assert_eq!(get!(., ["event.type"]), ["group", "deletion"])
+              assert_eq!(get!(., ["group.name"]), "extra")
+              assert!(!exists(."user.name"))
+
+  - name: "format mismatch: lldap timestamped line without a level"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T08:48:31.145935991+00:00 [info] LDAP session start",
+            "timestamp": t'2026-10-13T08:48:31.146Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+
+  - name: lldap startup line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "> Starting lldap..",
+            "timestamp": t'2026-10-13T08:48:31.146Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-0", "container_name": "lldap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")

@@ -1,0 +1,55 @@
+transforms:
+  # CoreDNS: "[<LEVEL>] plugin/<name>: <message>". The errors plugin's lines are failed queries:
+  # "<rcode> <name> <type>: <error>" (plugin/errors/errors.go), the error usually naming the
+  # upstream it asked ("read udp <us>-><upstream>:53: i/o timeout"), or with consolidate,
+  # "<count> errors like '<pattern>' occurred in last <duration>". Mapped as Elastic's CoreDNS
+  # integration (the response code by its name), with the error in error.message.
+  coredns:
+    type: remap
+    inputs: [by_source.coredns]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "coredns.log"
+      ."event.category" = ["network"]
+      ."event.type" = ["protocol"]
+      ."network.protocol" = "dns"
+      msg = string(._msg) ?? ""
+      line, err = parse_regex(msg, r'^\[(?P<level>[A-Z]+)\] (?:(?P<plugin>plugin/[a-z0-9_]+): )?(?P<rest>.*)$')
+      if err != null && starts_with(msg, "[") {
+        # Not the startup banner (".:53", "CoreDNS-<version>", ...), which has no prefix.
+        %mismatch = "no [<LEVEL>] prefix"
+      }
+      if err == null {
+        l = downcase(string!(line.level))
+        ."log.level" = if l == "warn" { "warning" } else if l == "fatal" { "critical" } else { l }
+        if line.plugin != null { ."log.logger" = line.plugin }
+        if line.plugin == "plugin/errors" {
+          rest = string!(line.rest)
+          q, err = parse_regex(rest, r'^(?P<rcode>\d+) (?P<name>\S+) (?P<type>[A-Z0-9]+): (?P<error>.*)$')
+          many, many_err = parse_regex(rest, r'^(?P<count>\d+) errors like \'(?P<pattern>.*)\' occurred in last \S+$')
+          if err == null {
+            rcode = to_int(q.rcode) ?? -1
+            # RFC 1035 and 6895's names, as dns.response_code.
+            names = ["NOERROR", "FORMERR", "SERVFAIL", "NXDOMAIN", "NOTIMP", "REFUSED", "YXDOMAIN", "YXRRSET", "NXRRSET", "NOTAUTH", "NOTZONE"]
+            name = get!(names, [rcode])
+            ."dns.response_code" = if name != null { name } else { q.rcode }
+            ."event.outcome" = if rcode == 0 { "success" } else { "failure" }
+            ."dns.question.name" = replace(string!(q.name), r'\.$', "")
+            ."dns.question.type" = q.type
+            ."error.message" = q.error
+            upstream, err = parse_regex(string!(q.error), r'->\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)')
+            if err == null {
+              ."destination.ip" = upstream.ip
+              ."destination.port" = to_int(upstream.port) ?? null
+            }
+          } else if many_err == null {
+            ."event.outcome" = "failure"
+            # No ECS field for how many.
+            ."Dns.ErrorCount" = to_int(many.count) ?? null
+            ."error.message" = many.pattern
+          } else {
+            %mismatch = "an errors plugin line that isn't <rcode> <name> <type>: <error>"
+          }
+        }
+      }

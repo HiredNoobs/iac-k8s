@@ -1,0 +1,143 @@
+# Unit tests for config/coredns.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: CoreDNS failed query (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "coredns.log")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["log.logger"]), "plugin/errors")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              # The first number is the response code (plugin/errors), by its name.
+              assert_eq!(get!(., ["dns.response_code"]), "SERVFAIL")
+              assert!(get!(., ["event.count"]) == null)
+              assert_eq!(get!(., ["dns.question.name"]), "pihole.hirednoobs.com")
+              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
+              assert_eq!(get!(., ["error.message"]), "read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
+              assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
+              assert_eq!(get!(., ["destination.port"]), 53)
+              assert_eq!(get!(., ["related.ip"]), ["169.254.116.108"])
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["protocol"])
+              assert_eq!(get!(., ["network.protocol"]), "dns")
+
+  - name: CoreDNS consolidated errors line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 3 errors like '^read udp .* i/o timeout$' occurred in last 5m0s",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["Dns.ErrorCount"]), 3)
+              assert_eq!(get!(., ["error.message"]), "^read udp .* i/o timeout$")
+              assert!(get!(., ["dns.response_code"]) == null)
+
+  - name: CoreDNS response code with no name stays a number
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 23 x.hirednoobs.com. A: bad cookie",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["dns.response_code"]), "23")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+
+  - name: CoreDNS other plugin line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[INFO] plugin/reload: Running configuration SHA512 = 1a2b",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["log.logger"]), "plugin/reload")
+              assert!(!exists(."dns.question.name"))
+
+  - name: "format mismatch: CoreDNS errors line that isn't a query"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: something new happened",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(get!(., ["log.level"]), "error")
+
+  - name: "format mismatch: CoreDNS bracketed line without a level"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[error] plugin/errors: 2 a. A: x",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.message"]), "no [<LEVEL>] prefix")
+
+  - name: CoreDNS banner line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "CoreDNS-1.12.4",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")

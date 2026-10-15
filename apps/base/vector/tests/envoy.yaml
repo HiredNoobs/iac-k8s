@@ -1,0 +1,246 @@
+# Unit tests for config/envoy.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: Envoy access log line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"POST auth.hirednoobs.com/api/firstfactor?x=1 401 12ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"method\":\"POST\",\"x-envoy-origin-path\":\"/api/firstfactor?x=1\",\"protocol\":\"HTTP/2\",\"response_code\":401,\"response_flags\":\"-\",\"bytes_received\":120,\"bytes_sent\":64,\"duration\":12,\"x-forwarded-for\":null,\"user-agent\":\"Mozilla/5.0\",\"x-request-id\":\"9f0c\",\":authority\":\"auth.hirednoobs.com\",\"upstream_host\":\"10.244.3.7:9091\",\"downstream_remote_address\":\"192.168.50.10:51234\",\"route_name\":\"httproute/authelia/authelia/rule/0/match/0/auth_hirednoobs_com\"}",
+            "timestamp": t'2026-10-13T08:00:00.013Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy", "pod_node_name": "worker-4"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.access")
+              assert_eq!(get!(., ["event.provider"]), "envoy")
+              assert_eq!(get!(., ["ecs.version"]), "9.5.0")
+              assert!(is_timestamp(get!(., ["event.created"])))
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.10")
+              assert_eq!(get!(., ["source.port"]), 51234)
+              assert_eq!(get!(., ["http.request.method"]), "POST")
+              assert_eq!(get!(., ["http.response.status_code"]), 401)
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["url.domain"]), "auth.hirednoobs.com")
+              assert_eq!(get!(., ["url.original"]), "/api/firstfactor?x=1")
+              assert_eq!(get!(., ["url.path"]), "/api/firstfactor")
+              assert_eq!(get!(., ["url.query"]), "x=1")
+              assert_eq!(get!(., ["user_agent.original"]), "Mozilla/5.0")
+              assert_eq!(get!(., ["http.request.id"]), "9f0c")
+              assert_eq!(get!(., ["http.request.body.bytes"]), 120)
+              assert_eq!(get!(., ["http.response.body.bytes"]), 64)
+              assert_eq!(get!(., ["event.duration"]), 12000000)
+              assert_eq!(get!(., ["host.hostname"]), "worker-4")
+              assert_eq!(get!(., ["host.name"]), "worker-4.hirednoobs.com")
+              assert_eq!(._msg, "POST auth.hirednoobs.com/api/firstfactor?x=1 401 12ms")
+              assert_eq!(get!(., ["destination.address"]), "10.244.3.7")
+              assert_eq!(get!(., ["destination.ip"]), "10.244.3.7")
+              assert_eq!(get!(., ["destination.port"]), 9091)
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.10", "10.244.3.7"])
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["connection", "protocol"])
+              assert_eq!(get!(., ["network.protocol"]), "http")
+              assert_eq!(get!(., ["Proxy.RouteName"]), "httproute/authelia/authelia/rule/0/match/0/auth_hirednoobs_com")
+              # No upstream time header: none, not 0.
+              assert!(get!(., ["Proxy.UpstreamServiceTime"]) == null)
+              assert_eq!(get!(., ["event.start"]), "2026-10-13T08:00:00.000Z")
+              assert_eq!(get!(., ["http.version"]), "2")
+              # Moved to their ECS or Proxy.* fields, or only "-" or null.
+              for_each(["downstream_remote_address", ":authority", "x-envoy-origin-path", "method", "response_code", "user-agent", "x-request-id", "bytes_received", "bytes_sent", "duration", "upstream_host", "route_name", "response_flags", "x-forwarded-for", "start_time", "protocol"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert!(get!(., ["Proxy.ResponseFlags"]) == null)
+              assert!(get!(., ["Proxy.ForwardedFor"]) == null)
+              # "Mozilla/5.0" alone names nothing.
+              assert!(get!(., ["user_agent.name"]) == null)
+              assert!(get!(., ["user_agent.device.name"]) == null)
+
+  - name: Envoy access log line as it arrives (strings, "-")
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\":authority\":\"nas.hirednoobs.com\",\"bytes_received\":\"0\",\"bytes_sent\":\"3504\",\"downstream_local_address\":\"10.244.10.27:10443\",\"downstream_remote_address\":\"10.244.6.37:39602\",\"duration\":\"2\",\"message\":\"GET nas.hirednoobs.com/desktop/?os=ugospro 200 2ms\",\"method\":\"GET\",\"protocol\":\"HTTP/1.1\",\"requested_server_name\":\"nas.hirednoobs.com\",\"response_code\":\"200\",\"response_code_details\":\"via_upstream\",\"response_flags\":\"-\",\"route_name\":\"httproute/gateway/nas/rule/0/match/0/nas_hirednoobs_com\",\"start_time\":\"2026-10-13T12:08:05.863Z\",\"upstream_cluster\":\"httproute/gateway/nas/rule/0\",\"upstream_host\":\"192.168.111.6:9999\",\"upstream_local_address\":\"10.244.10.27:34396\",\"user-agent\":\"Blackbox-Exporter/0.29.0\",\"x-envoy-origin-path\":\"/desktop/?os=ugospro\",\"x-forwarded-for\":\"10.244.6.37\",\"x-request-id\":\"5d2b0657-4086-4895-99fd-2fdfa95638eb\"}",
+            "timestamp": t'2026-10-13T12:08:14.405Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-gateway-public-1e7f3513-769954cf7f-7jsx2", "container_name": "envoy", "pod_node_name": "prx-003-srv-prod-core-worker-001"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["source.ip"]), "10.244.6.37")
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["http.request.body.bytes"]), 0)
+              assert_eq!(get!(., ["http.response.body.bytes"]), 3504)
+              assert_eq!(get!(., ["event.duration"]), 2000000)
+              assert_eq!(get!(., ["url.path"]), "/desktop/")
+              assert_eq!(get!(., ["url.query"]), "os=ugospro")
+              assert_eq!(get!(., ["host.hostname"]), "prx-003-srv-prod-core-worker-001")
+              assert_eq!(get!(., ["host.name"]), "prx-003-srv-prod-core-worker-001.hirednoobs.com")
+              assert_eq!(get!(., ["http.version"]), "1.1")
+              assert_eq!(get!(., ["tls.client.server_name"]), "nas.hirednoobs.com")
+              assert_eq!(get!(., ["event.start"]), "2026-10-13T12:08:05.863Z")
+              assert!(!exists(.requested_server_name))
+              assert_eq!(get!(., ["destination.ip"]), "192.168.111.6")
+              assert_eq!(get!(., ["destination.port"]), 9999)
+              assert_eq!(get!(., ["related.ip"]), ["10.244.6.37", "192.168.111.6"])
+              assert_eq!(get!(., ["event.reason"]), "via_upstream")
+              assert_eq!(get!(., ["user_agent.original"]), "Blackbox-Exporter/0.29.0")
+              # uap-core calls it a "Generic Feature Phone": no device.
+              assert!(get!(., ["user_agent.device.name"]) == null)
+              # No ECS field for these.
+              assert_eq!(get!(., ["Proxy.ForwardedFor"]), "10.244.6.37")
+              assert_eq!(get!(., ["Proxy.ListenerAddress"]), "10.244.10.27:10443")
+              assert_eq!(get!(., ["Proxy.RouteName"]), "httproute/gateway/nas/rule/0/match/0/nas_hirednoobs_com")
+              for_each(["upstream_host", "upstream_cluster", "upstream_local_address", "downstream_local_address", "response_code_details", "response_flags", "route_name", "x-forwarded-for"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert!(get!(., ["Proxy.ResponseFlags"]) == null)
+
+  - name: Envoy access log line refused by ext_authz (flags, no upstream, a browser)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\":authority\":\"grafana.hirednoobs.com\",\"bytes_received\":\"0\",\"bytes_sent\":\"0\",\"downstream_local_address\":\"10.244.10.27:10443\",\"downstream_remote_address\":\"[2001:db8::5]:51000\",\"duration\":\"3\",\"message\":\"GET grafana.hirednoobs.com/ 302 3ms\",\"method\":\"GET\",\"protocol\":\"HTTP/2\",\"response_code\":\"302\",\"response_code_details\":\"ext_authz_denied\",\"response_flags\":\"UAEX,DPE\",\"route_name\":\"httproute/monitoring/grafana/rule/0/match/0/grafana_hirednoobs_com\",\"start_time\":\"2026-10-13T12:00:00.000Z\",\"upstream_host\":\"-\",\"upstream_cluster\":\"-\",\"x-envoy-upstream-service-time\":\"7\",\"user-agent\":\"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1\",\"x-envoy-origin-path\":\"/\",\"x-forwarded-for\":\"203.0.113.9,2001:db8::5\",\"x-request-id\":\"aa\"}",
+            "timestamp": t'2026-10-13T12:00:00.004Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.reason"]), "ext_authz_denied")
+              assert_eq!(get!(., ["Proxy.ResponseFlags"]), ["UAEX", "DPE"])
+              assert_eq!(get!(., ["Proxy.UpstreamServiceTime"]), 7000000)
+              # The header as it came: the client's own entry first.
+              assert_eq!(get!(., ["Proxy.ForwardedFor"]), "203.0.113.9,2001:db8::5")
+              assert_eq!(get!(., ["source.ip"]), "2001:db8::5")
+              assert_eq!(get!(., ["related.ip"]), ["2001:db8::5"])
+              assert!(get!(., ["destination.address"]) == null)
+              assert!(get!(., ["upstream_host"]) == null)
+              assert!(get!(., ["upstream_cluster"]) == null)
+              assert!(get!(., ["x-envoy-upstream-service-time"]) == null)
+              assert_eq!(get!(., ["user_agent.name"]), "Mobile Safari")
+              assert_eq!(get!(., ["user_agent.version"]), "18.0")
+              assert_eq!(get!(., ["user_agent.os.name"]), "iOS")
+              assert_eq!(get!(., ["user_agent.os.version"]), "18.0")
+              assert_eq!(get!(., ["user_agent.os.full"]), "iOS 18.0")
+              assert_eq!(get!(., ["user_agent.device.name"]), "iPhone")
+
+  - name: Envoy access log line, IPv6 client, no response sent
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET grafana.hirednoobs.com/ 0 1ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"method\":\"GET\",\"response_code\":\"0\",\"x-envoy-origin-path\":\"/\",\"user-agent\":\"-\",\"x-request-id\":null,\"downstream_remote_address\":\"[::1]:40000\"}",
+            "timestamp": t'2026-10-13T08:00:00.002Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["source.ip"]), "::1")
+              assert_eq!(get!(., ["source.port"]), 40000)
+              assert_eq!(get!(., ["event.outcome"]), "unknown")
+              assert!(!exists(."http.response.status_code"))
+              assert!(!exists(."user_agent.original"))
+              assert!(!exists(."user-agent"))
+              assert!(!exists(.response_code))
+              assert!(!exists(."http.request.id"))
+              assert!(!exists(."url.query"))
+              assert_eq!(get!(., ["url.path"]), "/")
+
+  - name: Envoy's own log line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[2026-10-13 08:00:00.000][1][warning][config] gRPC config stream closed",
+            "timestamp": t'2026-10-13T08:00:00.000Z',
+            "stream": "stderr",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.log")
+              assert!(!exists(."source.ip"))
+
+  - name: another container's access-log-shaped line isn't envoy.access
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET x/ 200 1ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"response_code\":200,\"downstream_remote_address\":\"192.168.50.99:1\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "default.envoy")
+              assert!(!exists(."source.ip"))
+
+  - name: "format mismatch: Envoy access line without a client address"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET x/ 200 1ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"response_code\":\"200\",\"downstream_remote_address\":\"-\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.access")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(get!(., ["error.message"]), "downstream_remote_address isn't <ip>:<port>")
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              # What didn't parse stays.
+              assert_eq!(.downstream_remote_address, "-")
+
+  - name: "format mismatch: Envoy response_code that isn't a number"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET x/\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"response_code\":\"-\",\"downstream_remote_address\":\"10.0.0.1:1\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.message"]), "response_code isn't a number")
+              assert_eq!(.response_code, "-")

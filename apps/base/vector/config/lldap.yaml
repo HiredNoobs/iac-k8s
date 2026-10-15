@@ -1,0 +1,61 @@
+transforms:
+  # lldap: its own lines ("<time>  INFO     ｉ [info]: LDAP session start: ...", tracing's
+  # tree lines without the prefix), and lldap-bootstrap's hourly run, whose lines say what it
+  # changed back to match git.
+  lldap:
+    type: remap
+    inputs: [by_source.lldap]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      msg = string(._msg) ?? ""
+      if .kubernetes.container.name == "lldap" {
+        %dataset = "lldap.log"
+        prefix, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\s+(?P<level>[A-Z]+)\s')
+        if err == null {
+          l = downcase(string!(prefix.level))
+          ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+        } else if match(msg, r'^\d{4}-\d\d-\d\dT') {
+          %mismatch = "a timestamped line without lldap's level"
+        }
+        # A login to its UI: whether it worked isn't logged.
+        login, err = parse_regex(msg, r'login attempt for "(?P<user>[^"]+)"')
+        if err == null {
+          ."event.category" = ["authentication"]
+          ."event.type" = ["start"]
+          ."event.action" = "password-login"
+          ."event.outcome" = "unknown"
+          ."user.name" = login.user
+        }
+      } else {
+        %dataset = "lldap.bootstrap"
+        %provider = "lldap-bootstrap"
+        if contains(msg, "[WARNING]") { ."log.level" = "warning" }
+        # A group is named with its id: Group "<name>" (<id>) successfully deleted.
+        change, err = parse_regex(msg, r'(?P<kind>User|Group) "(?P<name>[^"]+)"(?: \(\d+\))? successfully (?P<what>created|deleted|added to the group|removed from the group)(?: "(?P<group>[^"]+)")?')
+        if err == null {
+          ."event.category" = ["iam"]
+          ."event.outcome" = "success"
+          if change.kind == "User" {
+            ."user.name" = change.name
+            if change.group != null { ."group.name" = change.group }
+          } else {
+            ."group.name" = change.name
+          }
+          # ECS's iam types: what changed, and how (a membership is a change to the group).
+          ."event.type" = if change.what == "created" {
+            [downcase(string!(change.kind)), "creation"]
+          } else if change.what == "deleted" {
+            [downcase(string!(change.kind)), "deletion"]
+          } else {
+            ["group", "change"]
+          }
+          ."event.action" = if change.what == "added to the group" {
+            "added-to-group"
+          } else if change.what == "removed from the group" {
+            "removed-from-group"
+          } else {
+            downcase(string!(change.kind)) + "-" + string!(change.what)
+          }
+        }
+      }

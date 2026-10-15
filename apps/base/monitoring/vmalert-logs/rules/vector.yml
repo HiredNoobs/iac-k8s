@@ -23,11 +23,11 @@ groups:
           description: >-
             Vector kept them unparsed: without the source's own fields (source.ip, user.name,
             ...), so log alerts for {{ $labels.dataset }} don't see them. A format_mismatch
-            usually means the app's log format changed; a remap_error is a bug in vector.yaml.
+            usually means the app's log format changed; a remap_error is a bug in Vector's config.
           runbook: >-
             The lines and why: {event.kind="pipeline_error", event.dataset="{{ $labels.dataset }}"}
-            | fields _time, error.message, _msg. Fix the remap in apps/base/vector/vector.yaml,
-            with a test for the new line in tests.yaml. Trigger: kubectl -n mealie exec
+            | fields _time, error.message, _msg. Fix the source's remap in apps/base/vector/config/,
+            with a test for the new line in tests/. Trigger: kubectl -n mealie exec
             deploy/mealie -- sh -c 'echo "WARNING  not mealie format" > /proc/1/fd/1' (a
             format_mismatch in mealie.log; the exec itself raises KubeExecIntoPod).
           tested: "2026-10-13"

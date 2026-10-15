@@ -1,0 +1,34 @@
+transforms:
+  # Vaultwarden: "[<time>][<module>][<LEVEL>] <message>". It logs failed logins (a wrong password
+  # and an unknown account alike), not successful ones. The IP is the client's (IP_HEADER is
+  # X-Forwarded-For).
+  vaultwarden:
+    type: remap
+    inputs: [by_source.vaultwarden]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "vaultwarden.log"
+      msg = string(._msg) ?? ""
+      prefix, err = parse_regex(msg, r'^\[[^\]]+\]\[(?P<logger>[^\]]+)\]\[(?P<level>[A-Z]+)\]')
+      if err == null {
+        ."log.logger" = prefix.logger
+        l = downcase(string!(prefix.level))
+        ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+      } else if starts_with(msg, "[") && !starts_with(msg, "[CAUSE] ") {
+        # Not a continuation line or the startup banner, which have no prefix. An error's cause
+        # follows it on its own lines, starting "[CAUSE] <its debug output>".
+        %mismatch = "no [<time>][<module>][<LEVEL>] prefix"
+      }
+      login, err = parse_regex(msg, r'Username or password is incorrect\..* IP: (?P<ip>\S+)\. Username: (?P<user>.*)\.$')
+      if err == null {
+        ."event.category" = ["authentication"]
+        ."event.type" = ["start"]
+        ."event.action" = "password-login"
+        ."event.outcome" = "failure"
+        ."source.ip" = login.ip
+        if login.user != "" { ."user.name" = login.user }
+      } else {
+        ws, err = parse_regex(msg, r' connection from (?P<ip>[0-9A-Fa-f.:]+)$')
+        if err == null { ."source.ip" = ws.ip }
+      }

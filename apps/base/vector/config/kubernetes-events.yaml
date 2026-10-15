@@ -1,0 +1,66 @@
+transforms:
+  # Kubernetes events, one JSON line each from kubectl's watch (apps/base/kubectl): what happened
+  # (reason, message, Normal or Warning) to which object, by which component, how many times.
+  # Elastic's Kubernetes integration keeps them all under its own kubernetes.event.*; here ECS's
+  # fields where there's one (the object as orchestrator.*, as the audit log's), custom fields for
+  # the rest.
+  kubectl:
+    type: remap
+    inputs: [by_source.kubectl]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "kubernetes.event"
+      if .kind != "Event" || !is_object(.involvedObject) {
+        # kubectl's own messages (an error, a warning) aren't events.
+        %dataset = "kubectl.log"
+        if exists(.kind) || exists(.apiVersion) { %mismatch = "JSON that isn't an event" }
+      } else {
+        # The component that reported it (kubelet, default-scheduler, kustomize-controller, ...).
+        provider = string(.reportingComponent) ?? ""
+        if provider == "" { provider = string(.source.component) ?? "" }
+        %provider = if provider == "" { "kubernetes" } else { provider }
+        # Where it happened: the node, for a kubelet's event. Not the node kubectl runs on.
+        node = string(.source.host) ?? ""
+        if node == "" && provider == "kubelet" { node = string(.reportingInstance) ?? "" }
+        %host = node
+        # When it last happened (a repeat updates it); first and last as event.start/end.
+        last = .series.lastObservedTime || .lastTimestamp || .eventTime || .firstTimestamp
+        t = parse_timestamp(string(last) ?? "", "%+") ?? null
+        if t != null { ._time = t }
+        first = .firstTimestamp || .eventTime
+        if is_string(first) { ."event.start" = first }
+        if is_string(.lastTimestamp) { ."event.end" = .lastTimestamp }
+        ."log.level" = if .type == "Warning" { "warning" } else { "info" }
+        if is_string(.reason) { ."event.reason" = .reason }
+        if is_string(.action) && .action != "" { ."event.action" = .action }
+        if is_string(.metadata.uid) { ."event.id" = .metadata.uid }
+        # The object it's about, as orchestrator.* (the kind, lower case: pod, kustomization).
+        ref = object!(.involvedObject)
+        ."orchestrator.type" = "kubernetes"
+        if is_string(ref.kind) { ."orchestrator.resource.type" = downcase(string!(ref.kind)) }
+        if is_string(ref.name) { ."orchestrator.resource.name" = ref.name }
+        if is_string(ref.namespace) { ."orchestrator.namespace" = ref.namespace }
+        if is_string(ref.uid) { ."orchestrator.resource.id" = ref.uid }
+        if is_string(ref.apiVersion) { ."orchestrator.api_version" = ref.apiVersion }
+        # A container in a pod: spec.containers{<name>}.
+        field = string(ref.fieldPath) ?? ""
+        c, err = parse_regex(field, r'^spec\.(?:initC|ephemeralC|c)ontainers\{(?P<name>[^}]+)\}$')
+        if err == null {
+          ."container.name" = c.name
+        } else if field != "" {
+          ."Orchestrator.Resource.FieldPath" = field
+        }
+        if is_string(ref.resourceVersion) { ."Orchestrator.Resource.ResourceVersion" = ref.resourceVersion }
+        # No ECS field: how many times, who reported it, the event's own name and annotations
+        # (Flux's revision), a second object it's about.
+        count = .series.count || .count
+        if is_integer(count) { ."Orchestrator.Event.Count" = count }
+        if is_string(.reportingInstance) && .reportingInstance != "" { ."Orchestrator.Event.ReportingInstance" = .reportingInstance }
+        if is_string(.metadata.name) { ."Orchestrator.Event.Name" = .metadata.name }
+        if is_object(.metadata.annotations) { ."Orchestrator.Event.Annotations" = .metadata.annotations }
+        if is_object(.related) { ."Orchestrator.Event.Related" = .related }
+        for_each(["apiVersion", "kind", "metadata", "involvedObject", "reason", "type", "source", "firstTimestamp", "lastTimestamp", "eventTime", "series", "count", "action", "related", "reportingComponent", "reportingInstance"]) -> |_i, key| {
+          . = remove!(., [key])
+        }
+      }

@@ -1,0 +1,114 @@
+# Unit tests for config/syslog.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: syslog RFC 3164 over UDP (as rsyslog relays it)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 14 14:36:48 RT-AX88U dnsmasq[123]: query[A] example.com from 192.168.50.10",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-14T14:36:48.450111+01:00", "transport": "imudp",
+            "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-14T13:36:48.455Z'
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
+              assert_eq!(get!(., ["event.provider"]), "dnsmasq")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(._msg, "query[A] example.com from 192.168.50.10")
+              # No year or time zone in the message: when rsyslog received it.
+              assert_eq!(._time, t'2026-10-14T13:36:48.450111Z')
+              assert!(is_timestamp(get!(., ["event.created"])))
+              assert_eq!(get!(., ["host.hostname"]), "RT-AX88U")
+              assert_eq!(get!(., ["host.name"]), "RT-AX88U")
+              assert_eq!(get!(., ["host.ip"]), "192.168.111.1")
+              assert_eq!(get!(., ["network.transport"]), "udp")
+              assert_eq!(get!(., ["process.name"]), "dnsmasq")
+              assert_eq!(get!(., ["process.pid"]), 123)
+              assert_eq!(get!(., ["log.syslog.hostname"]), "RT-AX88U")
+              assert_eq!(get!(., ["log.syslog.appname"]), "dnsmasq")
+              assert_eq!(get!(., ["log.syslog.procid"]), "123")
+              assert_eq!(get!(., ["log.syslog.severity.code"]), 6)
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Informational")
+              assert_eq!(get!(., ["log.syslog.facility.code"]), 3)
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "daemon")
+              assert_eq!(get!(., ["log.syslog.priority"]), 30)
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert!(get!(., ["log.syslog.version"]) == null)
+              # The socket's own fields, and rsyslog's, are gone.
+              for_each(["message", "fromhost_ip", "received", "transport", "host", "port", "source_type", "timestamp"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert!(!exists(.kubernetes))
+
+  - name: syslog RFC 5424 over TCP, with structured data
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<36>1 2026-10-14T14:36:48.451744+01:00 nas sshd 42 ID7 [timeQuality tzKnown=\"1\"][origin@32473 ip=\"192.168.50.1\"] a \"quoted\" \\back\\slash ü",
+            "fromhost_ip": "192.168.111.6", "received": "2026-10-14T14:36:48.451943+01:00", "transport": "imtcp",
+            "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-14T13:36:48.456Z'
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "a \"quoted\" \\back\\slash ü")
+              # Its own timestamp, which has a time zone.
+              assert_eq!(._time, t'2026-10-14T13:36:48.451744Z')
+              assert_eq!(get!(., ["log.syslog.version"]), "1")
+              assert_eq!(get!(., ["log.syslog.msgid"]), "ID7")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Warning")
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "auth")
+              assert_eq!(get!(., ["log.syslog.priority"]), 36)
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["network.transport"]), "tcp")
+              assert_eq!(get!(., ["log.syslog.structured_data"]), {"timeQuality": {"tzKnown": "1"}, "origin@32473": {"ip": "192.168.50.1"}})
+              assert_eq!(get!(., ["host.hostname"]), "nas")
+              assert_eq!(get!(., ["process.pid"]), 42)
+
+  - name: syslog critical severity is critical
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<2>Oct 14 14:36:48 RT-AX88U kernel: out of memory",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-14T14:36:48+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "critical")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Critical")
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "kern")
+              assert!(get!(., ["process.pid"]) == null)
+
+  - name: "format mismatch: a line on the syslog port that isn't syslog"
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "just some text",
+            "fromhost_ip": "192.168.111.50", "received": "2026-10-14T14:36:48+01:00", "transport": "imtcp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(._msg, "just some text")
+              assert_eq!(get!(., ["host.ip"]), "192.168.111.50")
+              assert_eq!(._time, t'2026-10-14T13:36:48Z')

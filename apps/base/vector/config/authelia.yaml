@@ -1,0 +1,57 @@
+transforms:
+  # Authelia (JSON: level, msg, remote_ip, method, path). It logs failed logins, not successful
+  # ones, and its access decisions; the user is only in the message.
+  authelia:
+    type: remap
+    inputs: [by_source.authelia]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "authelia.log"
+      if !exists(.level) { %mismatch = "not Authelia's JSON (no level)" }
+      if is_string(.remote_ip) { ."source.ip" = del(.remote_ip) }
+      # The response's status (a request that timed out: 408).
+      status = to_int(.status_code) ?? -1
+      if .status_code != null && status > 0 { ."http.response.status_code" = status; del(.status_code) }
+      msg = string(._msg) ?? ""
+
+      login, err = parse_regex(msg, r'^Unsuccessful (?P<factor>1FA|TOTP|WebAuthn|Duo) authentication attempt by user \'(?P<user>[^\']*)\'(?P<banned> and they are banned)?')
+      if err == null {
+        ."event.category" = ["authentication"]
+        ."event.type" = ["start"]
+        ."event.action" = if login.factor == "1FA" { "password-login" } else { downcase(string!(login.factor)) + "-login" }
+        ."event.outcome" = "failure"
+        if login.user != "" { ."user.name" = login.user }
+        if login.banned != null { ."event.reason" = "banned" }
+      }
+      unknown, err = parse_regex(msg, r'username input \'(?P<user>[^\']*)\' which usually indicates they do not exist')
+      if err == null {
+        ."event.category" = ["authentication"]
+        ."event.type" = ["start"]
+        ."event.action" = "password-login"
+        ."event.outcome" = "failure"
+        ."event.reason" = "unknown user"
+        if unknown.user != "" { ."user.name" = unknown.user }
+      }
+      # An access decision for a site behind Authelia: the site's URL and method. The line's own
+      # method and path are the proxy's check request to Authelia (its method, an authz
+      # endpoint), so they go when they're that; anything else stays.
+      access, err = parse_regex(msg, r'^Access to (?P<url>\S+) \(method (?P<method>[A-Z]+)\) is not authorized to user (?P<user>.+?), responding with status code (?P<code>\d+)')
+      if err == null {
+        # A request to a site refused (401: not logged in, 403: not allowed), not a login.
+        ."event.category" = ["web"]
+        ."event.type" = ["access", "denied"]
+        ."event.action" = "authorization"
+        ."event.outcome" = "failure"
+        ."url.full" = access.url
+        u, err = parse_url(string!(access.url))
+        if err == null { ."url.domain" = u.host; ."url.path" = u.path }
+        ."http.request.method" = access.method
+        ."http.response.status_code" = to_int(access.code) ?? null
+        if access.user != "<anonymous>" { ."user.name" = access.user }
+        if .method == access.method { del(.method) }
+        if match(string(.path) ?? "", r'^/api/(authz/[a-z-]+|verify)/?$') { del(.path) }
+      } else {
+        if is_string(.method) { ."http.request.method" = del(.method) }
+        if is_string(.path) { ."url.path" = del(.path) }
+      }

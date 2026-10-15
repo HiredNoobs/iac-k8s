@@ -1,0 +1,623 @@
+# Unit tests for config/pipeline.yaml's transforms (pod lines, the common fields, pipeline
+# errors). Each source's tests are in its own file. All of them: `vector test config/*.yaml
+# tests/*.yaml`. Not in the ConfigMap. Needs NODE_NAME=cp-1 and NODE_DOMAIN=hirednoobs.com
+# (the remaps read them). One event per test: with several, Vector passes a test if any one
+# of them meets the conditions.
+tests:
+  - name: pod JSON line with msg and an RFC 3339 time
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"time\":\"2026-10-13T08:48:29.948Z\",\"level\":\"INFO\",\"source\":\"http.go:492\",\"msg\":\"Not following redirect\",\"module\":\"https_authelia\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z',
+            "stream": "stderr",
+            "file": "/var/log/pods/x/0.log",
+            "source_type": "kubernetes_logs",
+            "kubernetes": {
+              "pod_namespace": "monitoring",
+              "pod_name": "blackbox-exporter-abc",
+              "container_name": "blackbox-exporter",
+              "pod_node_name": "worker-1",
+              "pod_ip": "10.244.1.5",
+              "container_image": "quay.io/prometheus/blackbox-exporter:v0.29.0",
+              "container_id": "containerd://abc",
+              "pod_uid": "uid",
+              "pod_labels": {"app.kubernetes.io/name": "blackbox-exporter"},
+              "pod_annotations": {"prometheus.io/scrape": "true"},
+              "namespace_labels": {"kubernetes.io/metadata.name": "monitoring"}
+            }
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "Not following redirect")
+              assert_eq!(._time, t'2026-10-13T08:48:29.948Z')
+              assert_eq!(.level, "INFO")
+              assert_eq!(.source, "http.go:492")
+              assert_eq!(.module, "https_authelia")
+              assert!(!exists(.time))
+              assert!(!exists(.msg))
+              assert_eq!(."Log.Stream", "stderr")
+              # Elastic's names.
+              assert_eq!(.kubernetes, {
+                "namespace": "monitoring",
+                "pod": {"name": "blackbox-exporter-abc", "ip": "10.244.1.5"},
+                "container": {"name": "blackbox-exporter"},
+                "node": {"name": "worker-1"},
+                "labels": {"app.kubernetes.io/name": "blackbox-exporter"}
+              })
+              assert_eq!(get!(., ["container.image.name"]), "quay.io/prometheus/blackbox-exporter:v0.29.0")
+              assert_eq!(get!(., ["container.id"]), "abc")
+              assert_eq!(get!(., ["container.runtime"]), "containerd")
+              assert!(!exists(.file))
+              assert!(!exists(.source_type))
+              assert!(!exists(.timestamp))
+              # When Vector read it: after the line was written.
+              assert!(is_timestamp(get!(., ["event.created"])))
+              assert!(to_unix_timestamp(timestamp!(get!(., ["event.created"]))) > to_unix_timestamp(t'2026-10-13T08:48:30.001Z'))
+
+  - name: pod JSON line with message and no time field (Envoy's access log)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET grafana.hirednoobs.com/ 200 3ms\",\"start_time\":\"2026-10-13T08:00:00.000Z\",\"downstream_remote_address\":\"192.168.50.10:51234\",\":authority\":\"grafana.hirednoobs.com\",\"response_code\":200}",
+            "timestamp": t'2026-10-13T08:00:00.010Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "GET grafana.hirednoobs.com/ 200 3ms")
+              assert_eq!(._time, t'2026-10-13T08:00:00.010Z')
+              assert_eq!(.start_time, "2026-10-13T08:00:00.000Z")
+              assert_eq!(.downstream_remote_address, "192.168.50.10:51234")
+              assert_eq!(get!(., [":authority"]), "grafana.hirednoobs.com")
+              assert_eq!(.response_code, 200)
+              assert_eq!(.kubernetes.container.name, "envoy")
+
+  - name: plain text line stays as _msg (CoreDNS)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout",
+            "timestamp": t'2026-10-13T09:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "[ERROR] plugin/errors: 2 pihole.hirednoobs.com. AAAA: read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
+              assert_eq!(._time, t'2026-10-13T09:00:00.000Z')
+              assert_eq!(keys(.), ["Log.Stream", "_msg", "_time", "event.created", "kubernetes"])
+
+  - name: zap JSON with ts as Unix seconds
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":1791878400.5,\"logger\":\"controller\",\"msg\":\"reconciled\"}",
+            "timestamp": t'2026-10-13T10:00:01.000Z',
+            "stream": "stderr",
+            "kubernetes": {"pod_namespace": "external-secrets", "pod_name": "eso-1", "container_name": "external-secrets"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "reconciled")
+              assert_eq!(._time, t'2026-10-13T08:00:00.500Z')
+              assert!(!exists(.ts))
+              assert_eq!(.logger, "controller")
+
+  - name: Falco alert, message and a nanosecond time
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"hostname\":\"worker-2\",\"message\":\"08:20:41.123456789: Notice Shell in container\",\"priority\":\"Notice\",\"rule\":\"Terminal shell in container\",\"source\":\"syscall\",\"tags\":[\"T1059\",\"mitre_execution\"],\"time\":\"2026-10-13T08:20:41.123456789Z\",\"output_fields\":{\"k8s.ns.name\":\"default\",\"proc.name\":\"sh\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-1", "container_name": "falco", "pod_node_name": "worker-2"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "08:20:41.123456789: Notice Shell in container")
+              assert_eq!(._time, t'2026-10-13T08:20:41.123456789Z')
+              assert_eq!(.rule, "Terminal shell in container")
+              assert_eq!(.tags, ["T1059", "mitre_execution"])
+              assert_eq!(get!(.output_fields, ["k8s.ns.name"]), "default")
+
+  - name: a time that doesn't parse stays a field, _time is the runtime's
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hello\",\"time\":\"yesterday\"}",
+            "timestamp": t'2026-10-13T11:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "hello")
+              assert_eq!(.time, "yesterday")
+              assert_eq!(._time, t'2026-10-13T11:00:00.000Z')
+
+  - name: a JSON line that isn't an object stays text
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[1,2,3]",
+            "timestamp": t'2026-10-13T11:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "[1,2,3]")
+
+  - name: common fields on a pod's line, level normalised
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"time\":\"2026-10-13T08:48:29.948Z\",\"level\":\"INFO\",\"msg\":\"Not following redirect\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z',
+            "stream": "stderr",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "blackbox-exporter-abc", "container_name": "blackbox-exporter", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "monitoring.blackbox-exporter")
+              assert_eq!(get!(., ["event.provider"]), "blackbox-exporter")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(.tags, ["generic"])
+              assert_eq!(get!(., ["host.hostname"]), "worker-1")
+              assert_eq!(get!(., ["host.name"]), "worker-1.hirednoobs.com")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert!(!exists(.level))
+
+  - name: a generic line's provider is its image's name
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"msg\":\"artifact up-to-date\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "flux-system", "pod_name": "source-controller-1", "container_name": "manager", "container_image": "ghcr.io/fluxcd/source-controller:v1.9.6@sha256:0123abcd", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "source-controller")
+              assert_eq!(get!(., ["event.dataset"]), "flux-system.manager")
+
+  - name: an image with a registry port and no tag
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "hello",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "main", "container_image": "registry.local:5000/team/my-app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "my-app")
+
+  - name: a level that isn't a string stays where it is
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":30,\"msg\":\"listening\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."log.level"))
+              assert_eq!(.level, 30)
+
+  - name: a line can't set its own dataset or node
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"get /api/v1/secrets 200 by admin\",\"event.dataset\":\"kubernetes.audit\",\"host.name\":\"cp-1\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z',
+            "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "x", "pod_node_name": "worker-3"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "default.x")
+              assert_eq!(get!(., ["host.hostname"]), "worker-3")
+              assert_eq!(get!(., ["host.name"]), "worker-3.hirednoobs.com")
+
+  - name: zap's dpanic is critical
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {"message": "{\"lvl\":\"dpanic\",\"msg\":\"a\"}", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "critical")
+
+  - name: an unknown level is kept, lower case
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {"message": "{\"severity\":\"Verbose\",\"msg\":\"b\"}", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "verbose")
+
+  - name: a text line has no level
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {"message": "plain c", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."log.level"))
+
+  - name: Flux's applied objects (output) as one JSON text field
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":\"2026-10-14T20:00:00.000Z\",\"msg\":\"server-side apply completed\",\"controller\":\"kustomization\",\"Kustomization\":{\"name\":\"apps\",\"namespace\":\"flux-system\"},\"revision\":\"master@sha1:e24edef\",\"output\":{\"ExternalSecret/lldap/lldap-bootstrap\":\"unchanged\",\"HelmRelease/monitoring/blackbox-exporter\":\"configured\"}}",
+            "timestamp": t'2026-10-14T20:00:00.100Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "flux-system", "pod_name": "kustomize-controller-1", "container_name": "manager", "container_image": "ghcr.io/fluxcd/kustomize-controller:v1.9.1", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "flux-system.manager")
+              assert!(is_string(.output))
+              assert_eq!(parse_json!(.output), {"ExternalSecret/lldap/lldap-bootstrap": "unchanged", "HelmRelease/monitoring/blackbox-exporter": "configured"})
+              # Its other fields stay as Flux writes them.
+              assert_eq!(.Kustomization, {"name": "apps", "namespace": "flux-system"})
+
+  - name: another namespace's output field stays as it is
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"msg\":\"done\",\"output\":{\"a\":1}}",
+            "timestamp": t'2026-10-14T20:00:00.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.output, {"a": 1})
+
+  - name: a JSON line's error and zap's caller
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"error\",\"ts\":1760345309.948,\"caller\":\"controller/controller.go:316\",\"msg\":\"Reconciler error\",\"error\":\"context deadline exceeded\"}",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "cert-manager", "pod_name": "cert-manager-1", "container_name": "cert-manager-controller", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["error.message"]), "context deadline exceeded")
+              assert_eq!(get!(., ["log.origin.file.name"]), "controller/controller.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 316)
+              assert!(!exists(.error))
+              assert!(!exists(.caller))
+              assert!(!exists(.level))
+
+  - name: an error that isn't a string stays
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"failed\",\"err\":{\"code\":5}}",
+            "timestamp": t'2026-10-13T08:48:30.001Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "app-1", "container_name": "app", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."error.message"))
+              assert_eq!(.err, {"code": 5})
+
+  - name: zap console line (Envoy Gateway's controller, the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-13T08:06:57.198Z\tinfo\txds\tv3/simple.go:693\topen delta watch ID:311 for type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+            "timestamp": t'2026-10-13T08:06:57.199Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-gateway-1", "container_name": "envoy-gateway"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy-gateway.envoy-gateway")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["log.logger"]), "xds")
+              assert_eq!(get!(., ["log.origin.file.name"]), "v3/simple.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 693)
+
+  - name: klog line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "W1013 08:00:00.123456       1 reflector.go:561] k8s.io/client-go: failed to list",
+            "timestamp": t'2026-10-13T08:00:00.124Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "cert-manager", "pod_name": "cert-manager-1", "container_name": "cert-manager-controller"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.origin.file.name"]), "reflector.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 561)
+
+  - name: logrus text line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "time=\"2026-10-13T08:00:00Z\" level=error msg=\"failed to sync\" func=controller.(*X).sync",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "longhorn-manager-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "error")
+
+  - name: client-go warning (the Longhorn sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "longhorn-manager-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+
+  - name: Grafana JSON (t, level, logger)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-13T08:00:00.000Z\",\"level\":\"warn\",\"logger\":\"context\",\"msg\":\"Request Completed\"}",
+            "timestamp": t'2026-10-13T08:00:00.001Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.logger"]), "context")
+
+  - name: a line a source's remap failed on keeps that source's name
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "_msg": "GET x/ 200 1ms", "_time": t'2026-10-13T08:00:00.000Z', "Log.Stream": "stdout",
+            "kubernetes": {"namespace": "envoy-gateway", "pod": {"name": "envoy-public-1"}, "container": {"name": "envoy"}, "node": {"name": "worker-4"}},
+            "metadata": {"dropped": {"component_id": "envoy", "component_kind": "transform", "component_type": "remap", "message": "function call error for \"to_int\"", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.log")
+              assert_eq!(get!(., ["event.provider"]), "envoy")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "remap_error")
+              assert_eq!(get!(., ["error.message"]), "function call error for \"to_int\"")
+              assert_eq!(get!(., ["host.hostname"]), "worker-4")
+              assert_eq!(get!(., ["host.name"]), "worker-4.hirednoobs.com")
+              assert!(!exists(.tags))
+              assert_eq!(._msg, "GET x/ 200 1ms")
+              assert!(!exists(.metadata))
+
+  - name: a line the pod remap failed on is kept as it came
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "message": "some line", "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
+            "file": "/var/log/pods/x/0.log", "source_type": "kubernetes_logs",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app", "pod_node_name": "worker-1", "pod_uid": "u", "pod_annotations": {"a": "b"}},
+            "metadata": {"dropped": {"component_id": "pods", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "some line")
+              assert_eq!(._time, t'2026-10-13T08:00:00.000Z')
+              assert_eq!(."Log.Stream", "stderr")
+              assert_eq!(get!(., ["event.dataset"]), "default.app")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "remap_error")
+              assert_eq!(get!(., ["error.message"]), "boom")
+              assert!(!exists(.tags))
+              assert!(!exists(.kubernetes.pod_annotations))
+              assert!(!exists(.file))
+              assert!(!exists(.metadata))
+
+  - name: a line can't claim to be a pipeline error
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hi\",\"event.kind\":\"pipeline_error\",\"error.type\":\"x\",\"metadata\":{\"dropped\":{\"component_id\":\"envoy\",\"message\":\"x\"}}}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "default.app")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(.tags, ["generic"])
+
+  - name: a line with a parser isn't generic
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[INFO] plugin/reload: Running configuration SHA512 = 1a2b",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kube-system", "pod_name": "coredns-1", "container_name": "coredns"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!exists(.tags))
+
+  - name: generic is added to an app's own tags
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hi\",\"tags\":[\"a\",\"b\"]}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.tags, ["a", "b", "generic"])
+
+  - name: generic is added to an app's single tag
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"msg\":\"hi\",\"tags\":\"a\"}",
+            "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "default", "pod_name": "x", "container_name": "app"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.tags, ["a", "generic"])

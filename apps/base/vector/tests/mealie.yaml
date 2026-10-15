@@ -1,0 +1,98 @@
+# Unit tests for config/mealie.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: Mealie access line (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "INFO     2026-10-13T09:48:38 - [10.244.1.1:48410] 200 OK \"GET /api/app/about?x=1 HTTP/1.1\"",
+            "timestamp": t'2026-10-13T09:48:38.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "mealie.access")
+              assert_eq!(get!(., ["event.category"]), ["web"])
+              assert_eq!(get!(., ["event.type"]), ["access"])
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["source.ip"]), "10.244.1.1")
+              assert_eq!(get!(., ["source.port"]), 48410)
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(get!(., ["http.version"]), "1.1")
+              assert_eq!(get!(., ["url.path"]), "/api/app/about")
+              assert_eq!(get!(., ["url.query"]), "x=1")
+
+  - name: Mealie other line
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "WARNING  2026-10-13T09:48:38 - something happened",
+            "timestamp": t'2026-10-13T09:48:38.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "mealie.log")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert!(!exists(."source.ip"))
+
+  - name: Mealie's uvicorn line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "INFO: Started server process [1]",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+
+  - name: "format mismatch: Mealie level and space without its prefix"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "WARNING  something changed format",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+
+  - name: Mealie traceback line is fine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "Traceback (most recent call last):",
+            "timestamp": t'2026-10-13T09:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "mealie", "pod_name": "mealie-1", "container_name": "mealie"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")

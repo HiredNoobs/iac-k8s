@@ -1,4 +1,4 @@
-# The journald listener's server certificate (vector.yaml's journald_relay): Envoy checks it
+# The journald listener's server certificate (config/journald.yaml's journald_relay): Envoy checks it
 # against the monitoring CA (journald-route.yaml).
 apiVersion: cert-manager.io/v1
 kind: Certificate

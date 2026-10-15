@@ -1,0 +1,38 @@
+transforms:
+  # Mealie: "<LEVEL>    <time> - <message>"; its access lines' message is
+  # "[<ip>:<port>] <code> <reason> \"<method> <path> HTTP/<version>\"" (the Gateway's address).
+  mealie:
+    type: remap
+    inputs: [by_source.mealie]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "mealie.log"
+      msg = string(._msg) ?? ""
+      line, err = parse_regex(msg, r'^(?P<level>[A-Z]+)\s+\S+ - (?P<rest>.*)$')
+      if err != null && match(msg, r'^(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s') {
+        # Not a traceback's lines, which have no prefix.
+        %mismatch = "a level without Mealie's <time> - prefix"
+      }
+      if err == null {
+        l = downcase(string!(line.level))
+        ."log.level" = if l == "warn" { "warning" } else { l }
+        access, err = parse_regex(string!(line.rest), r'^\[(?P<ip>[^\]]+?):(?P<port>\d+)\] (?P<code>\d{3}) [^"]*"(?P<method>[A-Z]+) (?P<path>\S+) HTTP/(?P<version>[0-9.]+)"$')
+        if err == null {
+          %dataset = "mealie.access"
+          # As Elastic's web server access logs (nginx, apache).
+          ."event.category" = ["web"]
+          ."event.type" = ["access"]
+          ."source.ip" = access.ip
+          ."source.port" = to_int(access.port) ?? null
+          code = to_int(access.code) ?? 0
+          ."http.response.status_code" = code
+          ."event.outcome" = if code < 400 { "success" } else { "failure" }
+          ."http.request.method" = access.method
+          ."http.version" = access.version
+          ."url.original" = access.path
+          parts = split(string!(access.path), "?", limit: 2)
+          ."url.path" = parts[0]
+          if length(parts) > 1 { ."url.query" = parts[1] }
+        }
+      }
