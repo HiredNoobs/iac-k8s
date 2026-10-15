@@ -1,14 +1,29 @@
-# The nodes' own Talos logs, sent by Talos (iac-homelab's talos-cluster module: machine.logging
-# and KmsgLogConfig) to the talos-logs Service (service.yaml), which takes them to the Vector on
-# the same node. Its services' lines (machined, apid, trustd, kubelet, containerd, etcd, ...) as
-# talos.log with the service as service.name, the kernel's as talos.kernel. The node is the
+# The nodes' own Talos logs, sent by Talos (iac-homelab's talos-cluster module: machine.logging)
+# to the talos-logs Service (service.yaml), which takes them to the Vector on the same node. Its
+# services' lines (machined, apid, trustd, kubelet, containerd, etcd, ...) as talos.log with the
+# service as service.name, the kernel's (service kernel) as talos.kernel. The node is the
 # receiving Vector's (internalTrafficPolicy: Local), not a field of the line. A line that isn't
 # Talos' JSON is kept as a pipeline_error.
+#
+# What's parsed beyond Talos' own fields:
+#   kernel             "<facility>: <severity>: [<time>]: <message>", the facility and severity
+#                      as log.syslog.*. The kernel's continuation lines (SUBSYSTEM=..., DEVICE=...,
+#                      which belong to the line before) stay as they are.
+#   Talos' text        "<time> <LEVEL> <message>" (its controllers, dns-resolve-cache, ...) and Go's
+#                      "<date> <time> [<file>.go:<line>: ]<message>" (apid, trustd, machined)
+#   gRPC requests      apid's, trustd's and machined's: "[<server> ]<code> [<method>] <duration>
+#                      unary|stream <status>[ {<authorisation>}][ (<metadata>)]": the method as
+#                      event.action, the code as Rpc.Grpc.StatusCode (custom), the authorisation
+#                      reason as Rpc.Authorization (custom), the caller from the metadata
+#   dns-resolve-cache  each query and response, as CoreDNS (coredns.yaml)
+# The whole line is kept in event.original where _msg became part of it. Talos' controllers (its
+# own, not Kubernetes') as Talos.Controller; component goes when it's the service. Any other key
+# a service logs is kept as it came (tags generic, unless the line was mapped as above).
 
 sources:
   # One JSON object per line. Talos already parsed its services' own JSON: msg, talos-level,
   # talos-time and talos-service, the service's other keys as they were (an err is folded into
-  # msg). Kernel lines: msg, talos-level, talos-time, facility, priority, seq, clock.
+  # msg).
   talos_relay:
     type: socket
     mode: tcp
@@ -33,26 +48,152 @@ transforms:
       line = remove!(line, ["timestamp"])
       received = .timestamp
       service = string(get!(line, ["talos-service"])) ?? ""
-      kernel = exists(line.facility) && service == ""
-      %dataset = if kernel { "talos.kernel" } else { "talos.log" }
+      %dataset = if service == "kernel" { "talos.kernel" } else { "talos.log" }
       %host = get_env_var("NODE_NAME") ?? ""
       mismatch = !is_string(line.msg) || !is_string(get!(line, ["talos-time"]))
       if mismatch { %mismatch = "no msg or talos-time" }
-      . = {"_msg": string(line.msg) ?? "", "event.created": now()}
+      msg = string(line.msg) ?? ""
+      . = {"_msg": msg, "event.created": now()}
       ._time = parse_timestamp(string(get!(line, ["talos-time"])) ?? "", "%+") ?? received
       level = get!(line, ["talos-level"])
       if is_string(level) { .level = level }
-      if kernel {
-        if is_string(line.facility) { ."log.syslog.facility.name" = line.facility }
-        if is_string(line.priority) { ."log.syslog.severity.name" = line.priority }
-        # seq and clock are the kernel buffer's bookkeeping.
+      if service != "" { ."service.name" = service }
+      for_each(line) -> |key, value| {
+        if !includes(["msg", "talos-level", "talos-time", "talos-service"], key) && !starts_with(key, "_") && get!(., [key]) == null {
+          . = set!(., [key], value)
+        }
+      }
+      if is_string(.controller) { ."Talos.Controller" = del(.controller) }
+      if service != "" && .component == service { del(.component) }
+      mapped = false
+
+      if service == "kernel" {
+        k, err = parse_regex(msg, r'^(?P<facility>[a-z0-9]+):\s+(?P<severity>[a-z]+): \[(?P<time>[^\]]+)\]: (?P<msg>(?s:.*))$')
+        if err == null {
+          ."event.original" = msg
+          ._msg = k.msg
+          ._time = parse_timestamp(string!(k.time), "%+") ?? ._time
+          ."log.syslog.facility.name" = k.facility
+          ."log.syslog.severity.name" = k.severity
+          # Normalised with the others (pipeline.yaml's ecs).
+          .level = k.severity
+          mapped = true
+        }
       } else {
-        if service != "" { ."service.name" = service }
-        # The service's own fields, not mapped yet: as they came, so generic.
-        for_each(line) -> |key, value| {
-          if !includes(["msg", "talos-level", "talos-time", "talos-service"], key) && !starts_with(key, "_") && get!(., [key]) == null {
-            . = set!(., [key], value)
+        text = msg
+        console, err = parse_regex(text, r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z (?P<level>[A-Z]+) (?P<msg>(?s:.*))$')
+        if err == null {
+          .level = console.level
+          text = string!(console.msg)
+        } else {
+          golog, err = parse_regex(text, r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d(?:\.\d+)? (?:(?P<file>[\w./-]+\.go):(?P<line>\d+): )?(?P<msg>(?s:.*))$')
+          if err == null {
+            if golog.file != null {
+              ."log.origin.file.name" = golog.file
+              ."log.origin.file.line" = to_int(golog.line) ?? null
+            }
+            text = string!(golog.msg)
           }
         }
-        if !mismatch { .tags = ["generic"] }
+        if text != msg {
+          ."event.original" = msg
+          ._msg = text
+        }
+
+        rpc, err = parse_regex(text, r'^(?:[a-z][a-z-]* )?(?P<code>[A-Z][A-Za-z]*) \[(?P<method>/[^\]\s]+)\] (?P<duration>\S+) (?:unary|stream) (?P<rest>(?s:.*))$')
+        if err == null {
+          mapped = true
+          ok = rpc.code == "OK"
+          ."event.action" = rpc.method
+          ."event.outcome" = if ok { "success" } else { "failure" }
+          ."Rpc.Grpc.StatusCode" = rpc.code
+          took, err = parse_duration(string!(rpc.duration), "ns")
+          if err == null { ."event.duration" = to_int(took) }
+          parts, err = parse_regex(string!(rpc.rest), r'^(?P<status>(?s:.*?))(?: \{(?P<authz>(?s:.*))\})?(?: \((?P<meta>(?s:.*))\))?$')
+          if err == null {
+            status = string(parts.status) ?? ""
+            if !ok && status != "" { ."error.message" = status }
+            if parts.authz != null { ."Rpc.Authorization" = parts.authz }
+            # key=value pairs split by ";", which a value (a user agent) can contain too: a
+            # piece that isn't key=value belongs to the value before it.
+            meta = {}
+            last = ""
+            for_each(split(string(parts.meta) ?? "", ";")) -> |_i, piece| {
+              kv, err = parse_regex(piece, r'^(?P<key>[A-Za-z:][\w:.-]*)=(?P<value>(?s:.*))$')
+              if err == null {
+                last = string!(kv.key)
+                meta = set!(meta, [last], kv.value)
+              } else if last != "" {
+                meta = set!(meta, [last], (string(get!(meta, [last])) ?? "") + ";" + piece)
+              }
+            }
+            # "@" for the local socket (the console dashboard, ...).
+            peer, err = parse_regex(string(meta.peer) ?? "", r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
+            if err == null {
+              ."source.ip" = peer.ip
+              ."source.port" = to_int(peer.port) ?? null
+            }
+            agent = string(get!(meta, ["user-agent"])) ?? ""
+            if agent != "" { ."user_agent.original" = agent }
+            roles = string(get!(meta, ["talos-role"])) ?? ""
+            if roles != "" { ."user.roles" = split(roles, ",") }
+          }
+        }
+
+        if service == "dns-resolve-cache" && is_string(.question) {
+          mapped = true
+          ."event.category" = ["network"]
+          ."event.type" = ["protocol"]
+          ."network.protocol" = "dns"
+          ."dns.question.name" = replace(string!(del(.question)), r'\.$', "")
+          if is_string(.proto) { ."network.transport" = del(.proto) }
+          for_each({"remote_addr": "source", "local_addr": "destination", "upstream": "server"}) -> |key, ecs| {
+            address, err = parse_regex(string(get!(., [key])) ?? "", r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
+            if err == null {
+              . = set!(., [ecs + ".ip"], address.ip)
+              . = set!(., [ecs + ".port"], to_int(address.port) ?? null)
+              . = remove!(., [key])
+            }
+          }
+          # The message as miekg/dns prints it: header, flags, sections.
+          data = string(.data) ?? ""
+          question, err = parse_regex(data, r';; QUESTION SECTION:\n;\S+\s+IN\s+(?P<type>[A-Z0-9]+)')
+          if err == null {
+            ."dns.question.type" = question.type
+            header, err = parse_regex(data, r'status: (?P<rcode>[A-Z]+), id: (?P<id>\d+)\n;; flags:(?P<flags>[a-z ]*);')
+            if err == null {
+              flags = split(strip_whitespace(string!(header.flags)), " ")
+              ."dns.id" = header.id
+              ."dns.header_flags" = map_values(flags) -> |f| { upcase(f) }
+              response = includes(flags, "qr")
+              ."dns.type" = if response { "answer" } else { "query" }
+              if response {
+                ."dns.response_code" = header.rcode
+                ."event.outcome" = if header.rcode == "NOERROR" { "success" } else { "failure" }
+              }
+            }
+            answers = []
+            ips = []
+            section, err = parse_regex(data, r';; ANSWER SECTION:\n(?P<records>(?s:.*?))(?:\n\n|\n?$)')
+            if err == null {
+              for_each(split(string!(section.records), "\n")) -> |_i, record| {
+                rr, err = parse_regex(record, r'^(?P<name>\S+)\s+(?P<ttl>\d+)\s+(?P<class>[A-Z]+)\s+(?P<type>[A-Z0-9]+)\s+(?P<data>.*)$')
+                if err == null {
+                  answers = push(answers, {
+                    "name": replace(string!(rr.name), r'\.$', ""),
+                    "ttl": to_int(rr.ttl) ?? null,
+                    "class": rr.class,
+                    "type": rr.type,
+                    "data": rr.data,
+                  })
+                  if includes(["A", "AAAA"], rr.type) { ips = push(ips, rr.data) }
+                }
+              }
+            }
+            if answers != [] { ."dns.answers" = answers }
+            if ips != [] { ."dns.resolved_ip" = ips }
+            del(.data)
+          }
+        }
       }
+      if !mismatch && !mapped { .tags = ["generic"] }

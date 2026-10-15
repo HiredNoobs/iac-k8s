@@ -1,4 +1,5 @@
-# Unit tests for config/talos.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/talos.yaml (how to run them: tests/pipeline.yaml). The lines are real
+# ones from the nodes unless noted.
 tests:
   - name: Talos service line, the service's own fields kept (apid)
     inputs:
@@ -23,6 +24,7 @@ tests:
               assert_eq!(get!(., ["grpc.method"]), "/machine.MachineService/Version")
               assert_eq!(get!(., ["peer.address"]), "192.168.50.140:51234")
               assert_eq!(.tags, ["generic"])
+              assert!(!exists(."event.original"))
               for_each(["msg", "talos-level", "talos-time", "talos-service", "host", "port", "source_type", "timestamp", "level"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
               assert!(!exists(.kubernetes))
 
@@ -41,25 +43,267 @@ tests:
               assert_eq!(get!(., ["service.name"]), "kubelet")
               assert_eq!(.pod, "kube-system/kube-apiserver-cp-1")
 
-  - name: Talos kernel line
+  - name: etcd's line (zap JSON, its own fields kept)
     inputs:
       - insert_at: talos
         type: vrl
         source: |
-          . = {"msg": "Out of memory: Killed process 1234 (stress)", "talos-level": "error", "talos-time": "2026-10-15T12:00:02Z", "facility": "kern", "priority": "err", "seq": 812, "clock": 123456789, "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T12:00:00.500Z'}
+          . = {"msg": "starting compact hash check", "talos-level": "info", "talos-time": "2026-10-15T15:51:50.041062Z", "talos-service": "etcd", "caller": "etcdserver/corrupt.go:278", "local-member-id": "48c452a36a97e90", "timeout": "7s", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:50.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["service.name"]), "etcd")
+              assert_eq!(._msg, "starting compact hash check")
+              assert_eq!(get!(., ["log.origin.file.name"]), "etcdserver/corrupt.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 278)
+              assert_eq!(get!(., ["local-member-id"]), "48c452a36a97e90")
+              assert_eq!(.tags, ["generic"])
+              assert!(!exists(."event.original"))
+
+  - name: kernel line, the prefix as facility, severity, level and time
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "kern: warning: [2026-10-15T15:52:48.436605742Z]: audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192", "talos-level": "info", "talos-time": "2026-10-15T15:52:56.120876195Z", "talos-service": "kernel", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:56.5Z'}
     outputs:
       - extract_from: final
         conditions:
           - type: vrl
             source: |
               assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
-              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["service.name"]), "kernel")
+              assert_eq!(._msg, "audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192")
+              assert_eq!(._time, t'2026-10-15T15:52:48.436605742Z')
+              assert_eq!(get!(., ["log.level"]), "warning")
               assert_eq!(get!(., ["log.syslog.facility.name"]), "kern")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "err")
-              assert!(!exists(."service.name"))
-              assert!(!exists(.seq))
-              assert!(!exists(.clock))
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "warning")
+              assert_eq!(get!(., ["event.original"]), "kern: warning: [2026-10-15T15:52:48.436605742Z]: audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192")
               assert!(!exists(.tags))
+
+  - name: kernel line, a padded severity (err)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "kern:     err: [2026-10-15T15:52:48.43778798Z]: audit: rate limit exceeded", "talos-level": "info", "talos-time": "2026-10-15T15:52:56.121364155Z", "talos-service": "kernel", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:56.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "audit: rate limit exceeded")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "err")
+
+  - name: kernel line, Talos' own warning with its fields
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "user: warning: [2026-10-15T15:53:07.807105677Z]: [talos] error watching discovery service state", "talos-level": "info", "talos-time": "2026-10-15T15:53:09.43070695Z", "talos-service": "kernel", "component": "controller-runtime", "controller": "cluster.DiscoveryServiceController", "error": "rpc error: code = Unavailable desc = error reading from server: read tcp 192.168.111.23:50702->18.226.100.232:443: read: connection timed out", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:53:09.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
+              assert_eq!(._msg, "[talos] error watching discovery service state")
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "user")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["Talos.Controller"]), "cluster.DiscoveryServiceController")
+              assert_eq!(.component, "controller-runtime")
+              assert!(starts_with(string!(get!(., ["error.message"])), "rpc error: code = Unavailable"))
+              assert!(!exists(.controller))
+
+  - name: kernel continuation line, kept as it is
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "SUBSYSTEM=scsi", "talos-level": "info", "talos-time": "2026-10-15T15:52:56.1Z", "talos-service": "kernel", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:56.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(._msg, "SUBSYSTEM=scsi")
+              assert_eq!(.tags, ["generic"])
+              assert!(!exists(."log.syslog.facility.name"))
+              assert!(!exists(."event.original"))
+
+  - name: Talos' text format, the level from the text and the controller (controller-runtime)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests", "talos-level": "info", "talos-time": "2026-10-15T15:52:03.440944166Z", "talos-service": "controller-runtime", "component": "controller-runtime", "controller": "k8s.StaticPodServerController", "size": "14571", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:03.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "serving static pod manifests")
+              assert_eq!(._time, t'2026-10-15T15:52:03.440944166Z')
+              assert_eq!(get!(., ["log.level"]), "debug")
+              assert_eq!(get!(., ["Talos.Controller"]), "k8s.StaticPodServerController")
+              assert_eq!(get!(., ["event.original"]), "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests")
+              assert_eq!(.size, "14571")
+              assert_eq!(.tags, ["generic"])
+              assert!(!exists(.component))
+              assert!(!exists(.controller))
+              assert!(!exists(."Orchestrator.Controller"))
+
+  - name: Go's log format with a file (trustd's CSR request)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026/10/15 15:52:11.522743 reg.go:68: received CSR signing request from 192.168.111.12:56088: subject CN=prx-001-srv-prod-core-worker-001 dns names [prx-001-srv-prod-core-worker-001 prx-001-srv-prod-core-worker-001.hirednoobs.com] addresses [127.0.0.1 192.168.111.12 192.168.111.100 192.168.111.103]", "talos-level": "info", "talos-time": "2026-10-15T15:52:11.523321138Z", "talos-service": "trustd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:11.6Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(starts_with(string!(._msg), "received CSR signing request from 192.168.111.12:56088: subject CN="))
+              assert_eq!(get!(., ["log.origin.file.name"]), "reg.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 68)
+              assert!(starts_with(string!(get!(., ["event.original"])), "2026/10/15 15:52:11.522743 reg.go:68: "))
+              assert_eq!(.tags, ["generic"])
+
+  - name: gRPC request, trustd's (a peer with an address)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026/10/15 15:52:11.523189 log.go:92: OK [/securityapi.SecurityService/Certificate] 1.81362ms unary Success (:authority=192.168.111.11;content-type=application/grpc;grpc-accept-encoding=gzip;peer=192.168.111.12:56088;token=<hidden>;user-agent=grpc-go/1.83.2)", "talos-level": "info", "talos-time": "2026-10-15T15:52:11.523437627Z", "talos-service": "trustd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:11.6Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "/securityapi.SecurityService/Certificate")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["event.duration"]), 1813620)
+              assert_eq!(get!(., ["Rpc.Grpc.StatusCode"]), "OK")
+              assert_eq!(get!(., ["source.ip"]), "192.168.111.12")
+              assert_eq!(get!(., ["source.port"]), 56088)
+              assert_eq!(get!(., ["related.ip"]), ["192.168.111.12"])
+              assert_eq!(get!(., ["user_agent.original"]), "grpc-go/1.83.2")
+              assert_eq!(get!(., ["log.origin.file.name"]), "log.go")
+              assert!(starts_with(string!(._msg), "OK [/securityapi.SecurityService/Certificate] "))
+              assert!(!exists(."Rpc.Authorization"))
+              assert!(!exists(."error.message"))
+              assert!(!exists(.tags))
+
+  - name: gRPC request, machined's from the console dashboard (local socket, authorisation, roles)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026/10/15 15:52:02.636423 machined OK [/machine.MachineService/ServiceList] 115.731µs unary Success {authorized based on PID (253) match with service \"dashboard\" (allowed roles [os:meta:writer os:reader]); authorized ([os:admin os:operator os:reader] includes [os:meta:writer os:reader])} (:authority=localhost;content-type=application/grpc;grpc-accept-encoding=gzip;peer=@;runtime=Talos;talos-role=os:meta:writer,os:reader;user-agent=grpc-go/1.83.2)", "talos-level": "info", "talos-time": "2026-10-15T15:52:02.63645103Z", "talos-service": "machined", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:02.7Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "/machine.MachineService/ServiceList")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["event.duration"]), 115731)
+              assert_eq!(get!(., ["Rpc.Authorization"]), "authorized based on PID (253) match with service \"dashboard\" (allowed roles [os:meta:writer os:reader]); authorized ([os:admin os:operator os:reader] includes [os:meta:writer os:reader])")
+              assert_eq!(get!(., ["user.roles"]), ["os:meta:writer", "os:reader"])
+              assert_eq!(get!(., ["user_agent.original"]), "grpc-go/1.83.2")
+              assert!(!exists(."source.ip"))
+              assert!(!exists(."log.origin.file.name"))
+
+  - name: gRPC request that failed (not a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026/10/15 16:00:00.000001 log.go:92: PermissionDenied [/machine.MachineService/Reboot] 1m2.5s unary not authorized (peer=192.168.111.5:40000;user-agent=talosctl/v1.14.1 (linux; amd64))", "talos-level": "info", "talos-time": "2026-10-15T16:00:00.000002Z", "talos-service": "apid", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T16:00:00.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["Rpc.Grpc.StatusCode"]), "PermissionDenied")
+              assert_eq!(get!(., ["error.message"]), "not authorized")
+              assert_eq!(get!(., ["event.duration"]), 62500000000)
+              assert_eq!(get!(., ["source.ip"]), "192.168.111.5")
+              assert_eq!(get!(., ["user_agent.original"]), "talosctl/v1.14.1 (linux; amd64)")
+
+  - name: dns-resolve-cache query
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026-10-15T15:51:57.653Z DEBUG making dns request", "talos-level": "info", "talos-time": "2026-10-15T15:51:57.653115266Z", "talos-service": "dns-resolve-cache", "component": "dns-resolve-cache", "data": ";; opcode: QUERY, status: NOERROR, id: 37758\n;; flags: rd ad; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1\n\n;; OPT PSEUDOSECTION:\n; EDNS: version 0; flags:; udp: 1232\n\n;; QUESTION SECTION:\n;redis.hirednoobs.com.\tIN\t AAAA\n", "local_addr": "169.254.116.108:53", "proto": "udp", "question": "redis.hirednoobs.com.", "remote_addr": "10.244.8.9:52314", "upstream": "192.168.111.1:53", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:57.7Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "making dns request")
+              assert_eq!(get!(., ["log.level"]), "debug")
+              assert_eq!(get!(., ["network.protocol"]), "dns")
+              assert_eq!(get!(., ["network.transport"]), "udp")
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["dns.question.name"]), "redis.hirednoobs.com")
+              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
+              assert_eq!(get!(., ["dns.type"]), "query")
+              assert_eq!(get!(., ["dns.id"]), "37758")
+              assert_eq!(get!(., ["dns.header_flags"]), ["RD", "AD"])
+              assert_eq!(get!(., ["source.ip"]), "10.244.8.9")
+              assert_eq!(get!(., ["source.port"]), 52314)
+              assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
+              assert_eq!(get!(., ["server.ip"]), "192.168.111.1")
+              assert_eq!(get!(., ["server.port"]), 53)
+              assert_eq!(get!(., ["related.ip"]), ["10.244.8.9", "169.254.116.108", "192.168.111.1"])
+              for_each(["data", "question", "proto", "remote_addr", "local_addr", "upstream", "component", "tags"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
+              assert!(!exists(."dns.response_code"))
+              assert!(!exists(."event.outcome"))
+
+  - name: dns-resolve-cache response with answers (the answer section isn't from a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026-10-15T15:51:57.654Z DEBUG dns response", "talos-level": "info", "talos-time": "2026-10-15T15:51:57.654901258Z", "talos-service": "dns-resolve-cache", "component": "dns-resolve-cache", "data": ";; opcode: QUERY, status: NOERROR, id: 37759\n;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1\n\n;; OPT PSEUDOSECTION:\n; EDNS: version 0; flags:; udp: 1232\n\n;; QUESTION SECTION:\n;www.hirednoobs.com.\tIN\t A\n\n;; ANSWER SECTION:\nwww.hirednoobs.com.\t300\tIN\tCNAME\tedge.hirednoobs.com.\nedge.hirednoobs.com.\t300\tIN\tA\t192.168.111.101\n", "local_addr": "169.254.116.108:53", "proto": "udp", "question": "www.hirednoobs.com.", "remote_addr": "10.244.8.9:52315", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:57.7Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["dns.type"]), "answer")
+              assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["dns.header_flags"]), ["QR", "RD", "RA"])
+              assert_eq!(get!(., ["dns.answers"]), [{"name": "www.hirednoobs.com", "ttl": 300, "class": "IN", "type": "CNAME", "data": "edge.hirednoobs.com."}, {"name": "edge.hirednoobs.com", "ttl": 300, "class": "IN", "type": "A", "data": "192.168.111.101"}])
+              assert_eq!(get!(., ["dns.resolved_ip"]), ["192.168.111.101"])
+              assert!(!exists(."server.ip"))
+              assert!(!exists(.data))
+
+  - name: dns-resolve-cache response, a name that doesn't exist (not a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026-10-15T15:51:57.654Z DEBUG dns response", "talos-level": "info", "talos-time": "2026-10-15T15:51:57.654901258Z", "talos-service": "dns-resolve-cache", "data": ";; opcode: QUERY, status: NXDOMAIN, id: 4\n;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 0\n\n;; QUESTION SECTION:\n;nope.hirednoobs.com.\tIN\t A\n\n;; AUTHORITY SECTION:\nhirednoobs.com.\t3600\tIN\tSOA\tns.hirednoobs.com. admin.hirednoobs.com. 1 3600 600 86400 3600\n", "proto": "udp", "question": "nope.hirednoobs.com.", "remote_addr": "10.244.8.9:52316", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:57.7Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["dns.response_code"]), "NXDOMAIN")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert!(!exists(."dns.answers"))
+              assert!(!exists(."dns.resolved_ip"))
 
   - name: "format mismatch: a line on the Talos port that isn't Talos' JSON"
     inputs:

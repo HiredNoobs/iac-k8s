@@ -31,8 +31,8 @@ spec:
       targetPort: journald
       protocol: TCP
 ---
-# Where every node's Talos sends its own logs (iac-homelab's talos-cluster module, machine.logging
-# and KmsgLogConfig). Talos resolves names with the host's DNS, not the cluster's, so the address
+# Where every node's Talos sends its own logs (iac-homelab's talos-cluster module,
+# machine.logging). Talos resolves names with the host's DNS, not the cluster's, so the address
 # is fixed: in the first 256 of the Service range (10.96.0.0/12), which Kubernetes only assigns
 # to Services that ask for an address, so a rebuild can't give it to another one. Change both
 # together. Local: each node's lines go to the Vector on that node, which is how they get their
