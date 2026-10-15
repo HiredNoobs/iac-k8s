@@ -1,0 +1,192 @@
+transforms:
+  # Pod lines with no parser of their own that aren't JSON: the text formats several apps share,
+  # normalised like a JSON line. The message becomes _msg (the whole line kept in event.original
+  # when they differ), key=value pairs and zap's trailing JSON become fields, the level, logger
+  # and error stay plain fields (level, logger, err) for ecs to map, the code's location is
+  # log.origin.*. _time stays the container runtime's: these formats' times have no year or
+  # zone, or only seconds (logfmt's own RFC 3339 time= is used). Still generic (tags), so an
+  # app's own field names stay as they are.
+  #   zap console  "<time>\t<LEVEL>\t[<logger>\t][<file>.go:<line>\t]<message>[\t{<json>}]"
+  #                (Envoy Gateway, VictoriaMetrics, the RabbitMQ topology operator)
+  #   klog         "<I|W|E|F>MMDD hh:mm:ss.uuuuuu <pid> <file>:<line>] <message>", the message
+  #                quoted and followed by key="value" pairs when structured (Kubernetes'
+  #                components, cert-manager)
+  #   slog text    "YYYY/MM/DD hh:mm:ss LEVEL <message> key=value ..." (kube-vip, Longhorn)
+  #   logfmt       "time=... level=... msg=... key=value ..." (logrus: Longhorn), optionally after
+  #                Longhorn's "[<volume>-r-<id>] " or "[<volume>-e-<id>] " (a replica's or an
+  #                engine's line, as Storage.Volume.Name and Storage.Replica.Name or
+  #                Storage.Engine.Name)
+  #   Python       "<date> <time>,<ms> LEVEL [<file>:<function>():L<line>] <message>" (contentbot)
+  #   Pi-hole      "<date> <time> <zone> [<pid>/T<thread>] LEVEL: <message>" (FTL), or
+  #                "<date> <time> <zone> <program>: <message>"
+  #   RabbitMQ     "<date> <time>+00:00 [level] <<erlang pid>> <message>", the Erlang process as
+  #                process.thread.name (a lightweight process, the nearest ECS field)
+  generic:
+    type: remap
+    inputs: [by_source._unmatched]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      if %text == true {
+        line = string(._msg) ?? ""
+        found = false
+        message = line
+        fields = {}
+        origin = {}
+
+        zap, err = parse_regex(line, r'^\d{4}-\d\d-\d\dT\S+\t(?P<level>(?i:debug|info|warn|warning|error|dpanic|panic|fatal))\t(?P<rest>.*)$')
+        if err == null {
+          found = true
+          fields.level = zap.level
+          parts = split(string!(zap.rest), "\t")
+          n = length(parts)
+          if n > 1 {
+            trailing, err = parse_json(string!(get!(parts, [n - 1])))
+            if err == null && is_object(trailing) {
+              fields = merge(fields, object!(trailing))
+              parts = slice!(parts, 0, n - 1)
+            }
+          }
+          caller = -1
+          for_each(parts) -> |i, part| {
+            if caller == -1 && match(part, r'^\S+\.go:\d+$') { caller = i }
+          }
+          if caller >= 0 {
+            location = string!(get!(parts, [caller]))
+            loc = parse_regex!(location, r'^(?P<file>\S+):(?P<line>\d+)$')
+            origin."file.name" = loc.file
+            origin."file.line" = to_int!(loc.line)
+            if caller > 0 { fields.logger = join(slice!(parts, 0, caller), "\t") }
+            message = join(slice!(parts, caller + 1), "\t")
+          } else if length(parts) > 1 {
+            # Without the caller, a logger and a message can't be told apart by their form: the
+            # first of two is the logger (controller-runtime's events, ...).
+            fields.logger = get!(parts, [0])
+            message = join(slice!(parts, 1), "\t")
+          } else {
+            message = join(parts, "\t")
+          }
+        }
+
+        if !found {
+          klog, err = parse_regex(line, r'^(?P<sev>[IWEF])\d{4} \d\d:\d\d:\d\d\.\d+\s+\d+ (?P<file>[^:\]\s]+):(?P<line>\d+)\] (?P<rest>.*)$')
+          if err == null {
+            found = true
+            fields.level = if klog.sev == "I" { "info" } else if klog.sev == "W" { "warning" } else if klog.sev == "E" { "error" } else { "critical" }
+            origin."file.name" = klog.file
+            origin."file.line" = to_int!(klog.line)
+            rest = string!(klog.rest)
+            message = rest
+            structured, err = parse_regex(rest, r'^"(?P<quoted>(?:[^"\\]|\\.)*)"(?: (?P<pairs>.*))?$')
+            if err == null {
+              # Go's quoting, which JSON reads.
+              message = string(parse_json("\"" + string!(structured.quoted) + "\"") ?? null) ?? string!(structured.quoted)
+              if structured.pairs != null {
+                pairs, err = parse_logfmt(string!(structured.pairs))
+                if err == null { fields = merge(fields, pairs) } else { message = rest }
+              }
+            }
+          }
+        }
+
+        if !found {
+          slog, err = parse_regex(line, r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (?P<level>DEBUG|INFO|WARN|ERROR) (?P<message>.*?)(?: (?P<pairs>[\w.]+=(?:"(?:[^"\\]|\\.)*"|\S*)(?: [\w.]+=(?:"(?:[^"\\]|\\.)*"|\S*))*))?$')
+          if err == null {
+            found = true
+            fields.level = slog.level
+            message = string!(slog.message)
+            if slog.pairs != null {
+              pairs, err = parse_logfmt(string!(slog.pairs))
+              if err == null { fields = merge(fields, pairs) } else { message = message + " " + string!(slog.pairs) }
+            }
+          }
+        }
+
+        if !found {
+          body = line
+          storage = {}
+          prefix, err = parse_regex(line, r'^\[(?P<volume>[a-z0-9-]+)-(?P<kind>[re])-(?P<id>[0-9a-f]+)\] (?P<rest>.*)$')
+          if err == null {
+            body = string!(prefix.rest)
+            storage."Storage.Volume.Name" = prefix.volume
+            name = string!(prefix.volume) + "-" + string!(prefix.kind) + "-" + string!(prefix.id)
+            if prefix.kind == "r" { storage."Storage.Replica.Name" = name } else { storage."Storage.Engine.Name" = name }
+          }
+          if match(body, r'^[\w.]+=') && match(body, r'(?:^|\s)msg=') {
+            pairs, err = parse_logfmt(body)
+            if err == null && is_string(pairs.msg) {
+              found = true
+              message = string!(pairs.msg)
+              fields = merge(fields, storage)
+              fields = merge(fields, remove!(pairs, ["msg"]))
+              if is_string(fields.file) {
+                loc, err = parse_regex(string!(fields.file), r'^(?P<file>[^:\s]+):(?P<line>\d+)$')
+                if err == null {
+                  origin."file.name" = loc.file
+                  origin."file.line" = to_int!(loc.line)
+                  fields = remove!(fields, ["file"])
+                }
+              }
+              if is_string(fields.func) {
+                origin."function" = fields.func
+                fields = remove!(fields, ["func"])
+              }
+              if is_string(fields.time) {
+                t, err = parse_timestamp(string!(fields.time), "%+")
+                if err == null {
+                  ._time = t
+                  fields = remove!(fields, ["time"])
+                }
+              }
+            }
+          }
+        }
+
+        if !found {
+          py, err = parse_regex(line, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} (?P<level>[A-Z]+) \[(?P<file>[^:\]\s]+):(?P<function>[^:\]\s]+?)(?:\(\))?:L(?P<line>\d+)\] (?P<message>.*)$')
+          if err == null {
+            found = true
+            fields.level = py.level
+            origin."file.name" = py.file
+            origin."function" = py.function
+            origin."file.line" = to_int!(py.line)
+            message = string!(py.message)
+          }
+        }
+
+        if !found {
+          ftl, err = parse_regex(line, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [A-Z]+ (?:\[(?P<pid>\d+)(?:/T(?P<thread>\d+))?\] (?P<level>[A-Z]+): |(?P<program>[\w.-]+): )(?P<message>.*)$')
+          if err == null {
+            found = true
+            message = string!(ftl.message)
+            if ftl.level != null { fields.level = ftl.level }
+            if ftl.pid != null { fields."process.pid" = to_int!(ftl.pid) }
+            if ftl.thread != null { fields."process.thread.id" = to_int!(ftl.thread) }
+            if ftl.program != null { fields."process.name" = ftl.program }
+          }
+        }
+
+        if !found {
+          rabbit, err = parse_regex(line, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+[+-]\d\d:\d\d \[(?P<level>[a-z]+)\] <(?P<pid>[0-9.]+)> (?P<message>.*)$')
+          if err == null {
+            found = true
+            fields.level = rabbit.level
+            fields."process.thread.name" = rabbit.pid
+            message = string!(rabbit.message)
+          }
+        }
+
+        if found {
+          # client-go's warnings from the API server (deprecated APIs), logged at info.
+          if starts_with(message, "Warning: ") { fields.level = "warning" }
+          # The line's own fields never replace Vector's (_msg, _time, kubernetes, ...).
+          for_each(fields) -> |key, value| {
+            if !starts_with(key, "_") && get!(., [key]) == null { . = set!(., [key], value) }
+          }
+          for_each(origin) -> |key, value| { . = set!(., ["log.origin." + key], value) }
+          if message != line {
+            ._msg = message
+            ."event.original" = line
+          }
+        }
+      }

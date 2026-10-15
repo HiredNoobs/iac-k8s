@@ -24,6 +24,7 @@ configMapGenerator:
       - config/coredns.yaml
       - config/envoy.yaml
       - config/falco.yaml
+      - config/generic.yaml
       - config/ghostunnel.yaml
       - config/grafana.yaml
       - config/journald.yaml
