@@ -59,3 +59,11 @@ spec:
     defaultBackupStore:
       backupTarget: cifs://192.168.111.6/longhorn-backups
       backupTargetCredentialSecret: longhorn-backup
+    # No CSI snapshotter: it serves Kubernetes' VolumeSnapshot API, whose CRDs and
+    # snapshot-controller aren't installed (nothing here uses it; snapshots and backups are
+    # Longhorn's own), so it only logged "Failed to watch" errors. A string: the chart passes the
+    # value only when it's truthy, and the number 0 isn't (longhorn-manager then defaults to 3).
+    # Not a documented setting (Longhorn's Rancher form allows 1-10, longhorn-manager v1.12.1
+    # doesn't check): after an upgrade, check deploy/csi-snapshotter is still at 0 replicas.
+    csi:
+      snapshotterReplicaCount: "0"
