@@ -128,6 +128,7 @@ transforms:
       vaultwarden: .kubernetes.namespace == "vaultwarden" && .kubernetes.container.name == "vaultwarden"
       coredns: .kubernetes.namespace == "kube-system" && .kubernetes.container.name == "coredns"
       mealie: .kubernetes.namespace == "mealie" && .kubernetes.container.name == "mealie"
+      grafana: .kubernetes.namespace == "monitoring" && .kubernetes.container.name == "grafana"
       ghostunnel: .kubernetes.namespace == "lldap" && .kubernetes.container.name == "ghostunnel"
       kubectl: .kubernetes.namespace == "kubectl" && .kubernetes.container.name == "events"
 
@@ -137,7 +138,7 @@ transforms:
   # come here, so a line can't claim to be one.
   unparsed:
     type: remap
-    inputs: [pods.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, journald.dropped]
+    inputs: [pods.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, journald.dropped]
     source: |
       dropped = object(.metadata.dropped) ?? {}
       . = remove!(., ["metadata", "dropped"])
@@ -193,7 +194,7 @@ transforms:
   # found in metadata (%dataset, %provider, %kind, %mismatch, %error_*), which a line can't set.
   ecs:
     type: remap
-    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, ghostunnel, kubectl, syslog, journald, unparsed]
+    inputs: [by_source._unmatched, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, syslog, journald, unparsed]
     source: |
       # event.kind: pipeline_error for a line a remap failed on (remap_error) or one that looked
       # like its source's format but didn't parse (format_mismatch), the reason in error.message;

@@ -25,6 +25,7 @@ configMapGenerator:
       - config/envoy.yaml
       - config/falco.yaml
       - config/ghostunnel.yaml
+      - config/grafana.yaml
       - config/journald.yaml
       - config/kubernetes-audit.yaml
       - config/kubernetes-events.yaml

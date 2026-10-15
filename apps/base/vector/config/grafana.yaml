@@ -1,0 +1,79 @@
+transforms:
+  # Grafana's request log, its JSON lines with msg "Request Completed" (method, path, status,
+  # remote_addr, duration, size, referer, userId, orgId, handler, status_source): grafana.access,
+  # as Elastic's web server access logs (nginx, apache); no Elastic integration for Grafana's
+  # logs. What Envoy's access log can't tell: the Grafana user (user.id) and organisation
+  # (organization.id). The route's pattern as Http.Route, whether the status was Grafana's or a
+  # data source's as Http.Response.StatusSource. Grafana's other lines have no parser of their own.
+  grafana:
+    type: remap
+    inputs: [by_source.grafana]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      if ._msg == "Request Completed" {
+        # to_int would make a missing field 0, so each is checked first.
+        code, err = if .status != null { to_int(.status) } else { to_int("") }
+        if err != null {
+          %mismatch = "Request Completed without a numeric status"
+        } else {
+          %dataset = "grafana.access"
+          ."event.category" = ["web"]
+          ."event.type" = ["access"]
+          ."http.response.status_code" = code
+          ."event.outcome" = if code < 400 { "success" } else { "failure" }
+          del(.status)
+          if is_string(.method) { ."http.request.method" = del(.method) }
+          if is_string(.path) { ."url.path" = del(.path) }
+          # The connection's peer, with or without a port: behind the Gateway, Envoy's pod (as
+          # Mealie's); Envoy's access log has the client.
+          addr = string(.remote_addr) ?? ""
+          if is_ipv4(addr) || is_ipv6(addr) {
+            ."source.ip" = addr
+            del(.remote_addr)
+          } else {
+            hp, err = parse_regex(addr, r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
+            if err == null && (is_ipv4(string!(hp.ip)) || is_ipv6(string!(hp.ip))) {
+              ."source.ip" = hp.ip
+              ."source.port" = to_int(hp.port) ?? null
+              del(.remote_addr)
+            }
+          }
+          # duration is the more precise ("3.284ms"), time_ms the same in whole milliseconds.
+          ns, err = parse_duration(string(.duration) ?? "", "ns")
+          if err != null && .time_ms != null {
+            ms, err = to_float(.time_ms)
+            ns = ms * 1000000.0
+          }
+          if err == null {
+            ."event.duration" = to_int(ns)
+            del(.duration)
+            del(.time_ms)
+          }
+          if .size != null {
+            size, err = to_int(.size)
+            if err == null { ."http.response.body.bytes" = size; del(.size) }
+          }
+          if is_string(.referer) {
+            referer = del(.referer)
+            if referer != "" { ."http.request.referrer" = referer }
+          }
+          # 0 when there's no user or organisation (not logged in).
+          if .userId != null {
+            user, err = to_int(.userId)
+            if err == null {
+              if user != 0 { ."user.id" = to_string(user) }
+              del(.userId)
+            }
+          }
+          if .orgId != null {
+            org, err = to_int(.orgId)
+            if err == null {
+              if org != 0 { ."organization.id" = to_string(org) }
+              del(.orgId)
+            }
+          }
+          if is_string(.handler) { ."Http.Route" = del(.handler) }
+          if is_string(.status_source) { ."Http.Response.StatusSource" = del(.status_source) }
+        }
+      }

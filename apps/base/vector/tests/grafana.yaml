@@ -1,0 +1,129 @@
+# Unit tests for config/grafana.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: Grafana request, a logged-in user
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-15T08:00:00.123Z\",\"level\":\"info\",\"logger\":\"context\",\"userId\":2,\"orgId\":1,\"uname\":\"ryan\",\"msg\":\"Request Completed\",\"method\":\"POST\",\"path\":\"/api/ds/query\",\"status\":200,\"remote_addr\":\"192.168.50.140\",\"time_ms\":3,\"duration\":\"3.284ms\",\"size\":1532,\"referer\":\"https://grafana.hirednoobs.com/d/abc/overview\",\"handler\":\"/api/ds/query\",\"status_source\":\"server\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "grafana.access")
+              assert_eq!(get!(., ["event.provider"]), "grafana")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!includes(array(.tags) ?? [], "generic"))
+              assert_eq!(get!(., ["event.category"]), ["web"])
+              assert_eq!(get!(., ["event.type"]), ["access"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["http.request.method"]), "POST")
+              assert_eq!(get!(., ["url.path"]), "/api/ds/query")
+              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              assert_eq!(get!(., ["http.response.body.bytes"]), 1532)
+              assert_eq!(get!(., ["http.request.referrer"]), "https://grafana.hirednoobs.com/d/abc/overview")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert!(!exists(."source.port"))
+              assert_eq!(get!(., ["event.duration"]), 3284000)
+              assert_eq!(get!(., ["user.id"]), "2")
+              assert_eq!(get!(., ["related.user"]), ["2"])
+              assert_eq!(get!(., ["organization.id"]), "1")
+              assert_eq!(get!(., ["Http.Route"]), "/api/ds/query")
+              assert_eq!(get!(., ["Http.Response.StatusSource"]), "server")
+              for_each(["method", "path", "status", "remote_addr", "time_ms", "duration", "size", "referer", "userId", "orgId", "handler", "status_source", "t"]) -> |_i, k| {
+                assert!(get!(., [k]) == null, "still there: " + k)
+              }
+              assert_eq!(._time, t'2026-10-15T08:00:00.123Z')
+
+  - name: Grafana request, not logged in, an address with a port
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-15T08:00:00.123Z\",\"level\":\"info\",\"logger\":\"context\",\"userId\":0,\"orgId\":0,\"uname\":\"\",\"msg\":\"Request Completed\",\"method\":\"GET\",\"path\":\"/api/health\",\"status\":401,\"remote_addr\":\"[2001:db8::1]:51234\",\"time_ms\":3,\"duration\":\"3.284ms\",\"size\":27,\"referer\":\"\",\"handler\":\"/api/health\",\"status_source\":\"server\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "grafana.access")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["source.ip"]), "2001:db8::1")
+              assert_eq!(get!(., ["source.port"]), 51234)
+              assert!(!exists(."user.id"))
+              assert!(!exists(."organization.id"))
+              assert!(!exists(."http.request.referrer"))
+              assert!(!exists(.userId))
+              assert!(!exists(.orgId))
+              assert!(!exists(.referer))
+
+  - name: Grafana's other lines stay generic
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-15T08:00:00.123Z\",\"level\":\"info\",\"logger\":\"cleanup\",\"msg\":\"Completed cleanup jobs\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "monitoring.grafana")
+              assert_eq!(.tags, ["generic"])
+              assert_eq!(get!(., ["event.kind"]), "event")
+
+  - name: "format mismatch: Grafana Request Completed without a status"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-15T08:00:00.123Z\",\"level\":\"info\",\"logger\":\"context\",\"msg\":\"Request Completed\",\"method\":\"GET\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(.method, "GET")
+
+  - name: Grafana request through the Gateway, a duration in microseconds (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"t\":\"2026-10-15T08:06:04.553164445Z\",\"level\":\"info\",\"logger\":\"context\",\"userId\":0,\"orgId\":0,\"uname\":\"\",\"msg\":\"Request Completed\",\"method\":\"GET\",\"path\":\"/\",\"status\":302,\"remote_addr\":\"10.244.1.207\",\"time_ms\":0,\"duration\":\"80.779µs\",\"size\":29,\"referer\":\"\",\"handler\":\"/\",\"status_source\":\"server\"}",
+            "timestamp": t'2026-10-15T08:06:04.553356694Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "monitoring", "pod_name": "grafana-0", "container_name": "grafana"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "grafana.access")
+              assert_eq!(get!(., ["http.response.status_code"]), 302)
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["source.ip"]), "10.244.1.207")
+              assert_eq!(get!(., ["event.duration"]), 80779)
+              assert_eq!(get!(., ["http.response.body.bytes"]), 29)
+              assert_eq!(get!(., ["Http.Route"]), "/")
+              assert_eq!(._time, t'2026-10-15T08:06:04.553164445Z')
