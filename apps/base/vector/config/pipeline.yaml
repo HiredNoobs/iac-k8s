@@ -282,6 +282,26 @@ transforms:
           . = remove!(., [kind])
         }
       }
+      # Flux's notification-controller logs each event it receives with the object it's about
+      # (eventInvolvedObject): as orchestrator.*, as a Kubernetes event's object. Any other key
+      # stays under eventInvolvedObject.
+      if is_object(.eventInvolvedObject) && !exists(."orchestrator.type") {
+        ref = object!(del(.eventInvolvedObject))
+        ."orchestrator.type" = "kubernetes"
+        if is_string(ref.kind) { ."orchestrator.resource.type" = downcase(string!(ref.kind)) }
+        if is_string(ref.name) { ."orchestrator.resource.name" = ref.name }
+        if is_string(ref.namespace) { ."orchestrator.namespace" = ref.namespace }
+        if is_string(ref.uid) { ."orchestrator.resource.id" = ref.uid }
+        if is_string(ref.apiVersion) { ."orchestrator.api_version" = ref.apiVersion }
+        if is_string(ref.resourceVersion) { ."Orchestrator.Resource.ResourceVersion" = ref.resourceVersion }
+        rest = {}
+        for_each(ref) -> |key, value| {
+          if !includes(["kind", "name", "namespace", "uid", "apiVersion", "resourceVersion"], key) || !is_string(value) {
+            rest = set!(rest, [key], value)
+          }
+        }
+        if rest != {} { .eventInvolvedObject = rest }
+      }
 
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
       # (anything else as it is, lower case). From a JSON line's level, lvl or severity, else

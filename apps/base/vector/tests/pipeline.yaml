@@ -800,3 +800,45 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["log.level"]), "warning")
+
+  - name: "Flux's notification-controller event: the object as orchestrator.* (the sample)"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"ts\":\"2026-10-15T03:54:24.338Z\",\"logger\":\"event-server\",\"msg\":\"dispatching event\",\"eventInvolvedObject\":{\"kind\":\"Kustomization\",\"namespace\":\"flux-system\",\"name\":\"infra-operators\",\"uid\":\"24c7c7eb-c3d7-4e3b-ab91-11ee54726581\",\"apiVersion\":\"kustomize.toolkit.fluxcd.io/v1\",\"resourceVersion\":\"10822581\"},\"message\":\"Reconciliation finished in 1.59713407s, next run in 10m0s\"}",
+            "timestamp": t'2026-10-15T03:54:24.400Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "flux-system", "pod_name": "x-1", "container_name": "manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
+              assert_eq!(get!(., ["orchestrator.resource.type"]), "kustomization")
+              assert_eq!(get!(., ["orchestrator.resource.name"]), "infra-operators")
+              assert_eq!(get!(., ["orchestrator.namespace"]), "flux-system")
+              assert_eq!(get!(., ["orchestrator.resource.id"]), "24c7c7eb-c3d7-4e3b-ab91-11ee54726581")
+              assert_eq!(get!(., ["orchestrator.api_version"]), "kustomize.toolkit.fluxcd.io/v1")
+              assert_eq!(get!(., ["Orchestrator.Resource.ResourceVersion"]), "10822581")
+              assert!(!exists(.eventInvolvedObject))
+              assert_eq!(._msg, "Reconciliation finished in 1.59713407s, next run in 10m0s")
+
+  - name: Go slog text line (the longhorn-manager sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/10/15 00:05:49 INFO smartctl failed device=/dev/sdb err=\"exit status 4\"",
+            "timestamp": t'2026-10-15T03:54:24.400Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "info")
