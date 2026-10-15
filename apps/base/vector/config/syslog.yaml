@@ -18,8 +18,9 @@ sources:
 transforms:
   # Syslog, RFC 3164 or 5424 (parse_syslog), as Elastic's syslog fields: log.syslog.* and the
   # sender as the host (host.hostname from the message, host.ip the address rsyslog saw), the
-  # program as process.name/process.pid, the severity as log.level too. An RFC 3164 timestamp has
-  # no year or time zone, so its _time is when rsyslog received it; RFC 5424's is its own.
+  # program as process.name/process.pid, the severity as log.level too, UDP or TCP as
+  # Log.Transport. An RFC 3164 timestamp has no year or time zone, so its _time is when rsyslog
+  # received it; RFC 5424's is its own.
   syslog:
     type: remap
     inputs: [syslog_relay]
@@ -33,7 +34,8 @@ transforms:
       transport = string(.transport) ?? ""
       . = {"_msg": raw, "_time": received, "event.created": now()}
       if sender != "" { ."host.ip" = sender }
-      if transport == "imudp" { ."network.transport" = "udp" } else if transport == "imtcp" { ."network.transport" = "tcp" }
+      # How the line reached rsyslog, not the event's own traffic (network.*), so a custom field.
+      if transport == "imudp" { ."Log.Transport" = "udp" } else if transport == "imtcp" { ."Log.Transport" = "tcp" }
       s, err = parse_syslog(raw)
       if err != null {
         %mismatch = "not syslog (RFC 3164 or 5424)"
