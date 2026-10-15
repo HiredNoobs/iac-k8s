@@ -20,7 +20,7 @@ transforms:
   # sender as the host (host.hostname from the message, host.ip the address rsyslog saw), the
   # program as process.name/process.pid, the severity as log.level too, UDP or TCP as
   # Log.Transport. An RFC 3164 timestamp has no year or time zone, so its _time is when rsyslog
-  # received it; RFC 5424's is its own.
+  # received it; RFC 5424's is its own. Then the router's Wi-Fi and DHCP lines.
   syslog:
     type: remap
     inputs: [syslog_relay]
@@ -87,4 +87,60 @@ transforms:
           }
         }
         if sd != {} { ."log.syslog.structured_data" = sd }
+
+        # The router's Wi-Fi (hostapd) and DHCP (dnsmasq) lines: the device as client.* (its MAC
+        # in ECS's format, 28-7B-11-..., its DHCP address and hostname), the interface as
+        # observer.ingress.interface.name. No Elastic integration for either.
+        msg = string(s.message) ?? ""
+        app = string(s.appname) ?? ""
+        if app == "hostapd" {
+          # "<interface>: STA <mac> <module>: <what happened>"
+          sta, err = parse_regex(msg, r'^(?P<iface>\S+): STA (?P<mac>(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}) (?P<what>.*)$')
+          if err == null {
+            ."client.mac" = upcase(replace(string!(sta.mac), ":", "-"))
+            ."observer.ingress.interface.name" = sta.iface
+            what = string!(sta.what)
+            if match(what, r'^IEEE 802\.11: associated\b') {
+              ."event.action" = "associated"
+              ."event.category" = ["network"]
+              ."event.type" = ["connection", "start"]
+            } else if match(what, r'^IEEE 802\.11: disassociated\b') {
+              ."event.action" = "disassociated"
+              ."event.category" = ["network"]
+              ."event.type" = ["connection", "end"]
+            } else if starts_with(what, "IEEE 802.1X: authentication failed") {
+              ."event.action" = "authentication-failed"
+              ."event.category" = ["authentication"]
+              ."event.type" = ["start"]
+              ."event.outcome" = "failure"
+            } else if starts_with(what, "WPA: group key handshake completed") {
+              ."event.action" = "group-key-handshake-completed"
+              ."event.category" = ["network"]
+              ."event.type" = ["connection"]
+              ."event.outcome" = "success"
+            }
+          }
+        } else if app == "dnsmasq-dhcp" {
+          # "DHCP<TYPE>(<interface>) [<ip>] <mac>[ <hostname, or why for a DHCPNAK>]"
+          dhcp, err = parse_regex(msg, r'^DHCP(?P<message>[A-Z]+)\((?P<iface>[^)]+)\) (?:(?P<ip>\d+\.\d+\.\d+\.\d+) )?(?P<mac>(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})(?: (?P<rest>.+))?$')
+          if err == null {
+            message = downcase(string!(dhcp.message))
+            ."event.action" = "dhcp-" + message
+            ."event.category" = ["network"]
+            ."event.type" = ["protocol"]
+            ."network.protocol" = "dhcp"
+            ."observer.ingress.interface.name" = dhcp.iface
+            ."client.mac" = upcase(replace(string!(dhcp.mac), ":", "-"))
+            if dhcp.ip != null { ."client.ip" = dhcp.ip }
+            if message == "ack" {
+              ."event.outcome" = "success"
+              if is_string(dhcp.rest) && match(string!(dhcp.rest), r'^\S+$') {
+                ."client.domain" = dhcp.rest
+                ."related.hosts" = [dhcp.rest]
+              }
+            } else if message == "nak" {
+              ."event.outcome" = "failure"
+            }
+          }
+        }
       }

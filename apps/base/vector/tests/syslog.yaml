@@ -113,3 +113,181 @@ tests:
               assert_eq!(._msg, "just some text")
               assert_eq!(get!(., ["host.ip"]), "192.168.111.50")
               assert_eq!(._time, t'2026-10-14T13:36:48Z')
+
+  - name: router Wi-Fi, a device associated (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d6:6d:66:be:4c:3a IEEE 802.11: associated",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["client.mac"]), "D6-6D-66-BE-4C-3A")
+              assert_eq!(get!(., ["observer.ingress.interface.name"]), "wl0.1")
+              assert_eq!(get!(., ["event.action"]), "associated")
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["connection", "start"])
+              assert!(!exists(."event.outcome"))
+
+  - name: router Wi-Fi, a device disassociated (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA 28:7b:11:05:6d:5e IEEE 802.11: disassociated",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["client.mac"]), "28-7B-11-05-6D-5E")
+              assert_eq!(get!(., ["event.action"]), "disassociated")
+              assert_eq!(get!(., ["event.type"]), ["connection", "end"])
+
+  - name: router Wi-Fi, 802.1X authentication failed (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d4:da:cd:7c:4c:3e IEEE 802.1X: authentication failed - EAP type: 0 (unknown)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "authentication-failed")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+
+  - name: router Wi-Fi, group key handshake (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl1.1: STA 06:72:3d:bf:a0:e1 WPA: group key handshake completed (RSN)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["client.mac"]), "06-72-3D-BF-A0-E1")
+              assert_eq!(get!(., ["observer.ingress.interface.name"]), "wl1.1")
+              assert_eq!(get!(., ["event.action"]), "group-key-handshake-completed")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+
+  - name: router Wi-Fi, another station line keeps the device only
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d6:6d:66:be:4c:3a WPA: pairwise key handshake completed (RSN)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["client.mac"]), "D6-6D-66-BE-4C-3A")
+              assert!(!exists(."event.action"))
+              assert!(!exists(."event.category"))
+
+  - name: router DHCP acknowledged, with the hostname (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C dnsmasq-dhcp[1234]: DHCPACK(br0) 192.168.50.56 28:7b:11:05:6d:5e Smart-TV-Pro",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "dnsmasq-dhcp")
+              assert_eq!(get!(., ["event.action"]), "dhcp-ack")
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["protocol"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["network.protocol"]), "dhcp")
+              assert_eq!(get!(., ["observer.ingress.interface.name"]), "br0")
+              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
+              assert_eq!(get!(., ["client.mac"]), "28-7B-11-05-6D-5E")
+              assert_eq!(get!(., ["client.domain"]), "Smart-TV-Pro")
+              assert_eq!(get!(., ["related.hosts"]), ["Smart-TV-Pro"])
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.56"])
+
+  - name: router DHCP request (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C dnsmasq-dhcp[1234]: DHCPREQUEST(br0) 192.168.50.56 28:7b:11:05:6d:5e",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dhcp-request")
+              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
+              assert!(!exists(."client.domain"))
+              assert!(!exists(."event.outcome"))
+
+  - name: router DHCP discover, no address yet
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C dnsmasq-dhcp[1234]: DHCPDISCOVER(br0) 28:7b:11:05:6d:5e",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dhcp-discover")
+              assert_eq!(get!(., ["client.mac"]), "28-7B-11-05-6D-5E")
+              assert!(!exists(."client.ip"))
+
+  - name: router DHCP refused, the reason isn't a hostname
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C dnsmasq-dhcp[1234]: DHCPNAK(br0) 192.168.50.56 28:7b:11:05:6d:5e wrong network",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dhcp-nak")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert!(!exists(."client.domain"))
