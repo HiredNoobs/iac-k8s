@@ -318,6 +318,27 @@ transforms:
           kv, err = parse_regex(msg, r'(?:^|\s)level=(?P<level>[A-Za-z]+)(?:\s|$)')
           if err == null { raw = kv.level }
         }
+        if raw == null {
+          # zap's console format without the caller (the RabbitMQ topology operator): only the
+          # level, a logger can't be told from the message without the caller after it.
+          zap, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\t(?P<level>(?i:debug|info|warn|error|dpanic|panic|fatal))\t')
+          if err == null { raw = zap.level }
+        }
+        if raw == null {
+          # Go's log/slog text default (kube-vip): "YYYY/MM/DD hh:mm:ss LEVEL <message>".
+          slog, err = parse_regex(msg, r'^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (?P<level>DEBUG|INFO|WARN|ERROR) ')
+          if err == null { raw = slog.level }
+        }
+        if raw == null {
+          # Pi-hole FTL: "<date> <time> <zone> [<pid>/T<thread>] LEVEL: <message>".
+          ftl, err = parse_regex(msg, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ \S+ \[\d+(?:/T\d+)?\] (?P<level>[A-Z]+): ')
+          if err == null { raw = ftl.level }
+        }
+        if raw == null {
+          # RabbitMQ: "<date> <time>+00:00 [level] <pid> <message>".
+          rabbit, err = parse_regex(msg, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+[+-]\d\d:\d\d \[(?P<level>[a-z]+)\] ')
+          if err == null { raw = rabbit.level }
+        }
         # client-go's warnings from the API server (deprecated APIs).
         if raw == null && starts_with(msg, "Warning: ") { raw = "warning" }
         if is_string(raw) {

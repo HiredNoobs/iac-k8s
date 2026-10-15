@@ -714,3 +714,89 @@ tests:
               assert_eq!(.namespace, "default")
               assert_eq!(.name, "dashboards")
               assert!(!exists(."orchestrator.type"))
+
+  - name: zap console line without a caller (the RabbitMQ topology operator sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-14T19:02:33Z\tDEBUG\tevents\tEvent occurred\t{\"kind\": \"User\"}",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "rabbitmq-system", "pod_name": "x-1", "container_name": "manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "debug")
+              assert!(!exists(."log.logger"))
+
+  - name: Go slog text line (the kube-vip sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/10/14 15:29:36 INFO new leader election service=rsyslog namespace=rsyslog",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "kube-vip", "pod_name": "x-1", "container_name": "kube-vip"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "info")
+
+  - name: Pi-hole FTL line (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-15 03:22:00.044 BST [184/T186] INFO: Size of /etc/pihole/pihole-FTL.db is 0.36 MB, deleted 0 of 4907 rows",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "pihole", "pod_name": "x-1", "container_name": "pihole"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "info")
+
+  - name: Pi-hole's cron line has no level
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-14 17:38:00.360 BST crond: USER root pid 563550 cmd pihole updatechecker",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "pihole", "pod_name": "x-1", "container_name": "pihole"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."log.level"))
+
+  - name: RabbitMQ line (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-10-14 10:43:46.799992+00:00 [warning] <0.428328.0> Successfully set permissions for user 'contentbot'",
+            "timestamp": t'2026-10-15T08:00:00.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "rabbitmq", "pod_name": "x-1", "container_name": "rabbitmq"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
