@@ -1,7 +1,7 @@
 # One copy, kept on the pod's node where possible. For apps that replicate their own data
 # (e.g. RabbitMQ quorum queues), where Longhorn's copies would be on top of the app's. The
-# default class (longhorn, 2 copies) comes from the chart. StorageClasses can't be changed
-# once created, this matches the one stack-longhorn created.
+# default class (longhorn, 2 copies) comes from the chart. StorageClasses' parameters can't
+# be changed once created, this matches the one stack-longhorn created.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -10,6 +10,10 @@ provisioner: driver.longhorn.io
 allowVolumeExpansion: true
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
+# An SELinux label for the volume's files (infrastructure/controllers/longhorn/csi-selinux.yaml).
+# Copied into each PV when it's made: existing ones are patched by hand.
+mountOptions:
+  - context=system_u:object_r:ephemeral_t:s0
 parameters:
   numberOfReplicas: "1"
   staleReplicaTimeout: "30"

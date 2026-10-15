@@ -1,0 +1,79 @@
+# Lets Longhorn mount volumes with an SELinux label (the StorageClasses' and PVs' mountOptions,
+# context=...). Without a label a volume's files are unlabeled_t, and every write a pod makes to
+# them is an SELinux denial in Talos' audit log (permissive, so allowed, but logged).
+#
+# longhorn-csi-plugin mounts with util-linux's mount, which drops SELinux options (context=, ...)
+# without saying so when libselinux reports SELinux as off, and libselinux does that without
+# /etc/selinux/config, which its image doesn't have. So that container gets one, added when the
+# pod is created: longhorn-manager makes the DaemonSet itself, so patching it would be undone.
+# Ignore on failure: the CSI plugin still starts, mounting without the label (the denials
+# show it).
+#
+# After a change, restart the CSI plugin (kubectl -n longhorn-system rollout restart daemonset
+# longhorn-csi-plugin); volumes only get a label when they're next mounted on a node.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: longhorn-csi-selinux
+  namespace: longhorn-system
+data:
+  # The mode in it doesn't change the node's, only what libselinux reports.
+  config: |
+    SELINUX=permissive
+    SELINUXTYPE=targeted
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: longhorn-csi-selinux
+spec:
+  failurePolicy: Ignore
+  reinvocationPolicy: Never
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: longhorn-system
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchConditions:
+    - name: csi-plugin
+      expression: object.spec.containers.exists(c, c.name == "longhorn-csi-plugin")
+  # Merged by name and mount path: the rest of the pod stays as longhorn-manager made it. Only
+  # the file is mounted, so the image's other files in /etc/selinux stay.
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >
+          Object{
+            spec: Object.spec{
+              volumes: [
+                Object.spec.volumes{
+                  name: "selinux-config",
+                  configMap: Object.spec.volumes.configMap{name: "longhorn-csi-selinux", optional: true}
+                }
+              ],
+              containers: [
+                Object.spec.containers{
+                  name: "longhorn-csi-plugin",
+                  volumeMounts: [
+                    Object.spec.containers.volumeMounts{
+                      name: "selinux-config",
+                      mountPath: "/etc/selinux/config",
+                      subPath: "config",
+                      readOnly: true
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: longhorn-csi-selinux
+spec:
+  policyName: longhorn-csi-selinux

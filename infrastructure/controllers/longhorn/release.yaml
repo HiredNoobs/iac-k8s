@@ -67,3 +67,42 @@ spec:
     # doesn't check): after an upgrade, check deploy/csi-snapshotter is still at 0 replicas.
     csi:
       snapshotterReplicaCount: "0"
+  # The default StorageClass with an SELinux label for its volumes (csi-selinux.yaml), as
+  # longhorn-single has: the chart has no value for mountOptions. longhorn-manager makes the class
+  # from this ConfigMap, so it's the chart's as rendered for these values (1.12.1) plus
+  # mountOptions; check it against the chart's templates/storageclass.yaml after an upgrade.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: ConfigMap
+              name: longhorn-storageclass
+            patch: |
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: longhorn-storageclass
+              data:
+                storageclass.yaml: |
+                  kind: StorageClass
+                  apiVersion: storage.k8s.io/v1
+                  metadata:
+                    name: longhorn
+                    annotations:
+                      storageclass.kubernetes.io/is-default-class: "true"
+                  provisioner: driver.longhorn.io
+                  allowVolumeExpansion: true
+                  reclaimPolicy: "Delete"
+                  volumeBindingMode: Immediate
+                  mountOptions:
+                    - context=system_u:object_r:ephemeral_t:s0
+                  parameters:
+                    numberOfReplicas: "2"
+                    staleReplicaTimeout: "30"
+                    fromBackup: ""
+                    fsType: "ext4"
+                    dataLocality: "best-effort"
+                    unmapMarkSnapChainRemoved: "ignored"
+                    disableRevisionCounter: "true"
+                    dataEngine: "v1"
+                    backupTargetName: "default"
