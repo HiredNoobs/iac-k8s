@@ -1,0 +1,58 @@
+# The nodes' own Talos logs, sent by Talos (iac-homelab's talos-cluster module: machine.logging
+# and KmsgLogConfig) to the talos-logs Service (service.yaml), which takes them to the Vector on
+# the same node. Its services' lines (machined, apid, trustd, kubelet, containerd, etcd, ...) as
+# talos.log with the service as service.name, the kernel's as talos.kernel. The node is the
+# receiving Vector's (internalTrafficPolicy: Local), not a field of the line. A line that isn't
+# Talos' JSON is kept as a pipeline_error.
+
+sources:
+  # One JSON object per line. Talos already parsed its services' own JSON: msg, talos-level,
+  # talos-time and talos-service, the service's other keys as they were (an err is folded into
+  # msg). Kernel lines: msg, talos-level, talos-time, facility, priority, seq, clock.
+  talos_relay:
+    type: socket
+    mode: tcp
+    address: 0.0.0.0:6050
+    decoding:
+      codec: json
+    framing:
+      method: newline_delimited
+
+transforms:
+  talos:
+    type: remap
+    inputs: [talos_relay]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      line = .
+      # The socket's own fields.
+      line = remove!(line, ["host"])
+      line = remove!(line, ["port"])
+      line = remove!(line, ["source_type"])
+      line = remove!(line, ["timestamp"])
+      received = .timestamp
+      service = string(get!(line, ["talos-service"])) ?? ""
+      kernel = exists(line.facility) && service == ""
+      %dataset = if kernel { "talos.kernel" } else { "talos.log" }
+      %host = get_env_var("NODE_NAME") ?? ""
+      mismatch = !is_string(line.msg) || !is_string(get!(line, ["talos-time"]))
+      if mismatch { %mismatch = "no msg or talos-time" }
+      . = {"_msg": string(line.msg) ?? "", "event.created": now()}
+      ._time = parse_timestamp(string(get!(line, ["talos-time"])) ?? "", "%+") ?? received
+      level = get!(line, ["talos-level"])
+      if is_string(level) { .level = level }
+      if kernel {
+        if is_string(line.facility) { ."log.syslog.facility.name" = line.facility }
+        if is_string(line.priority) { ."log.syslog.severity.name" = line.priority }
+        # seq and clock are the kernel buffer's bookkeeping.
+      } else {
+        if service != "" { ."service.name" = service }
+        # The service's own fields, not mapped yet: as they came, so generic.
+        for_each(line) -> |key, value| {
+          if !includes(["msg", "talos-level", "talos-time", "talos-service"], key) && !starts_with(key, "_") && get!(., [key]) == null {
+            . = set!(., [key], value)
+          }
+        }
+        if !mismatch { .tags = ["generic"] }
+      }

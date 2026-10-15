@@ -60,6 +60,10 @@ spec:
             - name: journald
               containerPort: 8686
               protocol: TCP
+            # The node's own Talos logs (service.yaml's talos-logs).
+            - name: talos
+              containerPort: 6050
+              protocol: TCP
           securityContext:
             runAsUser: 0
             runAsGroup: 0

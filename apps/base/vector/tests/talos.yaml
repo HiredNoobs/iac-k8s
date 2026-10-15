@@ -1,0 +1,93 @@
+# Unit tests for config/talos.yaml (how to run them: tests/pipeline.yaml).
+tests:
+  - name: Talos service line, the service's own fields kept (apid)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "finished unary call", "talos-level": "info", "talos-time": "2026-10-15T12:00:00.123456789Z", "talos-service": "apid", "grpc.method": "/machine.MachineService/Version", "peer.address": "192.168.50.140:51234", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T12:00:00.500Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert_eq!(get!(., ["event.provider"]), "talos")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["service.name"]), "apid")
+              assert_eq!(._msg, "finished unary call")
+              assert_eq!(._time, t'2026-10-15T12:00:00.123456789Z')
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["host.hostname"]), "cp-1")
+              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
+              assert_eq!(get!(., ["grpc.method"]), "/machine.MachineService/Version")
+              assert_eq!(get!(., ["peer.address"]), "192.168.50.140:51234")
+              assert_eq!(.tags, ["generic"])
+              for_each(["msg", "talos-level", "talos-time", "talos-service", "host", "port", "source_type", "timestamp", "level"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
+              assert!(!exists(.kubernetes))
+
+  - name: Talos service line, a warning (the kubelet)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "Failed creating a mirror pod", "talos-level": "warn", "talos-time": "2026-10-15T12:00:01Z", "talos-service": "kubelet", "pod": "kube-system/kube-apiserver-cp-1", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T12:00:00.500Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["service.name"]), "kubelet")
+              assert_eq!(.pod, "kube-system/kube-apiserver-cp-1")
+
+  - name: Talos kernel line
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "Out of memory: Killed process 1234 (stress)", "talos-level": "error", "talos-time": "2026-10-15T12:00:02Z", "facility": "kern", "priority": "err", "seq": 812, "clock": 123456789, "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T12:00:00.500Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
+              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "kern")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "err")
+              assert!(!exists(."service.name"))
+              assert!(!exists(.seq))
+              assert!(!exists(.clock))
+              assert!(!exists(.tags))
+
+  - name: "format mismatch: a line on the Talos port that isn't Talos' JSON"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"message": "hello", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T12:00:00.500Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert!(!exists(.tags))
+
+  - name: a Talos line can't set Vector's fields
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "hi", "talos-level": "info", "talos-time": "2026-10-15T12:00:01Z", "talos-service": "machined", "event.dataset": "envoy.access", "host.name": "evil", "_time": "x", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T12:00:00.500Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
+              assert_eq!(._time, t'2026-10-15T12:00:01Z')

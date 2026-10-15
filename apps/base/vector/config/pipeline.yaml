@@ -142,7 +142,7 @@ transforms:
   # come here, so a line can't claim to be one.
   unparsed:
     type: remap
-    inputs: [pods.dropped, generic.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, journald.dropped]
+    inputs: [pods.dropped, generic.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, syslog.dropped, journald.dropped, talos.dropped]
     source: |
       dropped = object(.metadata.dropped) ?? {}
       . = remove!(., ["metadata", "dropped"])
@@ -187,6 +187,15 @@ transforms:
         if sender != "" { ."host.ip" = sender }
         if hostname != "" { %host = hostname }
         %dataset = "journald.log"
+      } else if component == "talos" {
+        # As Talos sent it: the message, when Vector got it (the node is this Vector's).
+        . = {
+          "_msg": .msg,
+          "_time": .timestamp,
+          "event.created": now(),
+        }
+        %host = get_env_var("NODE_NAME") ?? ""
+        %dataset = "talos.log"
       } else if component != "" && component != "generic" {
         # generic's lines keep <namespace>.<container> (ecs).
         %dataset = component + ".log"
@@ -199,7 +208,7 @@ transforms:
   # found in metadata (%dataset, %provider, %kind, %mismatch, %error_*), which a line can't set.
   ecs:
     type: remap
-    inputs: [generic, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, syslog, journald, unparsed]
+    inputs: [generic, envoy, authelia, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, syslog, journald, talos, unparsed]
     source: |
       # event.kind: pipeline_error for a line a remap failed on (remap_error) or one that looked
       # like its source's format but didn't parse (format_mismatch), the reason in error.message;
