@@ -496,6 +496,8 @@ tests:
             source: |
               assert_eq!(get!(., ["log.level"]), "warning")
               assert_eq!(get!(., ["log.logger"]), "context")
+              assert_eq!(._time, t'2026-10-13T08:00:00Z')
+              assert!(!exists(.t))
 
   - name: a line a source's remap failed on keeps that source's name
     inputs:

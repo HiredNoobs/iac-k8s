@@ -10,8 +10,8 @@
 # kubernetes.pod.ip, kubernetes.container.name, kubernetes.node.name, kubernetes.labels.*), the
 # container's image, id and runtime (container.*), and stdout or stderr (Log.Stream). A JSON line
 # is split into its fields: the first of message, msg, log becomes _msg and the first of time,
-# timestamp, ts that parses becomes _time (otherwise the time the container runtime wrote the
-# line). Any other line is _msg as it is. Then the common fields, ECS names
+# timestamp, ts, t (Grafana's) that parses becomes _time (otherwise the time the container
+# runtime wrote the line). Any other line is _msg as it is. Then the common fields, ECS names
 # (https://www.elastic.co/guide/en/ecs/current/) written as flat dotted keys, so they can't clash
 # with an app's own field of the same top-level name (the same field in VictoriaLogs either way):
 #   event.dataset   which source: its own name (envoy.access, ...) or <namespace>.<container>
@@ -90,7 +90,7 @@ transforms:
         }
         # RFC 3339 strings, or Unix seconds as a number (zap's default).
         t = null
-        for_each(["time", "timestamp", "ts"]) -> |_i, key| {
+        for_each(["time", "timestamp", "ts", "t"]) -> |_i, key| {
           v = get!(., [key])
           if t == null && v != null {
             if is_string(v) {
