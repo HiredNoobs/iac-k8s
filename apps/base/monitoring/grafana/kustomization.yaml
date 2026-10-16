@@ -17,9 +17,10 @@ configMapGenerator:
   # changes while it runs (every 30s, config/dashboards.yml), so fixed names: the pod isn't
   # restarted and the mounted files follow the ConfigMaps.
   #
-  # Upstream's, pinned (below), except Overview, Security and Log pipeline. Only their data source references are changed,
-  # for file provisioning: import placeholders (${DS_...}) without a matching variable point at
-  # the prometheus data source, data source variables have no saved selection (so the default).
+  # Upstream's, pinned (below), except Overview, Security, Log pipeline and Gateway logs. Only
+  # their data source references are changed, for file provisioning: import placeholders
+  # (${DS_...}) without a matching variable point at the prometheus data source, data source
+  # variables have no saved selection (so the default).
   # Overview: ours, the home dashboard (statefulset.yaml). To change it, edit it in Grafana, then
   # export the JSON (not "for sharing externally") over overview.json.
   - name: grafana-dashboards-overview
@@ -101,12 +102,14 @@ configMapGenerator:
   # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
   # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes), its
   # instance variable changed to only the HTTP probes (probe_http_status_code): the DNS and TCP
-  # ones have no HTTP phases or status code, so their rows were empty.
+  # ones have no HTTP phases or status code, so their rows were empty. grafana.com 763 rev 6
+  # (Redis, redis_exporter's own), a DS_PROM data source variable in place of its __inputs.
   - name: grafana-dashboards-services
     files:
       - dashboards/Services/rabbitmq-overview.json
       - dashboards/Services/vault.json
       - dashboards/Services/blackbox.json
+      - dashboards/Services/redis.json
     options:
       disableNameSuffixHash: true
   # ATT&CK coverage is generated from the alert rules' labels by

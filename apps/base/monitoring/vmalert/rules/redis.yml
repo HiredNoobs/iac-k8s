@@ -1,0 +1,46 @@
+# Redis (apps/base/redis), from the redis-exporter sidecar (vmagent's pods job): whether Redis
+# answers, persistence (the AOF, appendonly yes), memory against the container's limit (from
+# kube-state-metrics; no maxmemory: Redis grows until the kernel kills it), refused clients.
+# The exporter itself being gone is TargetDown's.
+groups:
+  - name: Redis
+    interval: 60s
+    rules:
+      - alert: RedisDown
+        expr: 'redis_up == 0'
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis isn't answering its exporter ({{ $labels.pod }})
+          description: "redis-exporter can't reach Redis on {{ $labels.pod }}: it's down, still loading the AOF, or the exporter's ACL user or certificate is refused (its log says which). contentbot can't use it either."
+
+      # 0 = the last write to the AOF, or the last rewrite of it, failed: Redis stops accepting
+      # writes after a failed fsync, and a failed rewrite leaves the AOF growing.
+      - alert: RedisPersistenceFailing
+        expr: 'min by (pod) (redis_aof_last_write_status) == 0 or min by (pod) (redis_aof_last_bgrewrite_status) == 0'
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis can't write its AOF ({{ $labels.pod }})
+          description: "The last AOF write or rewrite on {{ $labels.pod }} failed: usually a full or read-only volume (Longhorn). Redis' log has the error; INFO persistence the status."
+
+      - alert: RedisMemoryNearLimit
+        expr: >-
+          max by (pod) (redis_memory_used_bytes)
+          / on (pod) max by (pod) (kube_pod_container_resource_limits{namespace="redis", container="redis", resource="memory"})
+          > .85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis uses {{ $value | humanizePercentage }} of its memory limit ({{ $labels.pod }})
+          description: "Redis has no maxmemory, so at the container's limit it's OOM killed and reloads the AOF. Raise the limit (statefulset.yaml) or find what grew (redis scan-delete, contentbot's keys)."
+
+      - alert: RedisRejectedConnections
+        expr: 'increase(redis_rejected_connections_total[10m]) > 0'
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis refused {{ $value | humanize }} connections in 10 minutes ({{ $labels.pod }})
+          description: "Redis hit maxclients ({{ $labels.pod }}): a client is leaking connections. redis CLIENT LIST shows who holds them."

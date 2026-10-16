@@ -17,3 +17,4 @@ configMapGenerator:
       - rules/proxmox.yml
       - rules/logging.yml
       - rules/falco.yml
+      - rules/redis.yml

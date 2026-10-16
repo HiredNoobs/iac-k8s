@@ -1,0 +1,29 @@
+# Redis' own log (apps/base/redis, event.dataset redis.redis: no parser, _msg is the line as
+# Redis wrote it, "<pid>:<role> <time> <level mark> <message>").
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: redis
+    type: vlogs
+    interval: 5m
+    rules:
+      # Redis marks a few serious problems "== CRITICAL ==", e.g. replaying the AOF at startup
+      # and skipping a MULTI/EXEC block it refused (redis/redis#14156: its data is missing in
+      # memory until a restart replays it).
+      - alert: RedisCriticalLog
+        expr: >-
+          {event.dataset="redis.redis"} _msg:"== CRITICAL =="
+          | copy kubernetes.pod.name as pod
+          | stats by (pod) count() as lines
+        labels:
+          severity: critical
+          source: redis
+        annotations:
+          summary: "Redis logged {{ $value }} CRITICAL lines on {{ $labels.pod }} in 5 minutes"
+          description: >-
+            Something Redis itself calls critical. At startup, AOF lines mean commands from the
+            AOF weren't applied: that data is missing until Redis replays the AOF again.
+          runbook: >-
+            The lines: {event.dataset="redis.redis"} _msg:"== CRITICAL ==". For AOF-loading
+            errors, back up /data/appendonlydir before anything rewrites it (redis INFO
+            persistence: aof_rewrites), fix the cause, then restart Redis to replay it.
