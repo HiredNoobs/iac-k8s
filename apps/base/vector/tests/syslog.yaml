@@ -430,3 +430,191 @@ tests:
               assert_eq!(get!(., ["event.dataset"]), "syslog.log")
               assert_eq!(._msg, "something")
               assert_eq!(get!(., ["host.ip"]), "192.168.111.3")
+
+  - name: router DNS query (log-queries)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: query[AAAA] www.example.com from 192.168.50.56",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02.104+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.provider"]), "dnsmasq")
+              assert_eq!(get!(., ["event.action"]), "dns-query")
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["protocol"])
+              assert_eq!(get!(., ["network.protocol"]), "dns")
+              assert_eq!(get!(., ["dns.type"]), "query")
+              assert_eq!(get!(., ["dns.question.name"]), "www.example.com")
+              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
+              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.56")
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.56"])
+              assert_eq!(get!(., ["related.hosts"]), ["www.example.com"])
+              assert!(!exists(."Dns.Serial"))
+              assert!(!exists(."event.outcome"))
+
+  - name: router DNS reply (log-queries=extra)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: 4711 192.168.50.56/53124 reply www.example.com is 93.184.215.14",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02.110+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dns-reply")
+              assert_eq!(get!(., ["dns.type"]), "answer")
+              assert_eq!(get!(., ["dns.question.name"]), "www.example.com")
+              assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
+              assert_eq!(get!(., ["dns.resolved_ip"]), ["93.184.215.14"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["Dns.Serial"]), 4711)
+              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
+              assert_eq!(get!(., ["client.port"]), 53124)
+              assert_eq!(get!(., ["source.port"]), 53124)
+              assert_eq!(get!(., ["related.ip"]), ["93.184.215.14", "192.168.50.56"])
+
+  - name: router DNS forwarded upstream (log-queries=extra)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: 4711 192.168.50.56/53124 forwarded www.example.com to 192.168.111.100",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02.105+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dns-forwarded")
+              assert_eq!(get!(., ["dns.type"]), "query")
+              assert_eq!(get!(., ["destination.ip"]), "192.168.111.100")
+              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.56", "192.168.111.100"])
+              assert!(!exists(."dns.response_code"))
+
+  - name: router DNS answers without an address
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: reply nope.example.com is NXDOMAIN", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: cached v4only.example.com is NODATA-IPv6", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: reply www.example.org is <CNAME>", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: /etc/hosts router.asus.com is 192.168.50.1", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              name = get!(., ["dns.question.name"])
+              if name == "nope.example.com" {
+                assert_eq!(get!(., ["event.action"]), "dns-reply")
+                assert_eq!(get!(., ["dns.response_code"]), "NXDOMAIN")
+                assert_eq!(get!(., ["event.outcome"]), "failure")
+                assert!(!exists(."dns.resolved_ip"))
+              } else if name == "v4only.example.com" {
+                assert_eq!(get!(., ["event.action"]), "dns-cached")
+                assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
+                assert_eq!(get!(., ["event.outcome"]), "success")
+              } else if name == "www.example.org" {
+                assert_eq!(get!(., ["Dns.Answer"]), "<CNAME>")
+                assert!(!exists(."dns.response_code"))
+              } else {
+                assert_eq!(name, "router.asus.com")
+                assert_eq!(get!(., ["event.action"]), "dns-hosts")
+                assert_eq!(get!(., ["dns.resolved_ip"]), ["192.168.50.1"])
+              }
+
+  - name: router firewall drop, TCP SYN from outside
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<4>Oct 16 15:41:10 RT-BE86U-FFA0-1F4D20D-C kernel: DROP IN=eth0 OUT= MAC=a0:36:bc:12:34:56:00:1b:21:aa:bb:cc:08:00 SRC=203.0.113.7 DST=81.2.69.160 LEN=44 TOS=0x00 PREC=0x00 TTL=243 ID=54321 PROTO=TCP SPT=48234 DPT=8443 WINDOW=1024 RES=0x00 SYN URGP=0 MARK=0x8000000",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:41:10.001+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["process.name"]), "kernel")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["event.action"]), "drop")
+              assert_eq!(get!(., ["event.category"]), ["network"])
+              assert_eq!(get!(., ["event.type"]), ["connection", "denied"])
+              assert_eq!(get!(., ["observer.ingress.interface.name"]), "eth0")
+              assert!(!exists(."observer.egress.interface.name"))
+              assert_eq!(get!(., ["destination.mac"]), "A0-36-BC-12-34-56")
+              assert_eq!(get!(., ["source.mac"]), "00-1B-21-AA-BB-CC")
+              assert_eq!(get!(., ["source.ip"]), "203.0.113.7")
+              assert_eq!(get!(., ["destination.ip"]), "81.2.69.160")
+              assert_eq!(get!(., ["source.port"]), 48234)
+              assert_eq!(get!(., ["destination.port"]), 8443)
+              assert_eq!(get!(., ["network.transport"]), "tcp")
+              assert_eq!(get!(., ["network.type"]), "ipv4")
+              assert_eq!(get!(., ["Firewall.TcpFlags"]), ["SYN"])
+              assert_eq!(get!(., ["related.ip"]), ["203.0.113.7", "81.2.69.160"])
+
+  - name: router firewall drop, ICMPv6 between interfaces
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<4>Oct 16 15:41:10 RT-BE86U-FFA0-1F4D20D-C kernel: DROP IN=br0 OUT=eth0 MAC=a0:36:bc:12:34:56:28:7b:11:05:6d:5e:86:dd SRC=2001:0db8:0000:0000:0000:0000:0000:0001 DST=2001:0db8:0000:0000:0000:0000:0000:0002 LEN=104 TC=0 HOPLIMIT=63 FLOWLBL=0 PROTO=ICMPv6 TYPE=128 CODE=0 ID=1 SEQ=1",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:41:10.001+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["observer.ingress.interface.name"]), "br0")
+              assert_eq!(get!(., ["observer.egress.interface.name"]), "eth0")
+              assert_eq!(get!(., ["network.type"]), "ipv6")
+              assert_eq!(get!(., ["network.transport"]), "icmpv6")
+              assert_eq!(get!(., ["Firewall.Icmp.Type"]), 128)
+              assert_eq!(get!(., ["Firewall.Icmp.Code"]), 0)
+              assert!(!exists(."Firewall.TcpFlags"))
+              assert!(!exists(."source.port"))
+
+  - name: a kernel line that isn't the firewall's stays plain
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {"message": "<6>Oct 16 15:41:10 RT-BE86U-FFA0-1F4D20D-C kernel: br0: port 3(eth3) entered forwarding state", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:41:10+01:00", "transport": "imudp"}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."event.action"))
+              assert!(!exists(."source.ip"))
+              assert_eq!(._msg, "br0: port 3(eth3) entered forwarding state")

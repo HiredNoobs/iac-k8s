@@ -54,7 +54,7 @@ transforms:
   # sender as the host (host.hostname from the message, host.ip the address rsyslog saw), the
   # program as process.name/process.pid, the severity as log.level too, UDP or TCP as
   # Log.Transport. An RFC 3164 timestamp has no year or time zone, so its _time is when rsyslog
-  # received it; RFC 5424's is its own. Then the router's Wi-Fi and DHCP lines.
+  # received it; RFC 5424's is its own. Then the router's Wi-Fi, DHCP, DNS and firewall lines.
   syslog:
     type: remap
     inputs: [syslog_by_sender._unmatched]
@@ -188,6 +188,106 @@ transforms:
             } else if message == "nak" {
               ."event.outcome" = "failure"
             }
+          }
+        } else if app == "dnsmasq" {
+          # The router's DNS (log-queries): each query, where it went and what came back, with
+          # log-queries=extra prefixed "<serial> <client>/<port> " (the serial ties one query's
+          # lines together). The question as dns.question.*, the asker as client.*/source.*,
+          # the upstream as destination.ip, the answer as dns.resolved_ip (and related.ip) or
+          # dns.response_code.
+          # No Elastic integration; fields as its network_traffic DNS ones.
+          dns, err = parse_regex(msg, r'^(?:(?P<serial>\d+) (?P<peer>[0-9A-Fa-f.:]+)/(?P<port>\d+) )?(?P<kind>query\[(?P<qtype>[A-Za-z0-9]+)\]|forwarded|reply|cached|config|[/\w.-]+) (?P<name>\S+) (?P<rel>from|to|is) (?P<value>\S+)$')
+          if err == null {
+            ."event.category" = ["network"]
+            ."event.type" = ["protocol"]
+            ."network.protocol" = "dns"
+            name = string!(dns.name)
+            ."dns.question.name" = name
+            ."related.hosts" = [name]
+            if dns.serial != null { ."Dns.Serial" = to_int(dns.serial) ?? null }
+            if dns.peer != null {
+              ."client.ip" = dns.peer
+              ."source.ip" = dns.peer
+              port = to_int(dns.port) ?? null
+              if port != null {
+                ."client.port" = port
+                ."source.port" = port
+              }
+            }
+            kind = string!(dns.kind)
+            value = string!(dns.value)
+            if dns.qtype != null {
+              ."event.action" = "dns-query"
+              ."dns.type" = "query"
+              ."dns.question.type" = upcase(string!(dns.qtype))
+              ."client.ip" = value
+              ."source.ip" = value
+            } else if kind == "forwarded" {
+              # To Pi-hole, or the router's fallback upstream when Pi-hole doesn't answer.
+              ."event.action" = "dns-forwarded"
+              ."dns.type" = "query"
+              ."destination.ip" = value
+            } else {
+              # reply (from upstream), cached, config (the router's own records) or a hosts
+              # file's path.
+              ."event.action" = if kind == "reply" || kind == "cached" || kind == "config" { "dns-" + kind } else { "dns-hosts" }
+              ."dns.type" = "answer"
+              if is_ipv4(value) || is_ipv6(value) {
+                ."dns.response_code" = "NOERROR"
+                ."dns.resolved_ip" = [value]
+                ."related.ip" = [value]
+                ."event.outcome" = "success"
+              } else if includes(["NXDOMAIN", "SERVFAIL", "REFUSED"], value) {
+                ."dns.response_code" = value
+                ."event.outcome" = "failure"
+              } else if starts_with(value, "NODATA") {
+                # The name exists without a record of that type (NODATA-IPv4, NODATA-IPv6).
+                ."dns.response_code" = "NOERROR"
+                ."event.outcome" = "success"
+              } else {
+                # <CNAME> (the next line answers the target), <HTTPS>, <SRV>, ...
+                ."Dns.Answer" = value
+                ."event.outcome" = "success"
+              }
+            }
+          }
+        } else if app == "kernel" {
+          # The router's firewall log (Firewall > Logged packets): netfilter's LOG target with the
+          # prefix DROP or ACCEPT. As Elastic's iptables integration: interfaces as
+          # observer.*.interface.name, addresses, ports and MACs as source.*/destination.*, the
+          # protocol as network.transport; TCP flags and ICMP type/code in Firewall.*.
+          fw, err = parse_regex(msg, r'^(?:\[\s*\d+\.\d+\] )?(?P<action>DROP|ACCEPT) ?(?P<fields>IN=.*)$')
+          if err == null {
+            action = downcase(string!(fw.action))
+            ."event.action" = action
+            ."event.category" = ["network"]
+            ."event.type" = if action == "drop" { ["connection", "denied"] } else { ["connection", "allowed"] }
+            # An empty value (OUT= for a packet to the router itself) as "", else the parser takes
+            # the next pair as its value.
+            pairs = replace(replace(string!(fw.fields), r'= ', "=\"\" "), r'=$', "=\"\"")
+            fields = parse_key_value(pairs, key_value_delimiter: "=", field_delimiter: " ", accept_standalone_key: true) ?? {}
+            if is_string(fields.IN) && fields.IN != "" { ."observer.ingress.interface.name" = fields.IN }
+            if is_string(fields.OUT) && fields.OUT != "" { ."observer.egress.interface.name" = fields.OUT }
+            # MAC=<destination>:<source>:<ethertype>, 14 bytes.
+            mac = split(string(fields.MAC) ?? "", ":")
+            if length(mac) == 14 {
+              ."destination.mac" = upcase(join!(slice!(mac, 0, 6), "-"))
+              ."source.mac" = upcase(join!(slice!(mac, 6, 12), "-"))
+            }
+            if is_string(fields.SRC) { ."source.ip" = fields.SRC }
+            if is_string(fields.DST) { ."destination.ip" = fields.DST }
+            ."network.type" = if is_ipv6(string(fields.SRC) ?? "") { "ipv6" } else { "ipv4" }
+            if is_string(fields.PROTO) { ."network.transport" = downcase(string!(fields.PROTO)) }
+            if fields.SPT != null { ."source.port" = to_int(fields.SPT) ?? null }
+            if fields.DPT != null { ."destination.port" = to_int(fields.DPT) ?? null }
+            # Flags are keys without a value (parse_key_value gives them true).
+            flags = filter(["CWR", "ECE", "URG", "ACK", "PSH", "RST", "SYN", "FIN"]) -> |_i, f| {
+              flag = get(fields, [f]) ?? null
+              flag == true
+            }
+            if flags != [] { ."Firewall.TcpFlags" = flags }
+            if fields.TYPE != null { ."Firewall.Icmp.Type" = to_int(fields.TYPE) ?? null }
+            if fields.CODE != null { ."Firewall.Icmp.Code" = to_int(fields.CODE) ?? null }
           }
         }
       }
