@@ -552,3 +552,25 @@ tests:
               assert_eq!(get!(., ["event.dataset"]), "pveproxy.log")
               assert!(!exists(."event.action"))
               assert!(!exists(."user.name"))
+
+  # The corosync rules (vmalert-logs journald.yml) read these as they are.
+  - name: a Proxmox host's corosync line stays as it is (not a real line)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "  [KNET  ] link: host: 4 link: 0 is down",
+            "@timestamp": "2026-10-16T08:00:00.000001+00:00", "X-Forwarded-For": "192.168.111.2",
+            "_HOSTNAME": "prx-001", "_SYSTEMD_UNIT": "corosync.service", "SYSLOG_IDENTIFIER": "corosync",
+            "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "journald.log")
+              assert_eq!(get!(., ["log.syslog.appname"]), "corosync")
+              assert_eq!(get!(., ["host.hostname"]), "prx-001")
+              assert_eq!(._msg, "  [KNET  ] link: host: 4 link: 0 is down")

@@ -396,3 +396,55 @@ groups:
             check its VMs' memory against the host's (ballooning off, too much assigned).
             Trigger: none safe; logger -t kernel -p kern.err "Out of memory: Killed process 1234
             (siem-test)" on a host (a test line).
+
+      # The Proxmox cluster's corosync, as each host sees it. Corosync logs every peer down and
+      # then up when it starts, so only a link whose last line in the window is down counts. A
+      # host cut off from the others is also cut off from the relay: its own lines arrive (from
+      # rsyslog's queue) after the window they belong to, so the others' lines are what fire.
+      - alert: CorosyncLinkDown
+        expr: >-
+          {event.dataset="journald.log"} log.syslog.appname:=corosync
+          _msg:~"host: [0-9]+ link: [0-9]+ is (down|up)"
+          | extract "host: <peer> link: <link> is <state>" | copy host.hostname as host
+          | last 1 by (_time) partition by (host, peer, link)
+          | filter state:=down
+          | stats by (host, peer, link) count() as lines
+        labels:
+          severity: warning
+          source: proxmox
+        annotations:
+          summary: "Corosync link {{ $labels.link }} from {{ $labels.host }} to node {{ $labels.peer }} is down"
+          description: >-
+            A Proxmox host lost its cluster link to another (a node id): that host is down,
+            rebooting, or unreachable on the cluster network. No HA, so nothing is fenced; while
+            the cluster stays quorate the rest carry on.
+          runbook: >-
+            pvecm status on a host (and pvecm nodes for which host the node id is). Expected
+            while a host reboots for more than a few minutes. Trigger: systemctl stop corosync
+            on one host for 6 minutes, then start it (its /etc/pve is read-only meanwhile, its
+            VMs keep running).
+
+      # Without quorum a host's /etc/pve is read-only: no starting, stopping, migrating or
+      # changing guests there (the running ones carry on). Corosync also logs this briefly while
+      # it starts, before it has found the others, so only the last line in the window counts.
+      - alert: CorosyncQuorumLost
+        expr: >-
+          {event.dataset="journald.log"} log.syslog.appname:=corosync
+          _msg:"This node is within the"
+          | extract "within the <component> component" | copy host.hostname as host
+          | last 1 by (_time) partition by (host)
+          | filter component:=non-primary
+          | stats by (host) count() as lines
+        labels:
+          severity: critical
+          source: proxmox
+        annotations:
+          summary: "{{ $labels.host }} has lost the Proxmox cluster's quorum"
+          description: >-
+            Corosync on a Proxmox host is in the non-primary component: too few hosts reachable
+            for a majority, so Proxmox won't change anything on it until they're back.
+          runbook: >-
+            pvecm status on the host (Quorate, the votes); which hosts are down or unreachable
+            (CorosyncLinkDown). Trigger: none safe; logger -t corosync "[QUORUM] This node is
+            within the non-primary component and will NOT provide any services." on a host
+            (a test line).
