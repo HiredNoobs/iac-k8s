@@ -15,6 +15,7 @@ resources:
   - proxmox-001.yaml
   - proxmox-002.yaml
   - proxmox-003.yaml
+  - proxmox-999-ca.yaml
   - proxmox-999.yaml
   - qbittorrent.yaml
   - radarr.yaml

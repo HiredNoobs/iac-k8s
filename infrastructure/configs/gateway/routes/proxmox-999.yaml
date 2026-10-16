@@ -1,5 +1,6 @@
 # proxmox-999.hirednoobs.com -> https://192.168.111.9:8006, Proxmox.
-# Envoy reaches it over HTTPS, its self-signed certificate isn't verified (like nginx).
+# Envoy reaches it over HTTPS and verifies the host's certificate against prx-999's CA
+# (proxmox-999-ca.yaml), as prx-999.hirednoobs.com (its name in the certificate).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -11,7 +12,11 @@ spec:
         address: 192.168.111.9
         port: 8006
   tls:
-    insecureSkipVerify: true
+    sni: prx-999.hirednoobs.com
+    caCertificateRefs:
+      - group: ""
+        kind: ConfigMap
+        name: proxmox-999-ca
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
