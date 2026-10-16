@@ -17,10 +17,10 @@ configMapGenerator:
   # changes while it runs (every 30s, config/dashboards.yml), so fixed names: the pod isn't
   # restarted and the mounted files follow the ConfigMaps.
   #
-  # Upstream's, pinned (below), except Overview, Security, Log pipeline, Gateway logs and
-  # Authelia. Only their data source references are changed, for file provisioning: import
-  # placeholders (${DS_...}) without a matching variable point at the prometheus data source,
-  # data source variables have no saved selection (so the default).
+  # Upstream's, pinned (below), except Overview, Security, Log pipeline, Gateway logs,
+  # Authelia and Network. Only their data source references are changed, for file
+  # provisioning: import placeholders (${DS_...}) without a matching variable point at the
+  # prometheus data source, data source variables have no saved selection (so the default).
   # Overview: ours, the home dashboard (statefulset.yaml). To change it, edit it in Grafana, then
   # export the JSON (not "for sharing externally") over overview.json.
   - name: grafana-dashboards-overview
@@ -82,6 +82,12 @@ configMapGenerator:
   - name: grafana-dashboards-proxmox
     files:
       - dashboards/Proxmox/proxmox.json
+    options:
+      disableNameSuffixHash: true
+  # Network: ours, the router's DNS queries and firewall drops (its syslog in VictoriaLogs).
+  - name: grafana-dashboards-network
+    files:
+      - dashboards/Network/network.json
     options:
       disableNameSuffixHash: true
   # Flux: fluxcd/flux2-monitoring-example@7ab65dc (monitoring/configs/dashboards).

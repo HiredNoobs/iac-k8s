@@ -181,6 +181,9 @@ spec:
             - name: dashboards-proxmox
               mountPath: /etc/grafana/dashboards/Proxmox
               readOnly: true
+            - name: dashboards-network
+              mountPath: /etc/grafana/dashboards/Network
+              readOnly: true
             - name: dashboards-flux
               mountPath: /etc/grafana/dashboards/Flux
               readOnly: true
@@ -223,6 +226,9 @@ spec:
         - name: dashboards-proxmox
           configMap:
             name: grafana-dashboards-proxmox
+        - name: dashboards-network
+          configMap:
+            name: grafana-dashboards-network
         - name: dashboards-flux
           configMap:
             name: grafana-dashboards-flux
