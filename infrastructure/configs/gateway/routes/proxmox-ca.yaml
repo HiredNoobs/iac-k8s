@@ -1,0 +1,44 @@
+# The Proxmox cluster's CA (/etc/pve/pve-root-ca.pem on prx-001..003, shared through the cluster
+# file system), so Envoy verifies the hosts' certificates (their Backends' caCertificateRefs).
+# Valid until 2036-09-21; it changes only if the cluster is rebuilt.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxmox-ca
+  namespace: gateway
+data:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIF3TCCA8WgAwIBAgIUKd9hjEO1Jb3QG4S0iwKVU6DplIQwDQYJKoZIhvcNAQEL
+    BQAwdjEkMCIGA1UEAwwbUHJveG1veCBWaXJ0dWFsIEVudmlyb25tZW50MS0wKwYD
+    VQQLDCRkYTRmNzBhZS03NjM5LTRjNDQtODUzYy05ZjBlYWZkOWY4OWYxHzAdBgNV
+    BAoMFlBWRSBDbHVzdGVyIE1hbmFnZXIgQ0EwHhcNMjYwOTI0MTQ1NDI5WhcNMzYw
+    OTIxMTQ1NDI5WjB2MSQwIgYDVQQDDBtQcm94bW94IFZpcnR1YWwgRW52aXJvbm1l
+    bnQxLTArBgNVBAsMJGRhNGY3MGFlLTc2MzktNGM0NC04NTNjLTlmMGVhZmQ5Zjg5
+    ZjEfMB0GA1UECgwWUFZFIENsdXN0ZXIgTWFuYWdlciBDQTCCAiIwDQYJKoZIhvcN
+    AQEBBQADggIPADCCAgoCggIBAJd+u2anwPJmckpe9+8xMx8/p+XRFWaPR3pODx5F
+    OMFllqxOEE7Uye0z3OqoJSjxwP1BjivoEjMnlRqWgmKrsFgw+dKmzcqN++fB/6fW
+    nkQlsGtiG6iB+jH31mJRMPeH31MAON7caXCz5X9HOoENIKisn+C6UkiklqvrS1Bz
+    xQkcSLf1rl03//TTOG1h9Lz7tdsfSRxobbTwuEuDGIl5BsHtklL1U/SyHNl4xZ9y
+    fMPactgtZ4PGJKKEUofYBOu7ubFpughiBVYp0R5k1ULhiuP+l3NnUjU6FL+x9Eel
+    HRPKEAnuzsBwjJ8HNyVm7zaqFEkV4cuQi0vJGDzgEhsU6CYzyYkwQpyQp3XhhzOG
+    psZvUPoW4an94mWEFqyV4hhMNxxxNl6aUhuAWjeA6KaUGzuckJpGZEpALkBo+ZAZ
+    24aXPRuSjsdorrJJh7JpW1wnoeCBd5KzNl+V4+1OEmsY1ppguRZ1DIy8Dql3P6a/
+    qtKfdka7A+zraRtAi74nEIpvUskKTx8Gc93Awx95D/p95UoEOg/F0toj0shdnGlV
+    CHQYF0/JM/XmHIYihKFzz+YB/v2oEeZecTBMPX+YRdGcoyuqUDl1+R0TRt1KmUbt
+    qiB28ACzVp+ofo+a8MHZLbI24qWGyzBccFKxXzcIQFJrUpGZUKTvoRdSU6djsDYZ
+    rx3ZAgMBAAGjYzBhMB0GA1UdDgQWBBTL2ZGkZTZbK68y+9do5Q0mb3DH9zAfBgNV
+    HSMEGDAWgBTL2ZGkZTZbK68y+9do5Q0mb3DH9zAPBgNVHRMBAf8EBTADAQH/MA4G
+    A1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAgEAbafMjjYVq3nl5LET5ofk
+    sCrEpzGu6IfCnmupQ4NCqXdSqX13acrK5k6L26vimXYF4dE99TapaSoQyJwgyOdU
+    2qe9xYyPmPVSTq6VjKItOqStBos4Ey8pOR8ILzMpGMnA6wApDdRRtSbZBpSCQ6NC
+    EUtIxht0qaMjOcGwONP5m3qPdxXkD+vp91CutTNHnI+ADqXuEV7it6rwO6iyBAKG
+    nx9NXGTObmaKZ2ZtHe9Cwr2sVytAfO9P0dIHh4eosBkR8sbuvL1fnQgF18Vw5UtH
+    fqtVxirtiwATgaPeYOxIjjx7yyISwR0MKVNOD+3/JpsYJVaKje4THdDQF4IXhLlO
+    V/q09RupD+bpe1EizgexdB6t/uoFEpubbVaTjwKLk5TNuMRP6Ee7C3nr6fIrmN5K
+    NDyE9u907GlXLKMX4eMfQmppsrYCMx/wVKlXaaxvvhObobUs7DkJ/5RipGy9HcH1
+    qlCrhtCkhHDPGYFmQYuIA7UQtk6x46/hi+FYtyG+7PkFveQak+O+aZENj8f95GrW
+    MVz7EIYikWcZptiOOCYp9Hdfx3NDvYIrgxv3VKMXDkieWVLkAU0PAksYYkRiDE7j
+    0o+EwX0jMDFN5VP9TinPEv2F86I5B4IA+tpEC4/8I0LeA+j/IhBpCtYsV3eybyT2
+    aHxq9nZbySxFAMwJW23imUE=
+    -----END CERTIFICATE-----
