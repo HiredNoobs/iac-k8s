@@ -1,8 +1,9 @@
 # The prx-999 VMs' journals, from their own Vector through the Gateway, and the Proxmox hosts',
 # from rsyslog through the syslog relay (syslog.yaml's syslog_journal): event.dataset
 # journald.log, or the parsed units' own (vault.audit, vault.log, sshd.log, sudo.log,
-# forgejo.log), the VM as host.* (host.ip the address it came from), process.*, log.syslog.*,
-# log.level from the priority, the unit as Systemd.Unit.
+# forgejo.log, Proxmox's pvedaemon.log, pvescheduler.log, ...), the machine as host.* (host.ip
+# the address it came from), process.*, log.syslog.*, log.level from the priority, the unit as
+# Systemd.Unit.
 
 sources:
   # The prx-999 VMs' journals, from the Vector on each VM (iac-homelab's vector role) through the
@@ -25,15 +26,15 @@ sources:
       key_file: /etc/vector/journald-tls/tls.key
 
 transforms:
-  # The VMs' and hosts' journal entries. ECS fields where there's one (further than Elastic's journald input,
-  # which keeps most under its own journald.*): the process (_PID, _COMM, _EXE, _CMDLINE, _UID,
-  # _GID), the host (_HOSTNAME, _MACHINE_ID, _BOOT_ID; host.ip the address it came from), the
+  # The VMs' and hosts' journal entries. ECS fields where there's one (further than Elastic's
+  # journald input, which keeps most under its own journald.*): the process (_PID, _COMM, _EXE,
+  # _CMDLINE, _UID, _GID), the host (_HOSTNAME, _MACHINE_ID, _BOOT_ID; host.ip the address it came from), the
   # code (CODE_*), log.syslog.* (SYSLOG_*; PRIORITY is the severity, not syslog's priority). The
   # unit and transport as Systemd.Unit/Systemd.Transport, the journal's other fields as
   # Systemd.Journal.<Name> (its bookkeeping, the cursor and monotonic times, dropped). Then the
   # units with a parser: Vault (its audit log, vault.audit, as Elastic's HashiCorp Vault
-  # integration; its own lines, vault.log), sshd and sudo (as Elastic's system auth logs) and
-  # Forgejo; the rest is journald.log.
+  # integration; its own lines, vault.log), sshd and sudo (as Elastic's system auth logs),
+  # Forgejo and Proxmox (logins, tasks); the rest is journald.log.
   journald:
     type: remap
     inputs: [journald_relay, syslog_journal]
@@ -271,6 +272,64 @@ transforms:
             if port > 0 { ."source.port" = port }
           } else {
             ."source.ip" = fail.addr
+          }
+        }
+      } else if includes(["pvedaemon", "pveproxy", "pvescheduler", "pvesh", "vzdump", "qm", "pct"], ident) {
+        # Proxmox (the hosts'): its API daemons, scheduler and command line tools. Logins:
+        # pvedaemon checks every password login, the web UI's and the API's (an API token isn't a
+        # login, so it isn't logged); a failure has the client's address (IPv4 as ::ffff:<ip>), a
+        # success doesn't. Tasks (backups, migrations, VM starts, consoles, ...): "starting task"
+        # and "end task <UPID> <status>" (OK, WARNINGS: <n>, or the error), the UPID
+        # (UPID:<node>:<pid>:<pstart>:<start time>:<type>:<id>:<user>:) as Task.Id, its type as
+        # event.action, the VM or container it's for as Task.Target. The user as user.name, its
+        # realm (pam, pve, ...) as user.domain.
+        %dataset = ident + ".log"
+        who = ""
+        m, err = parse_regex(msg, r'^authentication failure; rhost=(?P<ip>\S+) user=(?P<user>\S*) msg=(?P<reason>.*)$')
+        if err == null {
+          ."event.category" = ["authentication"]
+          ."event.type" = ["start"]
+          ."event.action" = "login"
+          ."event.outcome" = "failure"
+          ."event.reason" = m.reason
+          ."source.ip" = replace(string!(m.ip), r'^::ffff:(\d+\.\d+\.\d+\.\d+)$', "$1")
+          who = string!(m.user)
+        }
+        m, err = parse_regex(msg, r'^(?:<[^>]*> )?successful auth for user \'(?P<user>[^\']*)\'$')
+        if err == null {
+          ."event.category" = ["authentication"]
+          ."event.type" = ["start"]
+          ."event.action" = "login"
+          ."event.outcome" = "success"
+          who = string!(m.user)
+        }
+        m, err = parse_regex(msg, r'^(?:<[^>]*> )?(?P<phase>starting|end) task (?P<upid>UPID:[^:\s]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:[0-9A-Fa-f]+:(?P<type>[^:\s]*):(?P<target>[^:\s]*):(?P<user>[^:\s]*):)(?: (?P<status>.*))?$')
+        if err == null {
+          ."event.category" = ["process"]
+          ."Task.Id" = m.upid
+          if m.type != "" { ."event.action" = m.type }
+          if m.target != "" { ."Task.Target" = m.target }
+          who = string!(m.user)
+          if m.phase == "starting" {
+            ."event.type" = ["start"]
+          } else {
+            ."event.type" = ["end"]
+            status = string(m.status) ?? ""
+            if status == "OK" || starts_with(status, "WARNINGS") {
+              ."event.outcome" = "success"
+            } else {
+              ."event.outcome" = "failure"
+              if status != "" { ."error.message" = status }
+            }
+          }
+        }
+        if who != "" {
+          account, err = parse_regex(who, r'^(?P<name>.+)@(?P<realm>[^@]+)$')
+          if err == null {
+            ."user.name" = account.name
+            ."user.domain" = account.realm
+          } else {
+            ."user.name" = who
           }
         }
       }

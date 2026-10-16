@@ -375,7 +375,7 @@ tests:
         type: vrl
         source: |
           . = {
-            "message": s'<30>1 2026-10-15T18:05:00.000001+00:00 prx-999 journal - - - { "MESSAGE": "starting task UPID:prx-999:0001:vzdump::root@pam:", "PRIORITY": "6", "SYSLOG_FACILITY": "3", "SYSLOG_IDENTIFIER": "pvedaemon", "_PID": "999", "_COMM": "pvedaemon worke", "_SYSTEMD_UNIT": "pvedaemon.service", "_HOSTNAME": "prx-999" }',
+            "message": s'<30>1 2026-10-15T18:05:00.000001+00:00 prx-999 journal - - - { "MESSAGE": "status update time (5.012 seconds)", "PRIORITY": "6", "SYSLOG_FACILITY": "3", "SYSLOG_IDENTIFIER": "pvestatd", "_PID": "999", "_COMM": "pvestatd", "_SYSTEMD_UNIT": "pvestatd.service", "_HOSTNAME": "prx-999" }',
             "fromhost_ip": "192.168.111.9", "received": "2026-10-15T18:05:00.100000+00:00", "transport": "imtcp",
             "host": "10.244.3.8", "port": 41758, "source_type": "socket", "timestamp": t'2026-10-15T18:05:00.2Z'
           }
@@ -385,11 +385,11 @@ tests:
           - type: vrl
             source: |
               assert_eq!(get!(., ["event.dataset"]), "journald.log")
-              assert_eq!(get!(., ["event.provider"]), "pvedaemon")
+              assert_eq!(get!(., ["event.provider"]), "pvestatd")
               assert_eq!(get!(., ["host.hostname"]), "prx-999")
               assert_eq!(get!(., ["host.ip"]), "192.168.111.9")
-              assert_eq!(get!(., ["Systemd.Unit"]), "pvedaemon.service")
-              assert_eq!(._msg, "starting task UPID:prx-999:0001:vzdump::root@pam:")
+              assert_eq!(get!(., ["Systemd.Unit"]), "pvestatd.service")
+              assert_eq!(._msg, "status update time (5.012 seconds)")
 
   - name: a journal entry from anywhere but the Proxmox hosts stays syslog
     inputs:

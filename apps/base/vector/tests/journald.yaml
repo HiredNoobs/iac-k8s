@@ -387,3 +387,168 @@ tests:
               assert_eq!(get!(., ["source.ip"]), "127.0.0.1")
               assert_eq!(get!(., ["source.port"]), 44330)
               assert_eq!(get!(., ["event.reason"]), "password mismatch")
+
+  - name: a Proxmox host's failed login (pvedaemon)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          # The message as Proxmox logs it (forum.proxmox.com, crowdsec's parser); the rest as
+          # prx-999's own entries come through syslog_journal.
+          . = {
+            "message": "authentication failure; rhost=::ffff:192.168.50.66 user=admin@pve msg=no such user ('admin@pve')",
+            "@timestamp": "2026-10-15T21:30:00.000001+00:00", "event.created": "2026-10-15T21:30:00.2+00:00",
+            "X-Forwarded-For": "192.168.111.9", "_HOSTNAME": "prx-999", "_SYSTEMD_UNIT": "pvedaemon.service",
+            "SYSLOG_IDENTIFIER": "pvedaemon", "SYSLOG_FACILITY": "3", "PRIORITY": "3", "_PID": "1109",
+            "_COMM": "pvedaemon worke", "_TRANSPORT": "syslog", "MESSAGE": "authentication failure; rhost=::ffff:192.168.50.66 user=admin@pve msg=no such user ('admin@pve')"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "pvedaemon.log")
+              assert_eq!(get!(., ["event.provider"]), "pvedaemon")
+              assert_eq!(get!(., ["event.action"]), "login")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["event.category"]), ["authentication"])
+              assert_eq!(get!(., ["event.reason"]), "no such user ('admin@pve')")
+              assert_eq!(get!(., ["source.ip"]), "192.168.50.66")
+              assert_eq!(get!(., ["user.name"]), "admin")
+              assert_eq!(get!(., ["user.domain"]), "pve")
+              assert_eq!(get!(., ["related.ip"]), ["192.168.50.66"])
+              assert_eq!(get!(., ["host.hostname"]), "prx-999")
+              assert_eq!(get!(., ["log.level"]), "error")
+
+  - name: a Proxmox host's login (pvedaemon, a real line)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "<root@pam> successful auth for user 'root@pam'",
+            "@timestamp": "2026-10-15T21:20:37.965942+00:00", "event.created": "2026-10-15T21:20:38.412306+00:00",
+            "X-Forwarded-For": "192.168.111.9", "_HOSTNAME": "prx-999", "_SYSTEMD_UNIT": "pvedaemon.service",
+            "SYSLOG_IDENTIFIER": "pvedaemon", "SYSLOG_FACILITY": "3", "PRIORITY": "6", "_PID": "1109",
+            "_COMM": "pvedaemon worke", "_TRANSPORT": "syslog", "MESSAGE": "<root@pam> successful auth for user 'root@pam'"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "pvedaemon.log")
+              assert_eq!(get!(., ["event.action"]), "login")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(get!(., ["user.domain"]), "pam")
+              assert_eq!(get!(., ["related.user"]), ["root"])
+              assert!(!exists(."source.ip"))
+              assert!(!exists(."event.reason"))
+
+  - name: a Proxmox task starting (pvedaemon, a real line)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "<root@pam> starting task UPID:prx-999:0019BC92:03BF8AEC:6AD143A5:vncshell::root@pam:",
+            "@timestamp": "2026-10-15T21:20:37.912593+00:00", "event.created": "2026-10-15T21:20:38.412306+00:00",
+            "X-Forwarded-For": "192.168.111.9", "_HOSTNAME": "prx-999", "_SYSTEMD_UNIT": "pvedaemon.service",
+            "SYSLOG_IDENTIFIER": "pvedaemon", "PRIORITY": "6", "_TRANSPORT": "syslog"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "pvedaemon.log")
+              assert_eq!(get!(., ["event.action"]), "vncshell")
+              assert_eq!(get!(., ["event.category"]), ["process"])
+              assert_eq!(get!(., ["event.type"]), ["start"])
+              assert_eq!(get!(., ["Task.Id"]), "UPID:prx-999:0019BC92:03BF8AEC:6AD143A5:vncshell::root@pam:")
+              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(get!(., ["user.domain"]), "pam")
+              assert!(!exists(."Task.Target"))
+              assert!(!exists(."event.outcome"))
+
+  - name: a Proxmox task that ended OK (pvedaemon, a real line)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "<root@pam> end task UPID:prx-999:0019BC92:03BF8AEC:6AD143A5:vncshell::root@pam: OK",
+            "@timestamp": "2026-10-15T21:20:38.831383+00:00", "event.created": "2026-10-15T21:20:39.162325+00:00",
+            "X-Forwarded-For": "192.168.111.9", "_HOSTNAME": "prx-999", "_SYSTEMD_UNIT": "pvedaemon.service",
+            "SYSLOG_IDENTIFIER": "pvedaemon", "PRIORITY": "6", "_TRANSPORT": "syslog"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.type"]), ["end"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert!(!exists(."error.message"))
+
+  - name: a Proxmox task that failed (a scheduled backup, not a real line)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "end task UPID:prx-001:00001234:0000ABCD:6AD14000:vzdump:101:root@pam: job errors",
+            "@timestamp": "2026-10-15T23:00:00.000001+00:00", "event.created": "2026-10-15T23:00:00.2+00:00",
+            "X-Forwarded-For": "192.168.111.2", "_HOSTNAME": "prx-001", "_SYSTEMD_UNIT": "pvescheduler.service",
+            "SYSLOG_IDENTIFIER": "pvescheduler", "PRIORITY": "6", "_TRANSPORT": "syslog"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "pvescheduler.log")
+              assert_eq!(get!(., ["event.action"]), "vzdump")
+              assert_eq!(get!(., ["Task.Target"]), "101")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["error.message"]), "job errors")
+              assert_eq!(get!(., ["user.name"]), "root")
+
+  - name: a Proxmox task that ended with warnings succeeded (not a real line)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "<root@pam> end task UPID:prx-001:00001235:0000ABCE:6AD14001:qmstart:102:root@pam: WARNINGS: 1",
+            "@timestamp": "2026-10-15T23:00:00.000001+00:00", "X-Forwarded-For": "192.168.111.2",
+            "_HOSTNAME": "prx-001", "SYSLOG_IDENTIFIER": "pvedaemon", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "qmstart")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert!(!exists(."error.message"))
+
+  - name: a Proxmox line that's neither a login nor a task
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "worker 1476877 finished",
+            "@timestamp": "2026-10-15T21:11:55.358868+00:00", "X-Forwarded-For": "192.168.111.9",
+            "_HOSTNAME": "prx-999", "SYSLOG_IDENTIFIER": "pveproxy", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "pveproxy.log")
+              assert!(!exists(."event.action"))
+              assert!(!exists(."user.name"))
