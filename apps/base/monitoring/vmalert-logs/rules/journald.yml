@@ -1,10 +1,13 @@
-# The prx-999 VMs' journals (iac-homelab's vector role, through apps/base/vector), mapped to ECS
-# fields by Vector (apps/base/vector/config/journald.yaml): prx-999-srv-{mgmt,git,runner,vault}-001 as
-# host.hostname (host.name is the FQDN, a stream field). sshd's lines are event.dataset sshd.log
-# (logins as event.action ssh_login with event.outcome, user.name, source.ip, Ssh.Method), sudo's
-# sudo.log (user.name, user.effective.name, the command as process.command_line, refusals as
-# event.outcome failure), Forgejo's forgejo.log (failed logins as password-login). mgmt
-# (192.168.111.254) is where Ansible and Terraform run, and the user's way in from the LAN.
+# The prx-999 VMs' journals (iac-homelab's vector role, through apps/base/vector) and the Proxmox
+# hosts' (iac-homelab's proxmox/rsyslog.conf, through the syslog relay), mapped to ECS fields by
+# Vector (apps/base/vector/config/journald.yaml): prx-999-srv-{mgmt,git,runner,vault}-001 and
+# prx-001, -002, -003 and prx-999 as host.hostname (host.name is the FQDN, a stream field).
+# sshd's lines are event.dataset sshd.log (logins as event.action ssh_login with event.outcome,
+# user.name, source.ip, Ssh.Method), sudo's sudo.log (user.name, user.effective.name, the command
+# as process.command_line, refusals as event.outcome failure), Forgejo's forgejo.log (failed
+# logins as password-login), the hosts' pvedaemon's pvedaemon.log (web UI and API logins as
+# login, user.name and the realm as user.domain, a failure's source.ip). mgmt (192.168.111.254)
+# is where Ansible and Terraform run, and the user's way in from the LAN.
 #
 # Vault's audit log is in vault.service's journal (the stdout audit device, terraform/vault): one
 # JSON object per request and per response, event.dataset vault.audit, mapped as Elastic's
@@ -256,3 +259,140 @@ groups:
           runbook: >-
             The usernames tried are in the events (user.name). Trigger: five wrong passwords at
             https://git.hirednoobs.com/user/login.
+
+      # pvedaemon checks every password login to a Proxmox host, the web UI's and the API's (API
+      # tokens aren't logins, so homepage's isn't logged). No fail2ban on the hosts: each wrong
+      # password is one line.
+      - alert: ProxmoxLoginFailures
+        expr: >-
+          {event.dataset="pvedaemon.log"} event.action:=login event.outcome:=failure
+          | copy host.hostname as host, source.ip as remote_ip
+          | stats by (host, remote_ip) count() as failures
+          | filter failures:>=3
+        labels:
+          severity: warning
+          source: proxmox
+          mitre_tactic: credential-access
+          mitre_technique: T1110
+        annotations:
+          summary: "{{ $value }} failed Proxmox logins to {{ $labels.host }} from {{ $labels.remote_ip }} in 5 minutes"
+          description: >-
+            Repeated wrong passwords or unknown users at a Proxmox host's web UI or API:
+            guessing, or a client with an old password.
+          runbook: >-
+            The users tried and why each failed are in the events (user.name, user.domain,
+            event.reason). Trigger: three wrong passwords for root at the host's web UI
+            (https://<host>:8006).
+
+      # Only root@pam logs in; homepage's read-only user has an API token, which isn't a login.
+      # A login as anyone else (a password set on homepage's user, a new account) is unexpected.
+      - alert: ProxmoxLoginUnexpectedUser
+        expr: >-
+          {event.dataset="pvedaemon.log"} event.action:=login event.outcome:=success
+          -(user.name:=root user.domain:=pam)
+          | copy host.hostname as host, user.name as user, user.domain as realm
+          | stats by (host, user, realm) count() as logins
+        labels:
+          severity: warning
+          source: proxmox
+          mitre_tactic: initial-access
+          mitre_technique: T1078
+        annotations:
+          summary: "Proxmox login to {{ $labels.host }} as {{ $labels.user }}@{{ $labels.realm }}"
+          description: >-
+            A Proxmox host's web UI or API was logged in to as someone other than root@pam: an
+            account that shouldn't have a password, or a new one.
+          runbook: >-
+            Check Datacenter > Permissions > Users (and API tokens) for the account and what it
+            may do. The line has no address: pveproxy's access log on the host
+            (/var/log/pveproxy/access.log) does. Trigger: give a test user (pveum user add
+            siem-test@pve --password) a login, log in as it, then pveum user delete
+            siem-test@pve.
+
+      # A shell on a machine's console: the Proxmox web UI's Shell (a host's or a VM's console),
+      # or a keyboard. login logs it (sshd's logins are SshLoginUnexpected's). Rare enough that
+      # every one is worth an alert.
+      - alert: HostConsoleLogin
+        expr: >-
+          {event.dataset="journald.log"} log.syslog.appname:=login _msg:"session opened for user"
+          | extract "session opened for user <user>(" | copy host.hostname as host
+          | stats by (host, user) count() as logins
+        labels:
+          severity: warning
+          source: journald
+          mitre_tactic: initial-access
+          mitre_technique: T1078
+        annotations:
+          summary: "Console login to {{ $labels.host }} as {{ $labels.user }}"
+          description: >-
+            Someone opened a shell on the machine's console: on a Proxmox host usually the web
+            UI's Shell, which needs a root login to the UI first.
+          runbook: >-
+            Who logged in to the web UI just before (ProxmoxLoginUnexpectedUser, pvedaemon.log's
+            logins) and what the session did. Trigger: open the Shell of a host in the web UI.
+
+      # A Proxmox task that ended with an error: a backup (vzdump, the scheduler's), a
+      # migration, a VM starting or stopping, ... Ending with warnings counts as done.
+      - alert: ProxmoxTaskFailed
+        expr: >-
+          Task.Id:* event.type:end event.outcome:=failure
+          | copy host.hostname as host, event.action as task, Task.Target as target,
+          error.message as error
+          | stats by (host, task, target, error) count() as failures
+        labels:
+          severity: warning
+          source: proxmox
+        annotations:
+          summary: "Proxmox {{ $labels.task }} {{ $labels.target }} failed on {{ $labels.host }}: {{ $labels.error }}"
+          description: >-
+            A task Proxmox ran (a backup, a migration, a VM start, ...) ended with an error.
+          runbook: >-
+            The task's log: Datacenter > the host > Task History, or pvenode task log <Task.Id>
+            on the host. Trigger: pvesh create /nodes/<host>/vzdump --vmid 99999 (no such guest)
+            on a host.
+
+      # The machines' own health, the Proxmox hosts' and the prx-999 VMs': smartd (the hosts run
+      # it, Proxmox's default) at critical or error (a failing self-check, pending or
+      # uncorrectable sectors, a disk gone), and the kernel's I/O errors.
+      - alert: HostDiskFailing
+        expr: >-
+          {event.dataset="journald.log"}
+          ((log.syslog.appname:=smartd log.level:in("critical", "error"))
+          or (log.syslog.appname:=kernel _msg:"I/O error"))
+          | copy host.hostname as host, log.syslog.appname as reporter
+          | stats by (host, reporter) count() as lines
+        labels:
+          severity: critical
+          source: journald
+        annotations:
+          summary: "Disk problems on {{ $labels.host }} ({{ $value }} {{ $labels.reporter }} lines in 5 minutes)"
+          description: >-
+            smartd or the kernel reported a failing disk: under a host, its VMs and Longhorn's
+            copies; in a VM, its virtual disk or the storage under it.
+          runbook: >-
+            The disk and what's wrong are in the events (_msg). On the host: smartctl -a
+            /dev/<disk>, and which VMs and Longhorn disks are on it. Trigger: none safe;
+            logger -t smartd -p daemon.crit "Device: /dev/sdz [SAT], 8 Currently unreadable
+            (pending) sectors" on a host (a test line, no disk involved).
+
+      # The kernel killing a process because the whole machine ran out of memory (not a container
+      # at its own limit, "Memory cgroup out of memory"). On a host it's usually a VM's qemu.
+      - alert: HostOomKill
+        expr: >-
+          {event.dataset="journald.log"} log.syslog.appname:=kernel _msg:~"^Out of memory: Killed process"
+          | extract "Killed process <pid> (<process>)"
+          | copy host.hostname as host
+          | stats by (host, process) count() as kills
+        labels:
+          severity: critical
+          source: journald
+        annotations:
+          summary: "{{ $labels.host }} ran out of memory and killed {{ $labels.process }}"
+          description: >-
+            The kernel's OOM killer ended a process to free memory: on a Proxmox host usually a
+            VM (qemu), which goes down.
+          runbook: >-
+            journalctl -k on the machine around then shows what used the memory. On a host,
+            check its VMs' memory against the host's (ballooning off, too much assigned).
+            Trigger: none safe; logger -t kernel -p kern.err "Out of memory: Killed process 1234
+            (siem-test)" on a host (a test line).
