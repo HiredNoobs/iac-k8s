@@ -12,3 +12,4 @@ configMapGenerator:
   - name: vmagent-config
     files:
       - config/vmagent.yml
+      - config/relabel.yml

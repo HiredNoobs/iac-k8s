@@ -48,6 +48,8 @@ spec:
             # Per cluster (patch it in apps/<cluster>/ for another one).
             - --remoteWrite.label=cluster=production-core
             - --promscrape.config=/etc/vmagent/config.yml
+            # Drops the pushed Proxmox series nothing reads (config/relabel.yml).
+            - --remoteWrite.relabelConfig=/etc/vmagent/relabel.yml
           ports:
             - name: https
               containerPort: 8429
@@ -76,6 +78,10 @@ spec:
             - name: config
               mountPath: /etc/vmagent/config.yml
               subPath: vmagent.yml
+              readOnly: true
+            - name: config
+              mountPath: /etc/vmagent/relabel.yml
+              subPath: relabel.yml
               readOnly: true
             - name: tls
               mountPath: /etc/vmagent/tls

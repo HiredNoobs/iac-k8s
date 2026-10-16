@@ -1,0 +1,19 @@
+# Applied to every series vmagent sends on (--remoteWrite.relabelConfig), scraped or pushed. Only
+# drops what the Proxmox hosts' metric server pushes (metrics-route.yaml) and nothing reads: each
+# rule matches an object label as Proxmox sets it, so other series are untouched.
+#
+# - A guest's per-drive and per-interface stats: node_exporter in the guest has them, and the
+#   guest's totals (system_diskread/diskwrite, system_netin/netout) stay.
+- action: drop
+  source_labels: [object, __name__]
+  regex: "(qemu|lxc);(blockstat|nics)_.+"
+# - Text fields (names, states, tags, types), which aren't numbers, and the guest's process id
+#   and serial console flag.
+- action: drop
+  source_labels: [object, __name__]
+  regex: "(nodes|qemu|lxc|storages);(system_(name|tags|status|qmpstatus|lock|template|running-machine|running-qemu|serial|pid|type|content)|nics_type)"
+# - The host's CPU time counters (cpustat_cpu and cpustat_wait are the shares used) and its root
+#   filesystem's inode and reserved-block counts.
+- action: drop
+  source_labels: [object, __name__]
+  regex: "nodes;(cpustat_(user|nice|system|idle|iowait|irq|softirq|steal|guest|guest_nice|sum|total|used|ctime)|blockstat_(files|ffree|favail|fused|fper|su_.+|user_.+))"
