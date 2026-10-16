@@ -19,6 +19,12 @@ log:
   level: 'info'
   format: 'json'
 
+# Prometheus metrics on their own listener (:9959/metrics, plain HTTP), scraped by vmagent.
+telemetry:
+  metrics:
+    enabled: true
+    address: 'tcp://:9959/metrics'
+
 theme: 'auto'
 
 totp:

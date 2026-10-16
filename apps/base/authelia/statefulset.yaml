@@ -24,6 +24,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: authelia
+      annotations:
+        # Scraped by vmagent's pods job: requests, logins and second factors by outcome (the
+        # telemetry listener in configuration.yml, plain HTTP inside the cluster).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9959"
     spec:
       # Authelia reads every AUTHELIA_* env var as config and won't start with ones it doesn't
       # know, e.g. the AUTHELIA_SERVICE_HOST Kubernetes adds for the authelia Service.
@@ -64,6 +69,9 @@ spec:
           ports:
             - name: https
               containerPort: 9091
+              protocol: TCP
+            - name: http-metrics
+              containerPort: 9959
               protocol: TCP
           # The kubelet doesn't check the certificate.
           readinessProbe:
