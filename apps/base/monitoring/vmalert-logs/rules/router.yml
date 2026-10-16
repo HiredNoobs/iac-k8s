@@ -1,0 +1,40 @@
+# The router's syslog (event.dataset syslog.log from 192.168.111.1, through rsyslog and Vector's
+# config/syslog.yaml): its firewall's dropped packets (event.action drop, source.*,
+# destination.*, network.transport) and its DNS queries (dnsmasq log-queries, dns.*).
+#
+# Each group's interval is also the window its queries count over.
+groups:
+  - name: router
+    type: vlogs
+    interval: 5m
+    rules:
+      # A LAN device the firewall stops from reaching many ports or many hosts: something
+      # mapping the network (a compromised device, or a scanner someone ran). Drops from the
+      # internet are scans too, but constant and expected: no alert for those.
+      - alert: NetworkScanFromLan
+        expr: >-
+          {event.dataset="syslog.log"} host.ip:="192.168.111.1" event.action:=drop
+          (source.ip:ipv4_range("192.168.0.0/16") or source.ip:ipv4_range("10.0.0.0/8")
+          or source.ip:ipv4_range("172.16.0.0/12"))
+          | copy source.ip as remote_ip
+          | stats by (remote_ip) count_uniq(destination.port) as ports, count_uniq(destination.ip) as hosts
+          | math max(ports, hosts) as targets
+          | filter targets:>=10
+          | fields remote_ip, targets
+        labels:
+          severity: warning
+          source: router
+          mitre_tactic: discovery
+          mitre_technique: T1046
+        annotations:
+          summary: "{{ $labels.remote_ip }} was dropped trying {{ $value }} ports or hosts in 5 minutes"
+          description: >-
+            A device on the LAN tried many ports or many addresses the router's firewall
+            blocks: network discovery, from malware or a scanner. Your own nmap counts too.
+          runbook: >-
+            What it tried: {event.dataset="syslog.log"} event.action:=drop
+            source.ip:="{{ $labels.remote_ip }}" | stats by (destination.ip, destination.port)
+            count(). Which device it is: its DHCP lease (event.action:dhcp-ack, client.ip) and
+            its DNS queries on the Network dashboard. Trigger: from a LAN client, scan ports the
+            router drops for it (e.g. nmap -Pn -p 1-20 to an address across a blocked VLAN
+            boundary); which traffic the router logs as dropped is to confirm first.
