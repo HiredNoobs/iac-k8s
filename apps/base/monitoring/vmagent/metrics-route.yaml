@@ -1,9 +1,10 @@
-# metrics.hirednoobs.com/api/v2/write: the Proxmox hosts' metric server (pvestatd, iac-homelab's
-# proxmox_metrics_server) pushes the host's, its guests' and its storages' stats here as InfluxDB
-# lines, to vmagent's InfluxDB endpoint (the vmagent Backend, routes.yaml). Machines can't log
-# in to Authelia, so instead of it only the hosts' addresses are let through (the client's own
+# metrics.hirednoobs.com/influx/api/v2/write: the Proxmox hosts' metric server (pvestatd,
+# iac-homelab's proxmox_metrics_server) pushes the host's, its guests' and its storages' stats
+# here as InfluxDB lines, to vmagent's InfluxDB endpoint (the vmagent Backend, routes.yaml).
+# Proxmox checks /influx/health when the server is added or changed. Machines can't log in to
+# Authelia, so instead of it only the hosts' addresses are let through (the client's own
 # address: externalTrafficPolicy keeps it, and the Gateway trusts no X-Forwarded-For), and only
-# this path is routed. Anything on a host can write metrics here, so they say what a host sent.
+# these paths are routed. Anything on a host can write metrics here, so they say what a host sent.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -19,7 +20,10 @@ spec:
     - matches:
         - path:
             type: Exact
-            value: /api/v2/write
+            value: /influx/api/v2/write
+        - path:
+            type: Exact
+            value: /influx/health
       backendRefs:
         - group: gateway.envoyproxy.io
           kind: Backend
