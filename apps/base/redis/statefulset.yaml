@@ -7,8 +7,8 @@ metadata:
   labels:
     app.kubernetes.io/name: redis
   annotations:
-    # Restart to load a renewed certificate or changed ACL users.
-    secret.reloader.stakater.com/reload: redis-tls,redis-acl
+    # Restart to load a renewed certificate, changed ACL users or the exporter's password.
+    secret.reloader.stakater.com/reload: redis-tls,redis-acl,redis-exporter
 spec:
   serviceName: redis
   # Replication (Sentinel/cluster) isn't set up yet, a second instance would split the data.
@@ -24,6 +24,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: redis
+      annotations:
+        # Scraped by vmagent's pods job: the redis-exporter sidecar's memory, clients, commands,
+        # keys and persistence.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
     spec:
       # The redis user from the image, fsGroup lets it read the certs and write /data.
       securityContext:
@@ -34,6 +39,10 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      # The pod's own name is itself (the exporter's address, see redis-exporter).
+      hostAliases:
+        - ip: 127.0.0.1
+          hostnames: [redis-0.redis.redis.svc]
       # Time to flush the AOF on shutdown.
       terminationGracePeriodSeconds: 60
       containers:
@@ -113,6 +122,47 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+        # Redis' metrics (INFO and friends) for Prometheus, as the ACL user exporter: no keys,
+        # only the read-only server commands it needs (external-secret.yaml). Same certificate
+        # as the probes. It connects over loopback (hostAliases), so it still reaches Redis
+        # while the pod isn't ready, by a name the server certificate has.
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.94.0@sha256:0842ef7110e62b40bbde2d5c11f38c6fbd99f7100c75e3866637c1b335a1eff7
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: REDIS_ADDR
+              value: rediss://redis-0.redis.redis.svc:6379
+            - name: REDIS_USER
+              value: exporter
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-exporter
+                  key: REDIS_PASSWORD
+            - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
+              value: /etc/redis/secrets/ca.crt
+            - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
+              value: /etc/redis/secrets/tls.crt
+            - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
+              value: /etc/redis/secrets/tls.key
+          ports:
+            - name: http-metrics
+              containerPort: 9121
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: certs
+              mountPath: /etc/redis/secrets
+              readOnly: true
       volumes:
         - name: config
           configMap:
