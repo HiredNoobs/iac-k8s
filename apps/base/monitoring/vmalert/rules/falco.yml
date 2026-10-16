@@ -1,0 +1,27 @@
+# Falco (apps/base/falco), from its own metrics (:8765/metrics, vmagent's pods job). A syscall
+# Falco dropped, or an alert it couldn't send, is one no runtime rule can see.
+groups:
+  - name: Falco
+    interval: 60s
+    rules:
+      # The kernel side's ring buffer was full, so Falco missed syscalls on that node. A few in a
+      # burst are normal; a steady share means the node is too busy for the buffer.
+      - alert: FalcoDroppingEvents
+        expr: >-
+          sum by (pod) (increase(falcosecurity_scap_n_drops_total{job="falco"}[15m]))
+          / sum by (pod) (increase(falcosecurity_scap_n_evts_total{job="falco"}[15m])) > .01
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Falco is missing {{ $value | humanizePercentage }} of syscalls ({{ $labels.pod }})
+          description: "Falco on {{ $labels.pod }} has dropped over 1% of kernel events for 15 minutes: runtime rules may miss what happens on that node. falcosecurity_scap_n_drops_buffer_total says which syscalls; a bigger buffer (driver.modernEbpf.bufSizePreset) helps."
+
+      # Alerts Falco matched but couldn't hand to its outputs (stdout, so Vector): they're gone.
+      - alert: FalcoAlertsLost
+        expr: 'sum by (pod) (increase(falcosecurity_falco_outputs_queue_num_drops_total{job="falco"}[15m])) > 0'
+        labels:
+          severity: critical
+        annotations:
+          summary: Falco lost alerts ({{ $labels.pod }})
+          description: "Falco on {{ $labels.pod }} dropped {{ $value | humanize }} alerts from its outputs queue in 15 minutes: they never reached VictoriaLogs."

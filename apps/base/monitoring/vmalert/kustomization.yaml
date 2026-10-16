@@ -16,3 +16,4 @@ configMapGenerator:
       - rules/pihole.yml
       - rules/proxmox.yml
       - rules/logging.yml
+      - rules/falco.yml
