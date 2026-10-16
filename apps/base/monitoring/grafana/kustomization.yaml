@@ -75,6 +75,12 @@ configMapGenerator:
       - dashboards/Storage/longhorn.json
     options:
       disableNameSuffixHash: true
+  # Proxmox: the hosts' metric server, through vmagent's InfluxDB endpoint.
+  - name: grafana-dashboards-proxmox
+    files:
+      - dashboards/Proxmox/proxmox.json
+    options:
+      disableNameSuffixHash: true
   # Flux: fluxcd/flux2-monitoring-example@7ab65dc (monitoring/configs/dashboards).
   - name: grafana-dashboards-flux
     files:
