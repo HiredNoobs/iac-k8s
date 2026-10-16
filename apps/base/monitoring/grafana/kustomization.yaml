@@ -27,12 +27,14 @@ configMapGenerator:
       - dashboards/Overview/overview.json
     options:
       disableNameSuffixHash: true
-  # Gateway: Envoy Gateway's own (charts/gateway-addons-helm/dashboards at v1.9.2).
+  # Gateway: Envoy Gateway's own (charts/gateway-addons-helm/dashboards at v1.9.2). Gateway logs:
+  # ours (Envoy's access log in VictoriaLogs).
   - name: grafana-dashboards-gateway
     files:
       - dashboards/Gateway/envoy-clusters.json
       - dashboards/Gateway/envoy-gateway-global.json
       - dashboards/Gateway/envoy-proxy-global.json
+      - dashboards/Gateway/gateway-logs.json
     options:
       disableNameSuffixHash: true
   # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
