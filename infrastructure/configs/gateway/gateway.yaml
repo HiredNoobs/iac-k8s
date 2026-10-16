@@ -56,3 +56,19 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: vector
+    # The Proxmox hosts' metrics (InfluxDB lines from their metric server) on their own listener,
+    # to vmagent (apps/base/monitoring/vmagent/metrics-route.yaml), which only the hosts may reach.
+    - name: metrics
+      protocol: HTTPS
+      port: 443
+      hostname: metrics.hirednoobs.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring

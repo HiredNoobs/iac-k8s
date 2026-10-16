@@ -6,6 +6,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - routes.yaml
+  - metrics-route.yaml
 # A change rolls the pod (the name gets a hash).
 configMapGenerator:
   - name: vmagent-config

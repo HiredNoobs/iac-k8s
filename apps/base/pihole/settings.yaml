@@ -30,6 +30,7 @@ data:
     192.168.111.101 lidarr.hirednoobs.com;\
     192.168.111.101 lldap.hirednoobs.com;\
     192.168.111.101 mealie.hirednoobs.com;\
+    192.168.111.101 metrics.hirednoobs.com;\
     192.168.111.101 nas.hirednoobs.com;\
     192.168.111.101 pihole.hirednoobs.com;\
     192.168.111.101 pihole1.hirednoobs.com;\
@@ -87,6 +88,7 @@ data:
     local=/lidarr.hirednoobs.com/;\
     local=/lldap.hirednoobs.com/;\
     local=/mealie.hirednoobs.com/;\
+    local=/metrics.hirednoobs.com/;\
     local=/nas.hirednoobs.com/;\
     local=/pihole.hirednoobs.com/;\
     local=/pihole1.hirednoobs.com/;\
