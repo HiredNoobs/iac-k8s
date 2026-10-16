@@ -1,0 +1,50 @@
+# The Proxmox hosts, from the stats their metric server (pvestatd) pushes every 10 seconds through
+# vmagent's InfluxDB endpoint (apps/base/monitoring/vmagent/metrics-route.yaml): object nodes for
+# a host (host is its name), storages for a storage (host is the storage, nodename the host
+# reporting it). Pushed, not scraped: there's no up, ProxmoxHostNotReporting stands in for it.
+groups:
+  - name: Proxmox
+    interval: 60s
+    rules:
+      # lag() is the time since a host's last sample within the hour, so the alert keeps firing
+      # after the series has gone stale (5 minutes).
+      - alert: ProxmoxHostNotReporting
+        expr: 'lag(cpustat_cpu{object="nodes"}[1h]) > 120'
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: Proxmox host {{ $labels.host }} isn't reporting metrics
+          description: "{{ $labels.host }} last pushed its stats {{ $value | humanizeDuration }} ago: the host is down, or pvestatd can't reach metrics.hirednoobs.com (the host's journal says why: pvestatd's lines)."
+
+      # Per host and storage: a storage shared by the hosts (NFS, ...) fires once per host.
+      - alert: ProxmoxStorageFilling
+        expr: 'system_used{object="storages"} / (system_total{object="storages"} > 0) > .85'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Proxmox storage {{ $labels.host }} on {{ $labels.nodename }} is {{ $value | humanizePercentage }} full
+          description: "A full thin pool stops every guest on it writing (their I/O errors out or they pause). Free space or grow the storage."
+
+      - alert: ProxmoxStorageAlmostFull
+        expr: 'system_used{object="storages"} / (system_total{object="storages"} > 0) > .95'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Proxmox storage {{ $labels.host }} on {{ $labels.nodename }} is {{ $value | humanizePercentage }} full
+          description: "The guests on it are about to stop writing. Free space now (old backups, snapshots, unused disks) or move guests off it."
+
+      # ZFS's ARC isn't in the kernel's MemAvailable, but what it holds above its minimum is given
+      # back under pressure, so it counts as available.
+      - alert: ProxmoxHostMemoryLow
+        expr: |
+          (memory_memavailable{object="nodes"} + clamp_min(memory_arcsize{object="nodes"} - memory_arcmin{object="nodes"}, 0))
+            / memory_memtotal{object="nodes"} < .10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Proxmox host {{ $labels.host }} has {{ $value | humanizePercentage }} of its memory left
+          description: "Guests on {{ $labels.host }} are close to the host's memory: next is swapping, then the OOM killer ending a guest (HostOomKill). Move a guest or give less memory out."
