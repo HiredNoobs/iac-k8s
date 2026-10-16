@@ -279,6 +279,7 @@ groups:
           description: >-
             Repeated wrong passwords or unknown users at a Proxmox host's web UI or API:
             guessing, or a client with an old password.
+          tested: "2026-10-16"
           runbook: >-
             The users tried and why each failed are in the events (user.name, user.domain,
             event.reason). Trigger: three wrong passwords for root at the host's web UI
@@ -302,6 +303,7 @@ groups:
           description: >-
             A Proxmox host's web UI or API was logged in to as someone other than root@pam: an
             account that shouldn't have a password, or a new one.
+          tested: "2026-10-16"
           runbook: >-
             Check Datacenter > Permissions > Users (and API tokens) for the account and what it
             may do. The line has no address: pveproxy's access log on the host
@@ -327,6 +329,7 @@ groups:
           description: >-
             Someone opened a shell on the machine's console: on a Proxmox host usually the web
             UI's Shell, which needs a root login to the UI first.
+          tested: "2026-10-16"
           runbook: >-
             Who logged in to the web UI just before (ProxmoxLoginUnexpectedUser, pvedaemon.log's
             logins) and what the session did. Trigger: open the Shell of a host in the web UI.
