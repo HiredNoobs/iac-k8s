@@ -119,7 +119,11 @@ jobs:
           VECTOR_SELF_NODE_NAME: cp-1
         run: |
           vector validate --no-environment apps/base/vector/config/*.yaml
-          vector test apps/base/vector/config/*.yaml apps/base/vector/tests/*.yaml
+          failed=0
+          for tests in apps/base/vector/tests/*.yaml; do
+            vector test apps/base/vector/config/*.yaml "$tests" || failed=1
+          done
+          exit "$failed"
 
       # The Security folder's ATT&CK coverage dashboard is generated from the alert rules' labels.
       - name: ATT&CK coverage
