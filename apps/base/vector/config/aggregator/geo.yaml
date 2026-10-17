@@ -1,0 +1,54 @@
+# Where public addresses are: after the parsers, before the common end. For a line's source.ip
+# and destination.ip that are public (not private, loopback, link-local, CGNAT, multicast or a
+# documentation range), as Elastic's geoip processor: <side>.geo.continent_name,
+# country_iso_code, country_name, region_name, city_name, location.lat/lon, and <side>.as.number,
+# as.organization.name. An address the data doesn't know gets none of them.
+#
+# The data is DB-IP's IP to City Lite and IP to ASN Lite (https://db-ip.com, CC BY 4.0: credit
+# DB-IP where it's shown), MMDB files the aggregator's init container downloads into its volume
+# each month (../../scripts/geodata.sh, ../../aggregator.yaml). The paths are relative to the
+# working directory (Vector 0.59 only substitutes environment variables in its config when
+# started with --dangerously-allow-env-var-interpolation): the aggregator runs in /var/lib/vector,
+# the tests in ../../tests/, with MaxMind's small test databases (the same record layout).
+
+enrichment_tables:
+  # mmdb, not geoip: Vector's geoip type only takes MaxMind's own database types.
+  geo_city:
+    type: mmdb
+    path: geo/city.mmdb
+  geo_asn:
+    type: mmdb
+    path: geo/asn.mmdb
+
+transforms:
+  geo:
+    type: remap
+    inputs: [syslog, journald]
+    source: |
+      not_public = [
+        "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+        "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15",
+        "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+        "::/128", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8", "2001:db8::/32"
+      ]
+      for_each(["source", "destination"]) -> |_i, side| {
+        ip = get!(., [side + ".ip"])
+        if is_string(ip) && !(ip_cidr_contains(not_public, ip) ?? true) {
+          city = get_enrichment_table_record("geo_city", {"ip": ip}) ?? {}
+          asn = get_enrichment_table_record("geo_asn", {"ip": ip}) ?? {}
+          fields = {
+            "geo.continent_name": get!(city, ["continent", "names", "en"]),
+            "geo.country_iso_code": get!(city, ["country", "iso_code"]),
+            "geo.country_name": get!(city, ["country", "names", "en"]),
+            "geo.region_name": get!(city, ["subdivisions", 0, "names", "en"]),
+            "geo.city_name": get!(city, ["city", "names", "en"]),
+            "geo.location.lat": get!(city, ["location", "latitude"]),
+            "geo.location.lon": get!(city, ["location", "longitude"]),
+            "as.number": get!(asn, ["autonomous_system_number"]),
+            "as.organization.name": get!(asn, ["autonomous_system_organization"]),
+          }
+          for_each(fields) -> |key, value| {
+            if value != null { . = set!(., [side + "." + key], value) }
+          }
+        }
+      }

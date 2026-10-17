@@ -4,8 +4,10 @@
 # (journald-route.yaml), both through service.yaml. One pod: while it's down rsyslog queues
 # (10000 messages, in memory) and the VMs' Vector buffers on disk.
 #
-# Its own volume holds the disk buffer for VictoriaLogs. Recreate: the volume attaches to one
-# node at a time. If its node goes down, Longhorn's nodeDownPodDeletionPolicy lets the new pod
+# Its own volume holds the disk buffer for VictoriaLogs and the geo data (config/aggregator/
+# geo.yaml): DB-IP's City and ASN Lite, fetched by the init container (scripts/geodata.sh) each
+# start, and restarted weekly for a new month (geodata-refresh.yaml). Recreate: the volume
+# attaches to one node at a time. If its node goes down, Longhorn's nodeDownPodDeletionPolicy lets the new pod
 # start elsewhere (infrastructure/controllers/longhorn).
 #
 # app.kubernetes.io/name vector like the collectors, so vmagent scrapes it as job vector and the
@@ -58,10 +60,37 @@ spec:
         fsGroup: 65534
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # This month's geo data into the volume, or the copy there if DB-IP can't be reached.
+        - name: geodata
+          image: docker.io/library/alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+          command: ["sh", "/scripts/geodata.sh"]
+          env:
+            - name: GEO_DIR
+              value: /var/lib/vector/geo
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/vector
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
       containers:
         - name: vector
           image: timberio/vector:0.59.0-distroless-static@sha256:2138c72ef15477d3a60126da851407a198ec61d2ff4cd600a4e69db5f6a29ff7
           args: ["--config", "/etc/vector/*.yaml"]
+          # geo.yaml's paths are relative to it (geo/city.mmdb).
+          workingDir: /var/lib/vector
           env:
             # The node it runs on, for a pipeline error's host (config/common/pipeline.yaml).
             - name: NODE_NAME
@@ -92,12 +121,13 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          # The geo data is read into memory (City 127 MB, ASN 10 MB): about 300 MB idle.
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 320Mi
             limits:
-              memory: 512Mi
+              memory: 768Mi
           volumeMounts:
             - name: config
               mountPath: /etc/vector
@@ -117,6 +147,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: vector-aggregator
+        - name: scripts
+          configMap:
+            name: vector-geodata
         - name: tls
           secret:
             secretName: vector-tls

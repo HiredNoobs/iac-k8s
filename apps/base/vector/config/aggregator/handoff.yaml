@@ -8,10 +8,10 @@ transforms:
     inputs: [syslog.dropped, syslog_journal.dropped, journald.dropped]
     condition: "true"
 
-  # The parsed lines, for the common fields.
+  # The parsed lines, with where their public addresses are (geo.yaml), for the common fields.
   to_ecs:
     type: filter
-    inputs: [syslog, journald]
+    inputs: [geo]
     condition: "true"
 
   to_final:

@@ -1,0 +1,118 @@
+# Unit tests for config/aggregator/geo.yaml (how to run them: tests/collector/pipeline.yaml), run
+# from tests/ so geo/ is MaxMind's test databases (geo/README.md). In them 89.160.20.112 is
+# Linköping (Bredband2 AB, AS29518), 81.2.69.160 London (no ASN), 2001:480::1 San Diego, and
+# 8.8.8.8 isn't there.
+tests:
+  - name: a public source gets its place and network
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "89.160.20.112", "destination.ip": "192.168.111.1"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["source.geo.country_iso_code"]), "SE")
+              assert_eq!(get!(., ["source.geo.country_name"]), "Sweden")
+              assert_eq!(get!(., ["source.geo.city_name"]), "Linköping")
+              assert_eq!(get!(., ["source.geo.continent_name"]), "Europe")
+              assert_eq!(get!(., ["source.geo.region_name"]), "Östergötland County")
+              assert!(is_float(get!(., ["source.geo.location.lat"])))
+              assert!(is_float(get!(., ["source.geo.location.lon"])))
+              assert_eq!(get!(., ["source.as.number"]), 29518)
+              assert_eq!(get!(., ["source.as.organization.name"]), "Bredband2 AB")
+              # The private side is left alone.
+              assert!(!exists(."destination.geo.country_iso_code"))
+              assert!(!exists(."destination.as.number"))
+
+  - name: a public destination too, and only what the data has (no ASN for this one)
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "192.168.50.10", "destination.ip": "81.2.69.160"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["destination.geo.city_name"]), "London")
+              assert_eq!(get!(., ["destination.geo.country_iso_code"]), "GB")
+              assert!(!exists(."destination.as.number"))
+              assert!(!exists(."destination.as.organization.name"))
+              assert!(!exists(."source.geo.country_iso_code"))
+
+  - name: IPv6
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "2001:480::1"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["source.geo.city_name"]), "San Diego")
+              assert_eq!(get!(., ["source.geo.country_iso_code"]), "US")
+
+  - name: a documentation address and one the data doesn't know get nothing
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "203.0.113.7", "destination.ip": "8.8.8.8"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!exists(."source.geo.country_iso_code"))
+              assert!(!exists(."destination.geo.country_iso_code"))
+              assert!(!exists(."source.as.number"))
+              assert!(!exists(."destination.as.number"))
+
+  - name: a private IPv6 address and something that isn't an address get nothing, and no error
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "fd00::1", "destination.ip": "not an address"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!exists(."source.geo.country_iso_code"))
+              assert!(!exists(."destination.geo.country_iso_code"))
+              assert!(!exists(."source.as.number"))
+              assert!(!exists(."destination.as.number"))
+
+  - name: a router firewall drop from the internet, end to end
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<4>Oct 16 15:41:10 RT-BE86U-FFA0-1F4D20D-C kernel: DROP IN=eth0 OUT= MAC=a0:36:bc:12:34:56:00:1b:21:aa:bb:cc:08:00 SRC=89.160.20.112 DST=192.168.111.1 LEN=44 TOS=0x00 PREC=0x00 TTL=243 ID=54321 PROTO=TCP SPT=48234 DPT=22 WINDOW=1024 RES=0x00 SYN URGP=0 MARK=0x8000000",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:41:10.105+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "drop")
+              assert_eq!(get!(., ["source.ip"]), "89.160.20.112")
+              assert_eq!(get!(., ["source.geo.city_name"]), "Linköping")
+              assert_eq!(get!(., ["source.as.number"]), 29518)
+              assert_eq!(get!(., ["destination.port"]), 22)

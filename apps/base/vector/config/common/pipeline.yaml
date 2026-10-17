@@ -3,7 +3,7 @@
 # (aggregator.yaml: what other machines send, the LAN's syslog and the prx-999 VMs' and Proxmox
 # hosts' journals; ../aggregator/). Each loads this directory and its own as one config
 # (--config /etc/vector/*.yaml); tests in ../../tests/<collector|aggregator>/, a file per
-# source: `vector test config/common/*.yaml config/collector/*.yaml tests/collector/<file>`.
+# source, run from tests/ (how: tests/collector/pipeline.yaml).
 #
 # Each side's handoff.yaml says which of its components come here: to_unparsed (the lines its
 # parsers failed on), to_ecs (the parsed lines), to_final (with what doesn't need ecs, the audit

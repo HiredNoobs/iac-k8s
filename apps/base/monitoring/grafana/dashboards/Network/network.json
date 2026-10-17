@@ -1506,17 +1506,17 @@
       }
     },
     {
-      "type": "table",
-      "title": "Internet sources",
-      "id": 22,
-      "description": "Public addresses dropped most, with how many ports they tried.",
+      "type": "geomap",
+      "title": "Where they come from",
+      "id": 28,
+      "description": "Dropped packets from the internet by where the source address is: one point per place, bigger for more packets. Approximate below country level. Where an address is: IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
       },
       "gridPos": {
-        "h": 9,
-        "w": 8,
+        "h": 10,
+        "w": 12,
         "x": 0,
         "y": 45
       },
@@ -1529,7 +1529,392 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop -(source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) | stats by (source.ip) count() as packets, count_uniq(destination.port) as ports, max(_time) as _time | sort by (packets desc) | limit 50"
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop -(source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) source.geo.location.lat:* | stats by (source.geo.location.lat, source.geo.location.lon, source.geo.country_name, source.geo.city_name) count() as packets, count_uniq(source.ip) as sources"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "source.geo.location.lat",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "source.geo.location.lon",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "packets",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "sources",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "source.geo.city_name": 0,
+              "source.geo.country_name": 1,
+              "packets": 2,
+              "sources": 3,
+              "source.geo.location.lat": 4,
+              "source.geo.location.lon": 5
+            },
+            "renameByName": {
+              "source.geo.city_name": "City",
+              "source.geo.country_name": "Country",
+              "packets": "Packets",
+              "sources": "Sources",
+              "source.geo.location.lat": "lat",
+              "source.geo.location.lon": "lon"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "view": {
+          "id": "zero",
+          "lat": 25,
+          "lon": 0,
+          "zoom": 1.2,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": false,
+          "showAttribution": true
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Basemap",
+          "config": {}
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Sources",
+            "tooltip": true,
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "field": "Packets",
+                  "min": 3,
+                  "max": 18,
+                  "fixed": 5
+                },
+                "color": {
+                  "fixed": "red"
+                },
+                "opacity": 0.5,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                }
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Countries",
+      "id": 29,
+      "description": "Dropped packets from the internet by the source address's country. Where an address is: IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 12,
+        "y": 45
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop -(source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) | stats by (source.geo.country_iso_code, source.geo.country_name) count() as packets, count_uniq(source.ip) as sources | sort by (packets desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "packets",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "sources",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "source.geo.country_name": 0,
+              "source.geo.country_iso_code": 1,
+              "packets": 2,
+              "sources": 3
+            },
+            "renameByName": {
+              "source.geo.country_name": "Country",
+              "source.geo.country_iso_code": "Code",
+              "packets": "Packets",
+              "sources": "Sources"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Networks",
+      "id": 30,
+      "description": "Dropped packets from the internet by the network (autonomous system) the source address belongs to: hosting providers are usually scanners. Where an address is: IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 18,
+        "y": 45
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop -(source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) | stats by (source.as.number, source.as.organization.name) count() as packets, count_uniq(source.ip) as sources | sort by (packets desc) | limit 50"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "packets",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "sources",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "source.as.number",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "source.as.organization.name": 0,
+              "source.as.number": 1,
+              "packets": 2,
+              "sources": 3
+            },
+            "renameByName": {
+              "source.as.organization.name": "Network",
+              "source.as.number": "AS",
+              "packets": "Packets",
+              "sources": "Sources"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Internet sources",
+      "id": 22,
+      "description": "Public addresses dropped most, with how many ports they tried, their country and network. Where an address is: IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 55
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop -(source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) | stats by (source.ip, source.geo.country_iso_code, source.as.organization.name) count() as packets, count_uniq(destination.port) as ports, max(_time) as _time | sort by (packets desc) | limit 50"
         }
       ],
       "transformations": [
@@ -1570,15 +1955,19 @@
             },
             "indexByName": {
               "source.ip": 0,
-              "packets": 1,
-              "ports": 2,
-              "Time": 3
+              "source.geo.country_iso_code": 1,
+              "source.as.organization.name": 2,
+              "packets": 3,
+              "ports": 4,
+              "Time": 5
             },
             "renameByName": {
               "source.ip": "Source",
               "packets": "Packets",
               "ports": "Ports",
-              "Time": "Last seen"
+              "Time": "Last seen",
+              "source.geo.country_iso_code": "Country",
+              "source.as.organization.name": "Network"
             }
           }
         }
@@ -1628,7 +2017,7 @@
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 45
+        "y": 55
       },
       "targets": [
         {
@@ -1722,7 +2111,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 45
+        "y": 55
       },
       "targets": [
         {
@@ -1832,7 +2221,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 64
       },
       "targets": [
         {

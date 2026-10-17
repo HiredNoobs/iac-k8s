@@ -120,12 +120,14 @@ jobs:
           NODE_DOMAIN: hirednoobs.com
           VECTOR_SELF_NODE_NAME: cp-1
         run: |
-          cd apps/base/vector
+          # From tests/: the aggregator's geo data paths are relative (geo/, MaxMind's test
+          # databases there, tests/geo/README.md).
+          cd apps/base/vector/tests
           failed=0
           for side in collector aggregator; do
-            vector validate --no-environment config/common/*.yaml config/"$side"/*.yaml || failed=1
-            for tests in tests/"$side"/*.yaml; do
-              vector test config/common/*.yaml config/"$side"/*.yaml "$tests" || failed=1
+            vector validate --no-environment ../config/common/*.yaml ../config/"$side"/*.yaml || failed=1
+            for tests in "$side"/*.yaml; do
+              vector test ../config/common/*.yaml ../config/"$side"/*.yaml "$tests" || failed=1
             done
           done
           exit "$failed"
