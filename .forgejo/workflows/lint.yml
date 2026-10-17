@@ -9,8 +9,8 @@ on:
 
 env:
   # renovate: datasource=github-releases depName=kubernetes-sigs/kustomize extractVersion=^kustomize/v(?<version>.+)$
-  KUSTOMIZE_VERSION: "5.8.2"
-  KUSTOMIZE_SHA256: "06af0a202c2b831207d0173f9c9cdb1b30abceca0747cb3fbb72792d26055c95"
+  KUSTOMIZE_VERSION: "5.8.3"
+  KUSTOMIZE_SHA256: "cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61"
   # renovate: datasource=github-releases depName=yannh/kubeconform extractVersion=^v(?<version>.+)$
   KUBECONFORM_VERSION: "0.8.0"
   KUBECONFORM_SHA256: "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
@@ -26,8 +26,8 @@ env:
   # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers),
   # looked up from the same chart so Renovate groups them.
   # renovate: datasource=helm depName=external-secrets registryUrl=https://charts.external-secrets.io
-  ESO_VERSION: "2.11.0"
-  ESO_CRDS_SHA256: "2b2aa2e85a4c081a11688f0b31ebdb33153c0885d4c2e3604d11058995a11b75"
+  ESO_VERSION: "2.13.0"
+  ESO_CRDS_SHA256: "d4da9492a6906a3834bb1f5b7367575a29b5c43411017babc7a30728f465d1ba"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io extractVersion=^v(?<version>.+)$
   CERT_MANAGER_VERSION: "1.21.2"
   CERT_MANAGER_CRDS_SHA256: "262fef78478492cd35b73a1b227106b7802f9c056361d1f561d04b32d751337f"
@@ -42,7 +42,8 @@ env:
   # renovate: datasource=helm depName=longhorn registryUrl=https://charts.longhorn.io
   LONGHORN_VERSION: "1.12.1"
   LONGHORN_MANIFEST_SHA256: "41648963af867ac1d0c85755fb53cf61cacd57c9bb22e1942e3fb0439eeb04fd"
-  # Vector, the same version as its image (apps/base/vector/daemonset.yaml), for its config tests.
+  # Vector, the same version as its image (apps/base/vector/daemonset.yaml, aggregator.yaml), for
+  # its config tests.
   # renovate: datasource=github-releases depName=vectordotdev/vector extractVersion=^v(?<version>.+)$
   VECTOR_VERSION: "0.59.0"
   VECTOR_SHA256: "a8dbc43c18ae25d0b23a712c9262f3aad904e352b1db5e7db1d9c4aecab59496"
@@ -111,17 +112,21 @@ jobs:
 
           python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
 
-      # Vector's config loads, and its transforms do what tests/ expects.
+      # Both Vectors' configs load (the common files and their side's), and their transforms do
+      # what tests/<side>/ expects.
       - name: Vector
         env:
           NODE_NAME: cp-1
           NODE_DOMAIN: hirednoobs.com
           VECTOR_SELF_NODE_NAME: cp-1
         run: |
-          vector validate --no-environment apps/base/vector/config/*.yaml
+          cd apps/base/vector
           failed=0
-          for tests in apps/base/vector/tests/*.yaml; do
-            vector test apps/base/vector/config/*.yaml "$tests" || failed=1
+          for side in collector aggregator; do
+            vector validate --no-environment config/common/*.yaml config/"$side"/*.yaml || failed=1
+            for tests in tests/"$side"/*.yaml; do
+              vector test config/common/*.yaml config/"$side"/*.yaml "$tests" || failed=1
+            done
           done
           exit "$failed"
 

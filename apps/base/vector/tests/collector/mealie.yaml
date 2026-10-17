@@ -1,4 +1,4 @@
-# Unit tests for config/mealie.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/mealie.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: Mealie access line (the sample)
     inputs:
