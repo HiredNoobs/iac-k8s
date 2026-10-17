@@ -271,8 +271,8 @@ transforms:
             # MAC=<destination>:<source>:<ethertype>, 14 bytes.
             mac = split(string(fields.MAC) ?? "", ":")
             if length(mac) == 14 {
-              ."destination.mac" = upcase(join!(slice!(mac, 0, 6), "-"))
-              ."source.mac" = upcase(join!(slice!(mac, 6, 12), "-"))
+              ."destination.mac" = upcase(join(slice!(mac, 0, 6), "-"))
+              ."source.mac" = upcase(join(slice!(mac, 6, 12), "-"))
             }
             if is_string(fields.SRC) { ."source.ip" = fields.SRC }
             if is_string(fields.DST) { ."destination.ip" = fields.DST }

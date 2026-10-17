@@ -1,9 +1,9 @@
 # Unit tests for config/collector/pods.yaml and config/common/pipeline.yaml (pod lines, the common
 # fields, pipeline errors). Each source's tests are in its own file, under the side its parser is
 # on. A file at a time (vector test keeps every test's memory until it exits), with the common
-# config and its side's: `vector test config/common/*.yaml config/collector/*.yaml
-# tests/collector/<file>.yaml`, the same with aggregator for tests/aggregator/. Not in the
-# ConfigMaps. Needs NODE_NAME=cp-1 and NODE_DOMAIN=hirednoobs.com (the remaps read them). One event per test: with several, Vector passes a test if any one
+# config and its side's, from tests/ (the aggregator's geo data is tests/geo/): `vector test
+# ../config/common/*.yaml ../config/collector/*.yaml collector/<file>.yaml`, the same with
+# aggregator for aggregator/. Not in the ConfigMaps. Needs NODE_NAME=cp-1 and NODE_DOMAIN=hirednoobs.com (the remaps read them). One event per test: with several, Vector passes a test if any one
 # of them meets the conditions.
 tests:
   - name: pod JSON line with msg and an RFC 3339 time
