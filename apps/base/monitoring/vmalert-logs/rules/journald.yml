@@ -399,6 +399,7 @@ groups:
             check its VMs' memory against the host's (ballooning off, too much assigned).
             Trigger: none safe; logger -t kernel -p kern.err "Out of memory: Killed process 1234
             (siem-test)" on a host (a test line).
+          tested: "2026-10-17"
 
       # The Proxmox cluster's corosync, as each host sees it. Corosync logs every peer down and
       # then up when it starts, so only a link whose last line in the window is down counts. A

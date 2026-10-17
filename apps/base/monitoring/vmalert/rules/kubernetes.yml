@@ -21,6 +21,7 @@ groups:
         annotations:
           summary: Target down ({{ $labels.job }} {{ $labels.instance }})
           description: "vmagent can't scrape {{ $labels.instance }} (job {{ $labels.job }}).\n  LABELS = {{ $labels }}"
+          tested: "2026-10-17"
       # Alerts that fired but were never delivered: ntfy refusing a notification (it doesn't
       # retry a 400), or ntfy.sh unreachable. This one is a single short alert, so it gets
       # through whatever was too big; if ntfy itself is down, Grafana still shows it.
