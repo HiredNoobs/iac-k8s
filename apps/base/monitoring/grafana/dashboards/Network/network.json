@@ -529,6 +529,194 @@
     },
     {
       "type": "table",
+      "title": "Other DNS servers",
+      "id": 26,
+      "description": "Where the router sent queries instead of Pi-hole (192.168.111.100): its fallback upstream when Pi-hole doesn't answer, so these queries weren't filtered. Pi-hole being down or slow shows here. A device using its own DNS server directly (not the router) isn't in the router's DNS log.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" network.protocol:=dns event.action:=dns-forwarded -destination.ip:=192.168.111.100 | stats by (destination.ip) count() as queries, count_uniq(client.ip) as clients, count_uniq(dns.question.name) as domains, max(_time) as _time | sort by (queries desc)"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "queries",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "clients",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "domains",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "destination.ip": 0,
+              "queries": 1,
+              "clients": 2,
+              "domains": 3,
+              "Time": 4
+            },
+            "renameByName": {
+              "destination.ip": "DNS server",
+              "queries": "Queries",
+              "clients": "Clients",
+              "domains": "Domains",
+              "Time": "Last used"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Queries not via Pi-hole",
+      "id": 27,
+      "description": "Each name the router looked up somewhere other than Pi-hole, who asked (the client from log-queries=extra) and which DNS server answered it.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 8,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" network.protocol:=dns event.action:=dns-forwarded -destination.ip:=192.168.111.100 | stats by (destination.ip, dns.question.name, client.ip) count() as queries, max(_time) as _time | sort by (_time desc) | limit 200"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "queries",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "destination.ip": 0,
+              "dns.question.name": 1,
+              "client.ip": 2,
+              "queries": 3,
+              "Time": 4
+            },
+            "renameByName": {
+              "destination.ip": "DNS server",
+              "dns.question.name": "Domain",
+              "client.ip": "Client",
+              "queries": "Queries",
+              "Time": "Last seen"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
       "title": "Top domains",
       "id": 10,
       "description": "The most asked-for names, with how many clients asked.",
@@ -540,7 +728,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 13
+        "y": 22
       },
       "targets": [
         {
@@ -632,7 +820,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 13
+        "y": 22
       },
       "targets": [
         {
@@ -742,7 +930,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 13
+        "y": 22
       },
       "targets": [
         {
@@ -824,7 +1012,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 32
       },
       "panels": []
     },
@@ -841,7 +1029,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 24
+        "y": 33
       },
       "targets": [
         {
@@ -901,7 +1089,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 24
+        "y": 33
       },
       "targets": [
         {
@@ -961,7 +1149,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 24
+        "y": 33
       },
       "targets": [
         {
@@ -1025,7 +1213,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 24
+        "y": 33
       },
       "targets": [
         {
@@ -1085,7 +1273,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 24
+        "y": 33
       },
       "targets": [
         {
@@ -1145,7 +1333,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 24
+        "y": 33
       },
       "targets": [
         {
@@ -1205,7 +1393,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 37
       },
       "targets": [
         {
@@ -1273,7 +1461,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 37
       },
       "targets": [
         {
@@ -1330,7 +1518,7 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 36
+        "y": 45
       },
       "targets": [
         {
@@ -1440,7 +1628,7 @@
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 36
+        "y": 45
       },
       "targets": [
         {
@@ -1534,7 +1722,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 36
+        "y": 45
       },
       "targets": [
         {
@@ -1644,7 +1832,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 54
       },
       "targets": [
         {
