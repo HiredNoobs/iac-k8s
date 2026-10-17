@@ -41,6 +41,7 @@ groups:
             entry can be a shared host (a workers.dev name). Trigger: from a LAN client, look
             up a domain from https://threatfox.abuse.ch/export/csv/domains/recent/ (nslookup
             <domain>); only the lookup happens, Pi-hole may block it.
+          tested: "2026-10-17"
 
       # A name that isn't on the lists resolving to an address that is: a fresh domain for a
       # known C2 server.
@@ -72,6 +73,7 @@ groups:
             Trigger: from a LAN client, nslookup <a-b-c-d>.nip.io for an address a.b.c.d from
             https://threatfox.abuse.ch/export/csv/ip-port/recent/ (nip.io answers with the
             address in the name; nothing connects to it).
+          tested: "2026-10-17"
 
       # A known-bad address in a firewall line or a journal (an SSH login attempt, ...).
       # Packets from the internet the firewall dropped are left out: scanners and botnets hit
@@ -105,3 +107,4 @@ groups:
             "Failed password for invalid user ti-test from <a.b.c.d> port 22 ssh2" with an
             address from https://threatfox.abuse.ch/export/csv/ip-port/recent/ (a test line,
             nothing connects; SshLoginFailure may fire too).
+          tested: "2026-10-17"
