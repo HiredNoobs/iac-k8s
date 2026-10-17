@@ -1,0 +1,113 @@
+# Unit tests for config/aggregator/threat-intel.yaml (how to run them: tests/collector/pipeline.yaml),
+# run from tests/ so threat/indicators.csv is the made-up indicators there: bad.example.com
+# (ThreatFox), malware.example.net (URLhaus) and 198.51.100.66 (in both).
+tests:
+  - name: a LAN device looking up a known-bad domain, end to end
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: 4711 192.168.50.56/53124 query[A] bad.example.com from 192.168.50.56",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02.105+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dns-query")
+              assert_eq!(get!(., ["threat.enrichments.matched.type"]), "enrichment")
+              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["bad.example.com"])
+              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["dns.question.name"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.type"]), ["domain-name"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["ThreatFox"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.description"]), ["Vidar (botnet_cc)"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.confidence"]), ["High"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.first_seen"]), ["2026-10-17T18:05:48Z"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.reference"]), ["https://threatfox.abuse.ch/ioc/1/"])
+
+  - name: an answer resolving to an address in both feeds, and its name in one
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: 4711 192.168.50.56/53124 reply malware.example.net is 198.51.100.66",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02.110+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dns-reply")
+              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["dns.question.name", "dns.resolved_ip", "dns.resolved_ip"])
+              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["malware.example.net", "198.51.100.66", "198.51.100.66"])
+              # The two rows for the address come in no particular order.
+              providers = array!(get!(., ["threat.enrichments.indicator.provider"]))
+              assert_eq!(length(providers), 3)
+              assert_eq!(providers[0], "URLhaus")
+              assert!(includes(providers, "ThreatFox"))
+
+  - name: a known-bad destination the firewall dropped from the LAN
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<4>Oct 16 15:41:10 RT-BE86U-FFA0-1F4D20D-C kernel: DROP IN=br0 OUT=eth0 MAC=a0:36:bc:12:34:56:00:1b:21:aa:bb:cc:08:00 SRC=192.168.50.56 DST=198.51.100.66 LEN=60 TOS=0x00 PREC=0x00 TTL=63 ID=1 PROTO=TCP SPT=50000 DPT=443 WINDOW=64240 RES=0x00 SYN URGP=0",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:41:10.105+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "drop")
+              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["destination.ip", "destination.ip"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.type"]), ["ipv4-addr", "ipv4-addr"])
+
+  - name: a name in another case still matches
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "dns.question.name": "Bad.Example.COM"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["bad.example.com"])
+
+  - name: nothing known gets no threat fields
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "dns.question.name": "www.example.com", "dns.resolved_ip": ["93.184.215.14"], "source.ip": "192.168.50.56", "destination.ip": "203.0.113.9"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert!(!exists(."threat.enrichments.matched.atomic"))
+              assert!(!exists(."threat.enrichments.indicator.provider"))
+
+  - name: a parent or child domain isn't a match (exact values only)
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "dns.question.name": "www.bad.example.com"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."threat.enrichments.matched.atomic"))

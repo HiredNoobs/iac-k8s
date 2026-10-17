@@ -7,8 +7,9 @@
 # to service.yaml's talos-logs. vector-aggregator (aggregator.yaml, config/aggregator/): the LAN's
 # syslog, relayed by rsyslog (apps/base/rsyslog) to service.yaml, and the prx-999 VMs' journals,
 # sent by their own Vector (iac-homelab's vector role) through journald-route.yaml, with where
-# their public addresses are (config/aggregator/geo.yaml, DB-IP's data fetched by
-# scripts/geodata.sh, refreshed by geodata-refresh.yaml). Both end in config/common/.
+# their public addresses are (config/aggregator/geo.yaml, DB-IP's data, scripts/geodata.sh) and
+# what's known-bad (config/aggregator/threat-intel.yaml, abuse.ch's, scripts/threatintel.py), both
+# refreshed by aggregator-refresh.yaml. Both end in config/common/.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: vector
@@ -18,7 +19,7 @@ resources:
   - rbac.yaml
   - daemonset.yaml
   - aggregator.yaml
-  - geodata-refresh.yaml
+  - aggregator-refresh.yaml
   - service.yaml
   - journald-certificate.yaml
   - journald-route.yaml
@@ -50,7 +51,9 @@ configMapGenerator:
       - config/aggregator/handoff.yaml
       - config/aggregator/journald.yaml
       - config/aggregator/syslog.yaml
-  # The aggregator's init container fetches its geo data with it.
-  - name: vector-geodata
+      - config/aggregator/threat-intel.yaml
+  # The aggregator's init containers fetch its geo data and threat intel with them.
+  - name: vector-scripts
     files:
       - scripts/geodata.sh
+      - scripts/threatintel.py

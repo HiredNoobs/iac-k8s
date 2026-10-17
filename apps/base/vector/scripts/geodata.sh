@@ -4,8 +4,8 @@
 # CC BY 4.0, monthly) into $GEO_DIR as city.mmdb and asn.mmdb. Each file is this month's, else
 # last month's (a new month's is out a few days in), else the copy already there: the pod starts
 # with old data when DB-IP can't be reached, and only fails without any. A file that's already
-# the newest month isn't downloaded again, so restarts are cheap (geodata-refresh.yaml restarts
-# the aggregator weekly).
+# the newest month isn't downloaded again, so restarts are cheap (aggregator-refresh.yaml restarts
+# the aggregator every 6 hours, for its threat intel).
 set -eu
 
 dir=${GEO_DIR:-/var/lib/vector/geo}

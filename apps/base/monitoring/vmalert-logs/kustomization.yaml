@@ -21,5 +21,6 @@ configMapGenerator:
       - rules/lldap.yml
       - rules/redis.yml
       - rules/router.yml
+      - rules/threat-intel.yml
       - rules/vaultwarden.yml
       - rules/vector.yml
