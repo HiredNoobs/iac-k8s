@@ -4,8 +4,8 @@
 # rabbitmqClusterReference.connectionSecret (see apps/base/rabbitmq/operator-connection.yaml).
 #
 # Upstream only ships release manifests (no chart), vendored unmodified:
-# https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.3/messaging-topology-operator-with-certmanager.yaml
-# sha256 73a45a423b3abb9dddfa84248e60699f69a4dbcf3456830b9af62ef496e1e549. Renovate bumps the
+# https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.4/messaging-topology-operator-with-certmanager.yaml
+# sha256 11a390b02c74397251cdcbee7efac01b1cafc08ac041cd7ab2d69696b6fac0d8. Renovate bumps the
 # image in the patch below and .forgejo/scripts/update-pins.sh replaces the file, URL and checksum
 # with the new release's (by hand: bump the image, then run the script).
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -48,7 +48,7 @@ patches:
           spec:
             containers:
               - name: manager
-                image: ghcr.io/rabbitmq/messaging-topology-operator:1.20.3@sha256:f377d3c3e2215a8dfb8a7a5ab953ef7f180f295c401e5d2c2060f3b0748fefd6
+                image: ghcr.io/rabbitmq/messaging-topology-operator:1.20.4@sha256:27988ec3a9f23dfa9f4581985e0fdaf9c1267b0a8708acdc50fe5ba04d6e9254
                 # Upstream requests 300m, far more than it uses here.
                 resources:
                   requests:
