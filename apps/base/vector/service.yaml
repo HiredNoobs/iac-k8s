@@ -1,6 +1,5 @@
 # Where rsyslog (apps/base/rsyslog) sends the LAN's syslog, and the Gateway the prx-999 VMs'
-# journals (journald-route.yaml): any node's Vector takes them, so a node going away doesn't stop
-# them.
+# journals (journald-route.yaml): vector-aggregator (aggregator.yaml).
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,6 +9,7 @@ metadata:
 spec:
   selector:
     app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
   ports:
     - name: syslog
       port: 5514
@@ -25,6 +25,7 @@ metadata:
 spec:
   selector:
     app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
   ports:
     - name: journald
       port: 8686
@@ -48,6 +49,7 @@ spec:
   internalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: vector
+    app.kubernetes.io/component: collector
   ports:
     - name: talos
       port: 6050

@@ -1,5 +1,5 @@
-# Unit tests for config/talos.yaml (how to run them: tests/pipeline.yaml). The lines are real
-# ones from the nodes unless noted.
+# Unit tests for config/collector/talos.yaml (how to run them: tests/collector/pipeline.yaml). The lines
+# are real ones from the nodes unless noted.
 tests:
   - name: Talos service line, the service's own fields kept (apid)
     inputs:

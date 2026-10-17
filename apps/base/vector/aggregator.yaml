@@ -1,0 +1,125 @@
+# vector-aggregator: what other machines send (config/aggregator/), so the collectors
+# (daemonset.yaml) only read their own node. The LAN's syslog from rsyslog (apps/base/rsyslog),
+# with the Proxmox hosts' journals in it, and the prx-999 VMs' journals from the Gateway
+# (journald-route.yaml), both through service.yaml. One pod: while it's down rsyslog queues
+# (10000 messages, in memory) and the VMs' Vector buffers on disk.
+#
+# Its own volume holds the disk buffer for VictoriaLogs. Recreate: the volume attaches to one
+# node at a time. If its node goes down, Longhorn's nodeDownPodDeletionPolicy lets the new pod
+# start elsewhere (infrastructure/controllers/longhorn).
+#
+# app.kubernetes.io/name vector like the collectors, so vmagent scrapes it as job vector and the
+# Vector alerts cover it; app.kubernetes.io/component tells them apart.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vector-aggregator
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector-aggregator
+  labels:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vector
+      app.kubernetes.io/component: aggregator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vector
+        app.kubernetes.io/component: aggregator
+      annotations:
+        # Scraped by vmagent's pods job: lines read and sent, errors (TargetDown if it's gone).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9598"
+    spec:
+      # Reads nothing from the node: no service account token, not root.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vector
+          image: timberio/vector:0.59.0-distroless-static@sha256:2138c72ef15477d3a60126da851407a198ec61d2ff4cd600a4e69db5f6a29ff7
+          args: ["--config", "/etc/vector/*.yaml"]
+          env:
+            # The node it runs on, for a pipeline error's host (config/common/pipeline.yaml).
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NODE_DOMAIN
+              value: hirednoobs.com
+          ports:
+            - name: http-metrics
+              containerPort: 9598
+              protocol: TCP
+            # Syslog from rsyslog (service.yaml).
+            - name: syslog
+              containerPort: 5514
+              protocol: TCP
+            # The prx-999 VMs' journals, through the Gateway (journald-route.yaml).
+            - name: journald
+              containerPort: 8686
+              protocol: TCP
+          # Only sent traffic once it's listening.
+          readinessProbe:
+            tcpSocket:
+              port: syslog
+            periodSeconds: 10
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vector
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/vector
+            - name: tls
+              mountPath: /etc/vector/tls
+              readOnly: true
+            - name: journald-tls
+              mountPath: /etc/vector/journald-tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: vector-aggregator
+        - name: data
+          persistentVolumeClaim:
+            claimName: vector-aggregator
+        - name: tls
+          secret:
+            secretName: vector-tls
+        - name: journald-tls
+          secret:
+            secretName: vector-journald-tls

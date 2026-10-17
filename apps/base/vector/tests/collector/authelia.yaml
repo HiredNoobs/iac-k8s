@@ -1,4 +1,4 @@
-# Unit tests for config/authelia.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/authelia.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: Authelia failed first factor, banned
     inputs:

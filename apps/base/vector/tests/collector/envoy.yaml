@@ -1,4 +1,4 @@
-# Unit tests for config/envoy.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/envoy.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: Envoy access log line
     inputs:

@@ -1,4 +1,4 @@
-# Unit tests for config/grafana.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/grafana.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: Grafana request, a logged-in user
     inputs:

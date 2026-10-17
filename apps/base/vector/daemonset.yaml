@@ -1,9 +1,12 @@
-# Vector (config/) on every node: every pod's log files (/var/log/pods), and on the control
-# planes kube-apiserver's audit log (/var/log/audit/kube, as its own user, 65534). Root with only
-# CAP_DAC_READ_SEARCH: it can read those files and write its read positions and buffer to the
-# node (/var/lib/vector), nothing else. Its service account reads pods, namespaces and nodes
-# (rbac.yaml) for the logs' metadata. Any node's Vector also takes the LAN's syslog from rsyslog
-# and the prx-999 VMs' journals from the Gateway (service.yaml).
+# The collectors: Vector (config/common/, config/collector/) on every node: every pod's log files
+# (/var/log/pods), on the control planes kube-apiserver's audit log (/var/log/audit/kube, as its own
+# user, 65534), and the node's own Talos logs (service.yaml's talos-logs). Root with only
+# CAP_DAC_READ_SEARCH: it can read those files and write its read positions and buffer to the node
+# (/var/lib/vector), nothing else. Its service account reads pods, namespaces and nodes (rbac.yaml)
+# for the logs' metadata. What other machines send goes to vector-aggregator (aggregator.yaml).
+#
+# The selector is the DaemonSet's first one (it can't change); the Services pick these pods by
+# app.kubernetes.io/component too, as the aggregator's pods are app.kubernetes.io/name vector.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -18,6 +21,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: vector
+        app.kubernetes.io/component: collector
         vector.dev/exclude: "true"
       annotations:
         # Scraped by vmagent's pods job: lines read and sent, errors (TargetDown if it's gone).
@@ -52,14 +56,6 @@ spec:
             - name: http-metrics
               containerPort: 9598
               protocol: TCP
-            # Syslog from rsyslog (service.yaml).
-            - name: syslog
-              containerPort: 5514
-              protocol: TCP
-            # The prx-999 VMs' journals, through the Gateway (journald-route.yaml).
-            - name: journald
-              containerPort: 8686
-              protocol: TCP
             # The node's own Talos logs (service.yaml's talos-logs).
             - name: talos
               containerPort: 6050
@@ -93,9 +89,6 @@ spec:
             - name: tls
               mountPath: /etc/vector/tls
               readOnly: true
-            - name: journald-tls
-              mountPath: /etc/vector/journald-tls
-              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -118,6 +111,3 @@ spec:
         - name: tls
           secret:
             secretName: vector-tls
-        - name: journald-tls
-          secret:
-            secretName: vector-journald-tls

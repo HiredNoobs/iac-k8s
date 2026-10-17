@@ -1,5 +1,5 @@
 # The router's syslog (event.dataset syslog.log from 192.168.111.1, through rsyslog and Vector's
-# config/syslog.yaml): its firewall's dropped packets (event.action drop, source.*,
+# config/aggregator/syslog.yaml): its firewall's dropped packets (event.action drop, source.*,
 # destination.*, network.transport) and its DNS queries (dnsmasq log-queries, dns.*).
 #
 # Each group's interval is also the window its queries count over.

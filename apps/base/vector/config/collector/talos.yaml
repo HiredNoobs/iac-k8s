@@ -75,7 +75,7 @@ transforms:
           ._time = parse_timestamp(string!(k.time), "%+") ?? ._time
           ."log.syslog.facility.name" = k.facility
           ."log.syslog.severity.name" = k.severity
-          # Normalised with the others (pipeline.yaml's ecs).
+          # Normalised with the others (../common/pipeline.yaml's ecs).
           .level = k.severity
           mapped = true
         }

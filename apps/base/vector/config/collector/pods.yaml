@@ -1,0 +1,98 @@
+# Pod logs, read by the Vector on each node (daemonset.yaml): every container's log lines
+# (kubernetes_logs), with their namespace, pod, container, node and the pod's labels under
+# Elastic's names (kubernetes.namespace, kubernetes.pod.name, kubernetes.pod.ip,
+# kubernetes.container.name, kubernetes.node.name, kubernetes.labels.*), the container's image, id
+# and runtime (container.*), and stdout or stderr (Log.Stream). A JSON line is split into its
+# fields: the first of message, msg, log becomes _msg and the first of time, timestamp, ts, t
+# (Grafana's) that parses becomes _time (otherwise the time the container runtime wrote the line).
+# Any other line is _msg as it is. Then each source's own parser (the other files here), and the
+# common fields (../common/pipeline.yaml).
+
+sources:
+  # Not Vector's own pods (the vector.dev/exclude label, daemonset.yaml): its errors about
+  # sending would be sent through itself. Its metrics show them.
+  pod_logs:
+    type: kubernetes_logs
+    # Without a checkpoint (first start), from now rather than every file on the node. Files
+    # found later (new pods, rotations) are read from their start.
+    read_from: end
+
+transforms:
+  pods:
+    type: remap
+    inputs: [pod_logs]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      meta = {
+        "namespace": .kubernetes.pod_namespace,
+        "pod": {"name": .kubernetes.pod_name, "ip": .kubernetes.pod_ip},
+        "container": {"name": .kubernetes.container_name},
+        "node": {"name": .kubernetes.pod_node_name},
+        "labels": .kubernetes.pod_labels,
+      }
+      container = {"image.name": .kubernetes.container_image}
+      # containerd://<id>
+      runtime, err = parse_regex(string(.kubernetes.container_id) ?? "", r'^(?P<runtime>[a-z]+)://(?P<id>\S+)$')
+      if err == null { container."id" = runtime.id; container."runtime" = runtime.runtime }
+      # Without colour codes (RabbitMQ's, ...): they'd break text searches. Only the escape
+      # sequences (strip_ansi_escape_codes also takes tabs, which zap's console format needs).
+      line = replace(string(.message) ?? "", r'\x1b\[[0-9;]*[A-Za-z]', "")
+      written = .timestamp
+      output_stream = .stream
+
+      parsed, err = parse_json(line)
+      if err == null && is_object(parsed) {
+        . = object!(parsed)
+        if is_string(.message) && .message != "" {
+          ._msg = del(.message)
+        } else if is_string(.msg) && .msg != "" {
+          ._msg = del(.msg)
+        } else if is_string(.log) && .log != "" {
+          ._msg = del(.log)
+        }
+        # RFC 3339 strings, or Unix seconds as a number (zap's default).
+        t = null
+        for_each(["time", "timestamp", "ts", "t"]) -> |_i, key| {
+          v = get!(., [key])
+          if t == null && v != null {
+            if is_string(v) {
+              t = parse_timestamp(string(v) ?? "", "%+") ?? null
+            } else if is_float(v) || is_integer(v) {
+              ms = to_int((to_float(v) ?? 0.0) * 1000)
+              t = from_unix_timestamp(ms, unit: "milliseconds") ?? null
+            }
+            if t != null { . = remove!(., [key]) }
+          }
+        }
+        if t == null { t = written }
+        ._time = t
+      } else {
+        . = {"_msg": line, "_time": written}
+        # For generic's text formats.
+        %text = true
+      }
+      .kubernetes = compact(meta)
+      for_each(container) -> |key, value| {
+        if value != null { . = set!(., ["container." + key], value) }
+      }
+      ."Log.Stream" = output_stream
+      # When Vector read it (_time is when it happened, or was written).
+      ."event.created" = now()
+
+  # Each source with its own fields to its remap (by namespace and container, which the pod can't
+  # choose), the rest to generic (generic.yaml).
+  by_source:
+    type: route
+    inputs: [pods]
+    route:
+      envoy: .kubernetes.namespace == "envoy-gateway" && .kubernetes.container.name == "envoy"
+      authelia: .kubernetes.namespace == "authelia" && .kubernetes.container.name == "authelia"
+      falco: .kubernetes.namespace == "falco" && .kubernetes.container.name == "falco"
+      lldap: .kubernetes.namespace == "lldap" && includes(["lldap", "bootstrap"], .kubernetes.container.name)
+      vaultwarden: .kubernetes.namespace == "vaultwarden" && .kubernetes.container.name == "vaultwarden"
+      coredns: .kubernetes.namespace == "kube-system" && .kubernetes.container.name == "coredns"
+      mealie: .kubernetes.namespace == "mealie" && .kubernetes.container.name == "mealie"
+      grafana: .kubernetes.namespace == "monitoring" && .kubernetes.container.name == "grafana"
+      ghostunnel: .kubernetes.namespace == "lldap" && .kubernetes.container.name == "ghostunnel"
+      kubectl: .kubernetes.namespace == "kubectl" && .kubernetes.container.name == "events"
