@@ -32,17 +32,32 @@ fetch() {
       echo "$name: $m, up to date"
       return 0
     fi
-    rm -f "$dir/$name.tmp"
-    if wget -q -T 60 -O - "$url/$edition-$m.mmdb.gz" | gunzip -c > "$dir/$name.tmp" \
-      && [ -s "$dir/$name.tmp" ] && grep -q 'MaxMind.com' "$dir/$name.tmp"; then
-      mv "$dir/$name.tmp" "$dir/$name.mmdb"
-      echo "$m" > "$dir/$name.month"
-      echo "$name: downloaded $m"
-      return 0
+    # A step at a time, each failure with its exit code and message (137: killed, out of memory).
+    rm -f "$dir/$name.gz" "$dir/$name.tmp"
+    rc=0
+    out=$(wget -q -T 60 -O "$dir/$name.gz" "$url/$edition-$m.mmdb.gz" 2>&1) || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "$name: $m: download failed (exit $rc): $out"
+      continue
     fi
-    echo "$name: no $m from $url"
+    out=$(gunzip -c "$dir/$name.gz" 2>&1 > "$dir/$name.tmp") || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "$name: $m: unpacking failed (exit $rc): $out"
+      continue
+    fi
+    # The smallest, ASN, is about 9 MB: anything under 1 MB isn't the database.
+    size=$(wc -c < "$dir/$name.tmp")
+    if [ "$size" -lt 1000000 ]; then
+      echo "$name: $m: only $size bytes"
+      continue
+    fi
+    mv "$dir/$name.tmp" "$dir/$name.mmdb"
+    rm -f "$dir/$name.gz"
+    echo "$m" > "$dir/$name.month"
+    echo "$name: downloaded $m ($size bytes)"
+    return 0
   done
-  rm -f "$dir/$name.tmp"
+  rm -f "$dir/$name.gz" "$dir/$name.tmp"
   if [ -s "$dir/$name.mmdb" ]; then
     echo "$name: keeping ${have:-an older copy}"
     return 0

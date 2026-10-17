@@ -73,12 +73,14 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          # Writing the 127 MB City file fills the page cache, which counts against the limit:
+          # at 64Mi the download was killed partway on the Longhorn volume.
           resources:
             requests:
               cpu: 10m
-              memory: 16Mi
+              memory: 32Mi
             limits:
-              memory: 64Mi
+              memory: 512Mi
           volumeMounts:
             - name: data
               mountPath: /var/lib/vector
