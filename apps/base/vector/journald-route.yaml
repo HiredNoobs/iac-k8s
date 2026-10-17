@@ -1,5 +1,5 @@
 # journald.hirednoobs.com/journald: the prx-999 VMs' Vector (iac-homelab's vector role) sends
-# their journals here, to the Vector pods' journald listener (config/journald.yaml's journald_relay).
+# their journals here, to vector-aggregator's journald listener (config/aggregator/journald.yaml's journald_relay).
 # Machines can't log in to Authelia, so instead of it only the VMs' addresses are let through
 # (the client's own address: externalTrafficPolicy keeps it, and the Gateway trusts no
 # X-Forwarded-For), and only this path is routed. Anything on those VMs can write logs here, a CI

@@ -1,0 +1,25 @@
+# What this side hands to the common end (../common/pipeline.yaml). Pass-throughs, so the common
+# file names the same four inputs in both Vectors. Add a new parser here.
+
+transforms:
+  # The lines a parser failed on, for unparsed.
+  to_unparsed:
+    type: filter
+    inputs: [syslog.dropped, syslog_journal.dropped, journald.dropped]
+    condition: "true"
+
+  # The parsed lines, for the common fields.
+  to_ecs:
+    type: filter
+    inputs: [syslog, journald]
+    condition: "true"
+
+  to_final:
+    type: filter
+    inputs: [ecs]
+    condition: "true"
+
+  to_victorialogs:
+    type: filter
+    inputs: [final]
+    condition: "true"

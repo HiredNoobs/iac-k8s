@@ -49,6 +49,11 @@ spec:
       # Moves a copy when a volume's copies share a host (e.g. after a host is added), only as
       # far as needed: best-effort would also even out the copies per node.
       replicaAutoBalance: least-effort
+      # When a node goes down, Kubernetes marks its pods for deletion (after ~5 minutes) but
+      # can't finish while the node is unreachable, so their volumes stay attached to it and the
+      # replacements can't start. This deletes those pods, detaching the volumes: the new pod
+      # uses the copy on another host, which has every write Longhorn acknowledged.
+      nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
     # The default StorageClass, longhorn. longhorn-single (one copy) is in
     # infrastructure/configs/longhorn.
     persistence:

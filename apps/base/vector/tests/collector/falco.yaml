@@ -1,4 +1,4 @@
-# Unit tests for config/falco.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/falco.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: Falco alert, ECS fields
     inputs:

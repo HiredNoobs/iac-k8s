@@ -1,4 +1,4 @@
-# Unit tests for config/kubernetes-audit.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/kubernetes-audit.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: an audit log line that isn't JSON is kept
     inputs:

@@ -1,4 +1,4 @@
-# Unit tests for config/journald.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/aggregator/journald.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: journald entry, the common fields (cron)
     inputs:

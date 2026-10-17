@@ -1,4 +1,4 @@
-# Unit tests for config/lldap.yaml (how to run them: tests/pipeline.yaml).
+# Unit tests for config/collector/lldap.yaml (how to run them: tests/collector/pipeline.yaml).
 tests:
   - name: lldap's own line (the sample)
     inputs:
