@@ -9,8 +9,8 @@ on:
 
 env:
   # renovate: datasource=github-releases depName=kubernetes-sigs/kustomize extractVersion=^kustomize/v(?<version>.+)$
-  KUSTOMIZE_VERSION: "5.8.2"
-  KUSTOMIZE_SHA256: "06af0a202c2b831207d0173f9c9cdb1b30abceca0747cb3fbb72792d26055c95"
+  KUSTOMIZE_VERSION: "5.8.3"
+  KUSTOMIZE_SHA256: "cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61"
   # renovate: datasource=github-releases depName=yannh/kubeconform extractVersion=^v(?<version>.+)$
   KUBECONFORM_VERSION: "0.8.0"
   KUBECONFORM_SHA256: "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
