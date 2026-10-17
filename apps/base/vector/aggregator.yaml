@@ -4,10 +4,11 @@
 # (journald-route.yaml), both through service.yaml. One pod: while it's down rsyslog queues
 # (10000 messages, in memory) and the VMs' Vector buffers on disk.
 #
-# Its own volume holds the disk buffer for VictoriaLogs and the geo data (config/aggregator/
-# geo.yaml): DB-IP's City and ASN Lite, fetched by the init container (scripts/geodata.sh) each
-# start, and restarted weekly for a new month (geodata-refresh.yaml). Recreate: the volume
-# attaches to one node at a time. If its node goes down, Longhorn's nodeDownPodDeletionPolicy lets the new pod
+# Its own volume holds the disk buffer for VictoriaLogs, the geo data (config/aggregator/geo.yaml:
+# DB-IP's City and ASN Lite, scripts/geodata.sh) and the threat intel (config/aggregator/
+# threat-intel.yaml: abuse.ch's ThreatFox and URLhaus, scripts/threatintel.py), both fetched by
+# init containers each start; it's restarted every 6 hours for new indicators
+# (aggregator-refresh.yaml). Recreate: the volume attaches to one node at a time. If its node goes down, Longhorn's nodeDownPodDeletionPolicy lets the new pod
 # start elsewhere (infrastructure/controllers/longhorn).
 #
 # app.kubernetes.io/name vector like the collectors, so vmagent scrapes it as job vector and the
@@ -87,11 +88,36 @@ spec:
             - name: scripts
               mountPath: /scripts
               readOnly: true
+        # abuse.ch's indicators into the volume, or each feed's last copy if it can't be fetched.
+        - name: threatintel
+          image: docker.io/library/python:3.14.8-alpine3.24@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
+          # -B: no .pyc next to the script (read-only).
+          command: ["python", "-B", "/scripts/threatintel.py"]
+          env:
+            - name: TI_DIR
+              value: /var/lib/vector/threat
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/vector
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
       containers:
         - name: vector
           image: timberio/vector:0.59.0-distroless-static@sha256:2138c72ef15477d3a60126da851407a198ec61d2ff4cd600a4e69db5f6a29ff7
           args: ["--config", "/etc/vector/*.yaml"]
-          # geo.yaml's paths are relative to it (geo/city.mmdb).
+          # geo.yaml's and threat-intel.yaml's paths are relative to it (geo/city.mmdb, threat/).
           workingDir: /var/lib/vector
           env:
             # The node it runs on, for a pipeline error's host (config/common/pipeline.yaml).
@@ -151,7 +177,7 @@ spec:
             claimName: vector-aggregator
         - name: scripts
           configMap:
-            name: vector-geodata
+            name: vector-scripts
         - name: tls
           secret:
             secretName: vector-tls

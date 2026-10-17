@@ -1,0 +1,5 @@
+value,type,provider,description,confidence,first_seen,reference
+bad.example.com,domain-name,ThreatFox,Vidar (botnet_cc),High,2026-10-17T18:05:48Z,https://threatfox.abuse.ch/ioc/1/
+198.51.100.66,ipv4-addr,ThreatFox,Remcos (botnet_cc),High,2026-10-17T17:11:16Z,https://threatfox.abuse.ch/ioc/2/
+198.51.100.66,ipv4-addr,URLhaus,Malware distribution (payload_delivery),Not Specified,,https://urlhaus.abuse.ch/host/198.51.100.66/
+malware.example.net,domain-name,URLhaus,Malware distribution (payload_delivery),Not Specified,,https://urlhaus.abuse.ch/host/malware.example.net/

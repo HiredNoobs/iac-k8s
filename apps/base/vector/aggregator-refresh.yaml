@@ -1,18 +1,19 @@
-# Restarts vector-aggregator weekly, so its init container fetches DB-IP's new month
-# (scripts/geodata.sh, aggregator.yaml): Vector only reads its geo data when it starts. A restart
-# with the newest month already there downloads nothing; the restart itself is a few seconds of
-# syslog and journals queued by their senders. A failed run is KubeJobFailed.
+# Restarts vector-aggregator every 6 hours, so its init containers fetch abuse.ch's threat intel
+# again (scripts/threatintel.py: ThreatFox adds indicators all day) and DB-IP's new month
+# (scripts/geodata.sh, which downloads nothing while it has the newest): Vector only reads them
+# when it starts (aggregator.yaml). Each restart is a few seconds of syslog and journals queued
+# by their senders. A failed run is KubeJobFailed.
 #
 # Its service account can only read and restart that Deployment.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: geodata-refresh
+  name: aggregator-refresh
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: geodata-refresh
+  name: aggregator-refresh
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -22,25 +23,24 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: geodata-refresh
+  name: aggregator-refresh
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: geodata-refresh
+  name: aggregator-refresh
 subjects:
   - kind: ServiceAccount
-    name: geodata-refresh
+    name: aggregator-refresh
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: geodata-refresh
+  name: aggregator-refresh
   labels:
     app.kubernetes.io/name: vector
-    app.kubernetes.io/component: geodata-refresh
+    app.kubernetes.io/component: aggregator-refresh
 spec:
-  # Mondays, early: DB-IP's new month is out within the first week.
-  schedule: "15 5 * * 1"
+  schedule: "15 */6 * * *"
   timeZone: Europe/London
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
@@ -52,9 +52,9 @@ spec:
         metadata:
           labels:
             app.kubernetes.io/name: vector
-            app.kubernetes.io/component: geodata-refresh
+            app.kubernetes.io/component: aggregator-refresh
         spec:
-          serviceAccountName: geodata-refresh
+          serviceAccountName: aggregator-refresh
           restartPolicy: Never
           # The image runs as root by default; kubectl needs no user of its own.
           securityContext:

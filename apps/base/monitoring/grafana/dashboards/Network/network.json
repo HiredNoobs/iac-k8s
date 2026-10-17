@@ -1509,7 +1509,7 @@
       "type": "geomap",
       "title": "Where they come from",
       "id": 28,
-      "description": "Dropped packets from the internet by where the source address is: one point per place, bigger for more packets. Approximate below country level. Where an address is: IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0.",
+      "description": "Dropped packets from the internet by where the source address is: one point per place, bigger for more packets. Approximate below country level. Map tiles from OpenStreetMap (© OpenStreetMap contributors; Grafana's default, CARTO, needs an API key). Where an address is: IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -1626,8 +1626,8 @@
           "showAttribution": true
         },
         "basemap": {
-          "type": "default",
-          "name": "Basemap",
+          "type": "osm-standard",
+          "name": "OpenStreetMap",
           "config": {}
         },
         "layers": [
@@ -2245,6 +2245,377 @@
         "prettifyLogMessage": false,
         "showCommonLabels": false,
         "showLabels": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "Known-bad (abuse.ch threat intel)",
+      "id": 31,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Known-bad lookups",
+      "id": 32,
+      "description": "DNS lookups of a domain on the lists (DnsLookupOfKnownBadDomain). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=dns-query threat.enrichments.matched.field:\"dns.question.name\" | count() as lookups"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Known-bad answers",
+      "id": 33,
+      "description": "Answers resolving an unlisted name to a listed address (DnsAnswerWithKnownBadIp). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=dns-reply threat.enrichments.matched.field:\"dns.resolved_ip\" -threat.enrichments.matched.field:\"dns.question.name\" | count() as answers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Known-bad addresses seen",
+      "id": 34,
+      "description": "Lines with a listed address as source or destination, without the internet's dropped packets (TrafficWithKnownBadIp). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range (threat.enrichments.matched.field:\"source.ip\" or threat.enrichments.matched.field:\"destination.ip\") -(event.action:=drop -source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:ipv4_range(\"10.0.0.0/8\") -source.ip:ipv4_range(\"172.16.0.0/12\")) | count() as lines"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Dropped from known-bad",
+      "id": 35,
+      "description": "Packets from listed addresses on the internet the firewall dropped: expected, no alert. abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "stats",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop threat.enrichments.matched.field:\"source.ip\" | count() as packets"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Matches",
+      "id": 36,
+      "description": "Every line that matched, by what matched and where: the indicator's page on abuse.ch in Reference. abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 79
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "_time:$__range threat.enrichments.matched.atomic:* | replace_regexp (`^\\[\"|\"\\]$`, \"\") at threat.enrichments.matched.atomic | replace (`\",\"`, \", \") at threat.enrichments.matched.atomic | replace_regexp (`^\\[\"|\"\\]$`, \"\") at threat.enrichments.matched.field | replace (`\",\"`, \", \") at threat.enrichments.matched.field | replace_regexp (`^\\[\"|\"\\]$`, \"\") at threat.enrichments.indicator.provider | replace (`\",\"`, \", \") at threat.enrichments.indicator.provider | replace_regexp (`^\\[\"|\"\\]$`, \"\") at threat.enrichments.indicator.description | replace (`\",\"`, \", \") at threat.enrichments.indicator.description | replace_regexp (`^\\[\"|\"\\]$`, \"\") at threat.enrichments.indicator.reference | replace (`\",\"`, \", \") at threat.enrichments.indicator.reference | stats by (event.action, client.ip, source.ip, threat.enrichments.matched.atomic, threat.enrichments.matched.field, threat.enrichments.indicator.provider, threat.enrichments.indicator.description, threat.enrichments.indicator.reference) count() as lines, max(_time) as _time | sort by (_time desc) | limit 200"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "lines",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "event.action": 1,
+              "client.ip": 2,
+              "source.ip": 3,
+              "threat.enrichments.matched.atomic": 4,
+              "threat.enrichments.matched.field": 5,
+              "threat.enrichments.indicator.provider": 6,
+              "threat.enrichments.indicator.description": 7,
+              "threat.enrichments.indicator.reference": 8,
+              "lines": 9
+            },
+            "renameByName": {
+              "Time": "Last seen",
+              "event.action": "Action",
+              "client.ip": "Client",
+              "source.ip": "Source",
+              "threat.enrichments.matched.atomic": "Matched",
+              "threat.enrichments.matched.field": "In",
+              "threat.enrichments.indicator.provider": "Feed",
+              "threat.enrichments.indicator.description": "Threat",
+              "threat.enrichments.indicator.reference": "Reference",
+              "lines": "Lines"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
       }
     }
   ]

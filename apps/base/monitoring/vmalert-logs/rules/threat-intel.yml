@@ -1,0 +1,107 @@
+# Known-bad domains and addresses: lines vector-aggregator matched against abuse.ch's ThreatFox
+# and URLhaus as they came in (apps/base/vector/config/aggregator/threat-intel.yaml), so the
+# router's DNS and firewall lines and the prx-999 VMs' and Proxmox hosts' journals. The match is
+# in threat.enrichments.*: the value, the field it was in, the feed, the malware and the
+# feed's confidence. Lists change all day: the aggregator fetches them every 6 hours.
+#
+# The matches are arrays (one item per match): the labels drop their brackets and quotes
+# ("ThreatFox, URLhaus"). Each group's interval is also the window its queries count over.
+groups:
+  - name: threat-intel
+    type: vlogs
+    interval: 5m
+    rules:
+      # A device asking the router for a name on the lists: malware calling home, a payload
+      # being fetched, or someone clicking a link. Pi-hole may block the answer, the lookup is
+      # still the sign.
+      - alert: DnsLookupOfKnownBadDomain
+        expr: >-
+          {event.dataset="syslog.log"} host.ip:="192.168.111.1" event.action:=dns-query
+          threat.enrichments.matched.field:"dns.question.name"
+          | copy client.ip as client, dns.question.name as domain,
+            threat.enrichments.indicator.provider as feed, threat.enrichments.indicator.description as threat
+          | replace_regexp (`^\["|"\]$`, "") at feed | replace (`","`, ", ") at feed
+          | replace_regexp (`^\["|"\]$`, "") at threat | replace (`","`, ", ") at threat
+          | stats by (client, domain, feed, threat) count() as lookups
+        labels:
+          severity: critical
+          source: router
+          mitre_tactic: command-and-control
+          mitre_technique: T1071.004
+        annotations:
+          summary: "{{ $labels.client }} looked up {{ $labels.domain }}, known-bad ({{ $labels.feed }}: {{ $labels.threat }})"
+          description: >-
+            A device asked the router for a domain abuse.ch lists as used by malware, in the
+            last 48 hours (ThreatFox) or serving malware now (URLhaus).
+          runbook: >-
+            The indicator: its reference (threat.enrichments.indicator.reference) on abuse.ch.
+            What else the device did: the Network dashboard's DNS tables for the client, and
+            {event.dataset="syslog.log"} client.ip:="{{ $labels.client }}" event.action:=dns-query.
+            Which device: its DHCP lease (event.action:dhcp-ack). A low-confidence ThreatFox
+            entry can be a shared host (a workers.dev name). Trigger: from a LAN client, look
+            up a domain from https://threatfox.abuse.ch/export/csv/domains/recent/ (nslookup
+            <domain>); only the lookup happens, Pi-hole may block it.
+
+      # A name that isn't on the lists resolving to an address that is: a fresh domain for a
+      # known C2 server.
+      - alert: DnsAnswerWithKnownBadIp
+        expr: >-
+          {event.dataset="syslog.log"} host.ip:="192.168.111.1" event.action:=dns-reply
+          threat.enrichments.matched.field:"dns.resolved_ip"
+          -threat.enrichments.matched.field:"dns.question.name"
+          | copy client.ip as client, dns.question.name as domain, dns.resolved_ip as addresses,
+            threat.enrichments.indicator.provider as feed, threat.enrichments.indicator.description as threat
+          | replace_regexp (`^\["|"\]$`, "") at addresses | replace (`","`, ", ") at addresses
+          | replace_regexp (`^\["|"\]$`, "") at feed | replace (`","`, ", ") at feed
+          | replace_regexp (`^\["|"\]$`, "") at threat | replace (`","`, ", ") at threat
+          | stats by (client, domain, addresses, feed, threat) count() as answers
+        labels:
+          severity: warning
+          source: router
+          mitre_tactic: command-and-control
+          mitre_technique: T1071
+        annotations:
+          summary: "{{ $labels.domain }} resolved to a known-bad address for {{ $labels.client }} ({{ $labels.feed }}: {{ $labels.threat }})"
+          description: >-
+            The router answered a device's lookup with an address abuse.ch lists as a malware
+            server, for a name that isn't listed itself.
+          runbook: >-
+            Which address matched: threat.enrichments.matched.atomic, and its reference on
+            abuse.ch. Whether the device then connected isn't logged (the router only logs
+            drops); its other lookups: {event.dataset="syslog.log"} client.ip:="{{ $labels.client }}".
+            Trigger: from a LAN client, nslookup <a-b-c-d>.nip.io for an address a.b.c.d from
+            https://threatfox.abuse.ch/export/csv/ip-port/recent/ (nip.io answers with the
+            address in the name; nothing connects to it).
+
+      # A known-bad address in a firewall line or a journal (an SSH login attempt, ...).
+      # Packets from the internet the firewall dropped are left out: scanners and botnets hit
+      # it all the time, constant and expected (as NetworkScanFromLan).
+      - alert: TrafficWithKnownBadIp
+        expr: >-
+          (threat.enrichments.matched.field:"source.ip" or threat.enrichments.matched.field:"destination.ip")
+          -(event.action:=drop -source.ip:ipv4_range("192.168.0.0/16") -source.ip:ipv4_range("10.0.0.0/8")
+          -source.ip:ipv4_range("172.16.0.0/12"))
+          | copy host.hostname as host, event.dataset as dataset, threat.enrichments.matched.atomic as address,
+            threat.enrichments.indicator.provider as feed, threat.enrichments.indicator.description as threat
+          | replace_regexp (`^\["|"\]$`, "") at address | replace (`","`, ", ") at address
+          | replace_regexp (`^\["|"\]$`, "") at feed | replace (`","`, ", ") at feed
+          | replace_regexp (`^\["|"\]$`, "") at threat | replace (`","`, ", ") at threat
+          | stats by (host, dataset, address, feed, threat) count() as lines
+        labels:
+          severity: warning
+          source: threat-intel
+          mitre_tactic: command-and-control
+          mitre_technique: T1071
+        annotations:
+          summary: "{{ $labels.host }} ({{ $labels.dataset }}) saw known-bad {{ $labels.address }} ({{ $labels.feed }}: {{ $labels.threat }})"
+          description: >-
+            An address abuse.ch lists as a malware server showed up in {{ $labels.dataset }} on
+            {{ $labels.host }}: a LAN device's packet to it the firewall dropped, or a login
+            attempt or connection from it.
+          runbook: >-
+            The lines: threat.enrichments.matched.atomic:"{{ $labels.address }}". Whether it's
+            to or from it: threat.enrichments.matched.field (source.ip, destination.ip). A login
+            from it: the host's auth logs, fail2ban. Trigger: on a prx-999 VM, logger -t sshd
+            "Failed password for invalid user ti-test from <a.b.c.d> port 22 ssh2" with an
+            address from https://threatfox.abuse.ch/export/csv/ip-port/recent/ (a test line,
+            nothing connects; SshLoginFailure may fire too).

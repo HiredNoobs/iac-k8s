@@ -1,0 +1,57 @@
+# Known-bad domains and addresses, after geo.yaml: a line's dns.question.name, dns.resolved_ip,
+# source.ip and destination.ip looked up exactly (no parent domains, no ranges) in abuse.ch's
+# ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), which the aggregator's
+# init container fetches each start (../../scripts/threatintel.py, ../../aggregator.yaml).
+#
+# A match is recorded as Elastic records an indicator match, under threat.enrichments: arrays,
+# an item per match (a line can match more than one), in step with each other:
+#   threat.enrichments.matched.atomic       the value that matched
+#   threat.enrichments.matched.field        the field it was in (dns.question.name, ...)
+#   threat.enrichments.matched.type         enrichment (matched as the line came in)
+#   threat.enrichments.indicator.type       domain-name, ipv4-addr, ipv6-addr
+#   threat.enrichments.indicator.provider   ThreatFox, URLhaus
+#   threat.enrichments.indicator.description  the malware and threat type (Vidar (botnet_cc))
+#   threat.enrichments.indicator.confidence   High, Medium, Low, Not Specified
+#   threat.enrichments.indicator.first_seen   when the feed first had it
+#   threat.enrichments.indicator.reference    its page on abuse.ch
+# The detections are apps/base/monitoring/vmalert-logs/rules/threat-intel.yml.
+#
+# The path is relative to the working directory, as geo.yaml's: /var/lib/vector for the
+# aggregator, tests/ for the tests (a few made-up indicators in tests/threat/).
+
+enrichment_tables:
+  threat_intel:
+    type: file
+    file:
+      path: threat/indicators.csv
+      encoding:
+        type: csv
+
+transforms:
+  threat_intel:
+    type: remap
+    inputs: [geo]
+    source: |
+      matches = []
+      for_each(["dns.question.name", "dns.resolved_ip", "source.ip", "destination.ip"]) -> |_i, field| {
+        value = get!(., [field])
+        values = if is_array(value) { array!(value) } else { [value] }
+        for_each(values) -> |_j, candidate| {
+          if is_string(candidate) && candidate != "" {
+            atomic = downcase(string!(candidate))
+            rows = find_enrichment_table_records("threat_intel", {"value": atomic}) ?? []
+            for_each(rows) -> |_k, row| {
+              matches = push(matches, {"field": field, "atomic": atomic, "row": row})
+            }
+          }
+        }
+      }
+      if matches != [] {
+        ."threat.enrichments.matched.type" = "enrichment"
+        ."threat.enrichments.matched.atomic" = map_values(matches) -> |m| { m.atomic }
+        ."threat.enrichments.matched.field" = map_values(matches) -> |m| { m.field }
+        for_each(["type", "provider", "description", "confidence", "first_seen", "reference"]) -> |_i, key| {
+          values = map_values(matches) -> |m| { get(m.row, [key]) ?? null }
+          . = set!(., ["threat.enrichments.indicator." + key], values)
+        }
+      }
