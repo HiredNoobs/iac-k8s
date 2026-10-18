@@ -15,164 +15,141 @@
   "hideDisabled": false,
   "techniques": [
     {
-      "techniqueID": "T1595.003",
-      "tactic": "reconnaissance",
-      "score": 2,
-      "comment": "HttpErrorBurst (tested 2026-10-13)\nScannerPathRequest (tested 2026-10-13)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1078",
-      "tactic": "initial-access",
-      "score": 2,
-      "comment": "HostConsoleLogin (tested 2026-10-16)\nKubeAPIUnexpectedSource (tested 2026-10-10)\nLoginFromUntrustedNetwork (untested)\nLoginOutsideHours (untested)\nProxmoxLoginUnexpectedUser (tested 2026-10-16)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1190",
-      "tactic": "initial-access",
-      "score": 2,
-      "comment": "VaultwardenAdminRequest (tested 2026-10-13)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1609",
-      "tactic": "execution",
-      "score": 2,
-      "comment": "KubeExecIntoPod (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1610",
-      "tactic": "execution",
-      "score": 2,
-      "comment": "KubeWorkloadChangeOutsideFlux (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1098",
-      "tactic": "persistence",
-      "score": 2,
-      "comment": "GrafanaUserChange (tested 2026-10-14)\nKubeRBACChange (tested 2026-10-14)\nLldapDirectoryDrift (tested 2026-10-14)\nVaultConfigChange (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1098.007",
-      "tactic": "persistence",
-      "score": 2,
-      "comment": "LldapAdminGroupGranted (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1078.001",
-      "tactic": "privilege-escalation",
-      "score": 2,
-      "comment": "VaultRootTokenUsed (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1548.003",
-      "tactic": "privilege-escalation",
-      "score": 2,
-      "comment": "SudoFailures (tested 2026-10-14)\nSudoUnexpectedUser (tested 2026-10-11)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1611",
-      "tactic": "privilege-escalation",
-      "score": 2,
-      "comment": "KubePodSecurityViolation (tested 2026-10-14)\nKubePrivilegedPodCreated (untested)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1070",
-      "tactic": "stealth",
-      "score": 2,
-      "comment": "MonitoringDataDeletion (tested 2026-10-13)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1685",
-      "tactic": "defense-impairment",
-      "score": 2,
-      "comment": "AlertSilenced (tested 2026-10-14)\nFluxResourceSuspended (untested)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1685.002",
-      "tactic": "defense-impairment",
-      "score": 2,
-      "comment": "VaultAuditDeviceChange (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1110",
-      "tactic": "credential-access",
-      "score": 2,
-      "comment": "AutheliaSecondFactorFailures (tested 2026-10-14)\nForgejoLoginFailures (tested 2026-10-14)\nProxmoxLoginFailures (tested 2026-10-16)\nSshAuthFailures (tested 2026-10-14)\nVaultLoginFailures (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1110.001",
-      "tactic": "credential-access",
-      "score": 2,
-      "comment": "AutheliaLoginFailures (tested 2026-10-14)\nVaultwardenLoginFailures (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1110.003",
-      "tactic": "credential-access",
-      "score": 2,
-      "comment": "AutheliaUnknownUsers (tested 2026-10-14)\nVaultwardenManyUsernames (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1552.007",
-      "tactic": "credential-access",
-      "score": 2,
-      "comment": "KubeSecretRead (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1555",
-      "tactic": "credential-access",
-      "score": 2,
-      "comment": "VaultPermissionDenied (tested 2026-10-11)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1046",
-      "tactic": "discovery",
-      "score": 1,
-      "comment": "NetworkScanFromLan (untested)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1613",
-      "tactic": "discovery",
-      "score": 2,
-      "comment": "KubeForbiddenBurst (tested 2026-10-14)",
-      "enabled": true
-    },
-    {
       "techniqueID": "T1021.004",
-      "tactic": "lateral-movement",
       "score": 2,
       "comment": "SshLoginUnexpected (tested 2026-10-14)",
       "enabled": true
     },
     {
+      "techniqueID": "T1046",
+      "score": 1,
+      "comment": "NetworkScanFromLan (untested)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1070",
+      "score": 2,
+      "comment": "MonitoringDataDeletion (tested 2026-10-13)",
+      "enabled": true
+    },
+    {
       "techniqueID": "T1071",
-      "tactic": "command-and-control",
       "score": 2,
       "comment": "DnsAnswerWithKnownBadIp (tested 2026-10-17)\nTrafficWithKnownBadIp (tested 2026-10-17)",
       "enabled": true
     },
     {
       "techniqueID": "T1071.004",
-      "tactic": "command-and-control",
       "score": 2,
       "comment": "DnsLookupOfKnownBadDomain (tested 2026-10-17)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1078",
+      "score": 2,
+      "comment": "HostConsoleLogin (tested 2026-10-16)\nKubeAPIUnexpectedSource (tested 2026-10-10)\nLoginFromUntrustedNetwork (untested)\nLoginOutsideHours (untested)\nProxmoxLoginUnexpectedUser (tested 2026-10-16)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1078.001",
+      "score": 2,
+      "comment": "VaultRootTokenUsed (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1098",
+      "score": 2,
+      "comment": "GrafanaUserChange (tested 2026-10-14)\nKubeRBACChange (tested 2026-10-14)\nLldapDirectoryDrift (tested 2026-10-14)\nVaultConfigChange (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1098.007",
+      "score": 2,
+      "comment": "LldapAdminGroupGranted (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1110",
+      "score": 2,
+      "comment": "AutheliaSecondFactorFailures (tested 2026-10-14)\nForgejoLoginFailures (tested 2026-10-14)\nProxmoxLoginFailures (tested 2026-10-16)\nSshAuthFailures (tested 2026-10-14)\nVaultLoginFailures (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1110.001",
+      "score": 2,
+      "comment": "AutheliaLoginFailures (tested 2026-10-14)\nVaultwardenLoginFailures (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1110.003",
+      "score": 2,
+      "comment": "AutheliaUnknownUsers (tested 2026-10-14)\nVaultwardenManyUsernames (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1190",
+      "score": 2,
+      "comment": "VaultwardenAdminRequest (tested 2026-10-13)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1548.003",
+      "score": 2,
+      "comment": "SudoFailures (tested 2026-10-14)\nSudoUnexpectedUser (tested 2026-10-11)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1552.007",
+      "score": 2,
+      "comment": "KubeSecretRead (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1555",
+      "score": 2,
+      "comment": "VaultPermissionDenied (tested 2026-10-11)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1595.003",
+      "score": 2,
+      "comment": "HttpErrorBurst (tested 2026-10-13)\nScannerPathRequest (tested 2026-10-13)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1609",
+      "score": 2,
+      "comment": "KubeExecIntoPod (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1610",
+      "score": 2,
+      "comment": "KubeWorkloadChangeOutsideFlux (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1611",
+      "score": 2,
+      "comment": "KubePodSecurityViolation (tested 2026-10-14)\nKubePrivilegedPodCreated (untested)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1613",
+      "score": 2,
+      "comment": "KubeForbiddenBurst (tested 2026-10-14)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1685",
+      "score": 2,
+      "comment": "AlertSilenced (tested 2026-10-14)\nFluxResourceSuspended (untested)",
+      "enabled": true
+    },
+    {
+      "techniqueID": "T1685.002",
+      "score": 2,
+      "comment": "VaultAuditDeviceChange (tested 2026-10-14)",
       "enabled": true
     }
   ],

@@ -6,6 +6,11 @@
 # whose labels are templates (Falco's: the tactic and technique come from each event's tags) are
 # listed apart.
 #
+# A rule covers its technique under every tactic ATT&CK lists it in: it detects the behaviour,
+# whatever the adversary wanted from it (adding someone to an admin group is persistence and
+# privilege escalation). Its mitre_tactic is the one its alert is about, and where the per-tactic
+# table lists it.
+#
 # The dashboard's first panel is the ATT&CK matrix as ATT&CK Navigator draws it: a column per
 # tactic, a cell per technique, coloured by its rules (tested, untested, none), marked when its
 # alerts fired in the time range, filtered by the Platforms variable. It's a Business Text panel
@@ -208,18 +213,24 @@ def markdown(all_rules: list[dict], attack: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def covering(all_rules: list[dict]) -> dict[str, list[dict]]:
+    """The rules per technique (whatever their tactic), by name; Falco's left out."""
+    rules: dict[str, list[dict]] = {}
+    for r in sorted(all_rules, key=lambda r: r["alert"]):
+        if not r["dynamic"]:
+            rules.setdefault(r["technique"], []).append(r)
+    return rules
+
+
 def matrix(all_rules: list[dict], attack: dict) -> dict:
     """What attack-matrix.js draws: the tactics' techniques with their rules, platforms as bits."""
     techniques = attack["techniques"]
     platforms = sorted({p for t in techniques.values() for p in t["platforms"]})
     bits = {p: 1 << i for i, p in enumerate(platforms)}
-    cells: dict[tuple[str, str], list[dict]] = {}
-    for r in all_rules:
-        if not r["dynamic"]:
-            cells.setdefault((r["technique"], r["tactic"]), []).append(r)
+    by_technique = covering(all_rules)
 
-    def entry(technique: str, tactic: str) -> dict:
-        rules = sorted(cells.get((technique, tactic), []), key=lambda r: r["alert"])
+    def entry(technique: str) -> dict:
+        rules = by_technique.get(technique, [])
         tested = [f"{r['alert']} ({r['tested']})" for r in rules if r["tested"]]
         untested = [r["alert"] for r in rules if not r["tested"]]
         text = []
@@ -247,9 +258,9 @@ def matrix(all_rules: list[dict], attack: dict) -> dict:
         )
         column = []
         for parent in parents:
-            cell = entry(parent, short)
+            cell = entry(parent)
             cell["subs"] = [
-                entry(sub, short)
+                entry(sub)
                 for sub in sorted(
                     (t for t, info in techniques.items() if t.startswith(parent + ".") and short in info["tactics"]),
                     key=by_name,
@@ -277,7 +288,7 @@ def matrix_panel(all_rules: list[dict], attack: dict, datasource: dict) -> dict:
         "title": f"ATT&CK matrix (Enterprise {attack['version']})",
         "id": 3,
         "description": "Every technique on the selected platforms, as ATT&CK Navigator draws them. Green: a tested "
-        "rule covers it (in that tactic), yellow: only untested rules, a coloured edge: only its "
+        "rule covers it (in every tactic it's in), yellow: only untested rules, a coloured edge: only its "
         "sub-techniques are covered (they're listed under it). A red edge and count: its alerts that "
         "fired in the time range (ALERTS, any rule with this technique, Falco's included; revoked IDs "
         "count for their replacements). Hover for the rules, click for the technique on attack.mitre.org. "
@@ -406,21 +417,13 @@ def dashboard(rules: list[dict], attack: dict) -> dict:
 
 
 def layer(all_rules: list[dict], attack: dict) -> dict:
-    """An ATT&CK Navigator layer (format 4.5): an entry per technique and tactic with a rule."""
-    tactics = [t["shortname"] for t in attack["tactics"]]
-    cells: dict[tuple[str, str], list[dict]] = {}
-    for r in all_rules:
-        if not r["dynamic"]:
-            cells.setdefault((r["technique"], r["tactic"]), []).append(r)
+    """An ATT&CK Navigator layer (format 4.5): an entry per technique with a rule, no tactic so
+    Navigator applies it in every tactic the technique is in."""
     techniques = []
-    for (technique, tactic), rules in sorted(
-        cells.items(), key=lambda cell: (tactics.index(cell[0][1]), cell[0][0])
-    ):
-        rules.sort(key=lambda r: r["alert"])
+    for technique, rules in sorted(covering(all_rules).items()):
         techniques.append(
             {
                 "techniqueID": technique,
-                "tactic": tactic,
                 "score": 2 if any(r["tested"] for r in rules) else 1,
                 "comment": "\n".join(
                     f"{r['alert']} ({'tested ' + r['tested'] if r['tested'] else 'untested'})"
