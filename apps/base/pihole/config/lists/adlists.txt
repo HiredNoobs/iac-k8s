@@ -1,3 +1,8 @@
 # Block lists, one URL per line. Synced to every replica, removing a line removes the list.
 https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt
 https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.txt
+# abuse.ch: domains used by malware (ThreatFox) and hosts serving it now (URLhaus), which
+# HaGeZi's lists don't include. Blocked lookups still raise DnsLookupOfKnownBadDomain: the
+# router logs the query before Pi-hole answers it.
+https://threatfox.abuse.ch/downloads/hostfile/
+https://urlhaus.abuse.ch/downloads/hostfile/
