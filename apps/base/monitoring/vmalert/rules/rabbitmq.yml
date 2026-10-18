@@ -15,14 +15,17 @@ groups:
           summary: RabbitMQ has {{ $value }} of 3 nodes
           description: "Fewer than three RabbitMQ nodes are running: one more down and its quorum queues stop (contentbot with them). rabbitmq cluster_status says which; the missing pod's log why."
 
+      # By the cluster's permanent id: generated when a cluster forms and shared by the nodes that
+      # join it. Not rabbitmq_cluster, the cluster name: unset (rabbitmq.conf), each node reports
+      # its own node name.
       - alert: RabbitmqMoreThanOneCluster
-        expr: 'count(count by (rabbitmq_cluster) (rabbitmq_identity_info{namespace="rabbitmq"})) > 1'
+        expr: 'count(count by (rabbitmq_cluster_permanent_id) (rabbitmq_identity_info{namespace="rabbitmq"})) > 1'
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: The RabbitMQ nodes are in {{ $value }} clusters
-          description: "The nodes don't all report the same cluster name: one formed its own cluster instead of joining rabbitmq-0 (a lost volume, a wrong cookie). rabbitmq cluster_status on each node; the stray one must be reset and joined again."
+          description: "The nodes don't all report the same cluster (rabbitmq_cluster_permanent_id): one formed its own cluster instead of joining rabbitmq-0 (a lost volume, a wrong cookie). rabbitmq cluster_status on each node; the stray one must be reset and joined again."
 
       - alert: RabbitmqMemoryAlarm
         expr: 'max by (pod) (rabbitmq_alarms_memory_used_watermark{namespace="rabbitmq"}) == 1'
