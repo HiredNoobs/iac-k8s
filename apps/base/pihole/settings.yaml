@@ -55,7 +55,6 @@ data:
     192.168.111.101 vmalert-logs.hirednoobs.com;\
     192.168.111.101 vmagent.hirednoobs.com;\
     192.168.111.103 rabbitmq-broker.hirednoobs.com;\
-    192.168.111.102 redis.hirednoobs.com;\
     192.168.111.104 rsyslog.hirednoobs.com;\
     192.168.50.1 router.hirednoobs.com;\
     192.168.111.2 prx-001.hirednoobs.com;\
@@ -113,7 +112,6 @@ data:
     local=/vmalert-logs.hirednoobs.com/;\
     local=/vmagent.hirednoobs.com/;\
     local=/rabbitmq-broker.hirednoobs.com/;\
-    local=/redis.hirednoobs.com/;\
     local=/rsyslog.hirednoobs.com/;\
     local=/router.hirednoobs.com/;\
     local=/prx-001.hirednoobs.com/;\

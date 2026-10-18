@@ -8,9 +8,6 @@ metadata:
 spec:
   secretName: redis-tls
   dnsNames:
-    - redis-tls
-    - redis-tls.redis.svc
-    - redis-tls.redis.svc.cluster.local
     - redis-0.redis.redis.svc
     - redis-0.redis.redis.svc.cluster.local
     - redis-1.redis.redis.svc
@@ -20,7 +17,6 @@ spec:
     - redis-sentinel
     - redis-sentinel.redis.svc
     - redis-sentinel.redis.svc.cluster.local
-    - redis.hirednoobs.com
     # The probes and the exporter, in the pod.
     - localhost
   usages:
