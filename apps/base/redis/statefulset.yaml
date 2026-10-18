@@ -1,5 +1,12 @@
-# A single Redis instance, its data (the AOF) on a Longhorn volume that follows the pod to any
-# node. No PDB: with one instance there's nothing to keep up during a drain.
+# Redis with Sentinel: three pods, each a Redis (one master, two replicas, replicating over TLS)
+# and a sentinel. The sentinels watch the master and, when two of them agree it's been down for
+# 10 seconds, make a replica the master. Clients ask the sentinels where the master is
+# (redis-sentinel.redis.svc, services.yaml). Each pod's data (the AOF) is on its own Longhorn
+# volume that follows it to any node; init.sh (config/) picks each pod's role at start.
+#
+# Pods start one after another (OrderedReady): redis-0 first, so on a full start the others find
+# its sentinel. One per node and preferably one per Proxmox host (zone); the PDB keeps two up in
+# a drain.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -7,13 +14,12 @@ metadata:
   labels:
     app.kubernetes.io/name: redis
   annotations:
-    # Restart to load a renewed certificate, changed ACL users or the exporter's password.
-    secret.reloader.stakater.com/reload: redis-tls,redis-acl,redis-exporter
+    # Restart to load a renewed certificate, changed ACL users or passwords.
+    secret.reloader.stakater.com/reload: redis-tls,redis-acl,redis-exporter,redis-internal
 spec:
   serviceName: redis
-  # Replication (Sentinel/cluster) isn't set up yet, a second instance would split the data.
-  replicas: 1
-  # The volume outlives the StatefulSet, removing Redis from git doesn't delete the data.
+  replicas: 3
+  # The volumes outlive the StatefulSet, removing Redis from git doesn't delete the data.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain
     whenScaled: Retain
@@ -26,7 +32,7 @@ spec:
         app.kubernetes.io/name: redis
       annotations:
         # Scraped by vmagent's pods job: the redis-exporter sidecar's memory, clients, commands,
-        # keys and persistence.
+        # keys, persistence and replication.
         prometheus.io/scrape: "true"
         prometheus.io/port: "9121"
     spec:
@@ -39,16 +45,61 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
-      # The pod's own name is itself (the exporter's address, see redis-exporter).
-      hostAliases:
-        - ip: 127.0.0.1
-          hostnames: [redis-0.redis.redis.svc]
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: redis
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: redis
       # Time to flush the AOF on shutdown.
       terminationGracePeriodSeconds: 60
+      initContainers:
+        - name: init
+          image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
+          command: ["sh", "/usr/local/etc/redis/init.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - secretRef:
+                name: redis-internal
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
+            - name: certs
+              mountPath: /etc/redis/secrets
+              readOnly: true
+            - name: acl
+              mountPath: /etc/redis/acl
+              readOnly: true
+            - name: run
+              mountPath: /etc/redis-run
       containers:
         - name: redis
           image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
-          command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+          command: ["redis-server", "/etc/redis-run/redis.conf"]
           # Talos warns about anything short of the restricted pod security standard.
           securityContext:
             allowPrivilegeEscalation: false
@@ -109,10 +160,8 @@ spec:
             limits:
               memory: 512Mi
           volumeMounts:
-            - name: config
-              mountPath: /usr/local/etc/redis/redis.conf
-              subPath: redis.conf
-              readOnly: true
+            - name: run
+              mountPath: /etc/redis-run
             - name: certs
               mountPath: /etc/redis/secrets
               readOnly: true
@@ -122,10 +171,49 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+        - name: sentinel
+          image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
+          command: ["redis-sentinel", "/etc/redis-run/sentinel.conf"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: sentinel-tls
+              containerPort: 26379
+              protocol: TCP
+          # Over TLS as Redis' probes; NOAUTH: the sentinel's default user is off.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - >-
+                  redis-cli --tls -h localhost -p 26379
+                  --cacert /etc/redis/secrets/ca.crt
+                  --cert /etc/redis/secrets/tls.crt
+                  --key /etc/redis/secrets/tls.key
+                  ping | grep -qE 'PONG|NOAUTH'
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: run
+              mountPath: /etc/redis-run
+            - name: certs
+              mountPath: /etc/redis/secrets
+              readOnly: true
         # Redis' metrics (INFO and friends) for Prometheus, as the ACL user exporter: no keys,
         # only the read-only server commands it needs (external-secret.yaml). Same certificate
-        # as the probes. It connects over loopback (hostAliases), so it still reaches Redis
-        # while the pod isn't ready, by a name the server certificate has.
+        # as the probes, over loopback (which the certificate names), so it still reaches Redis
+        # while the pod isn't ready.
         - name: redis-exporter
           image: oliver006/redis_exporter:v1.94.0@sha256:0842ef7110e62b40bbde2d5c11f38c6fbd99f7100c75e3866637c1b335a1eff7
           securityContext:
@@ -135,7 +223,7 @@ spec:
               drop: ["ALL"]
           env:
             - name: REDIS_ADDR
-              value: rediss://redis-0.redis.redis.svc:6379
+              value: rediss://localhost:6379
             - name: REDIS_USER
               value: exporter
             - name: REDIS_PASSWORD
@@ -164,9 +252,15 @@ spec:
               mountPath: /etc/redis/secrets
               readOnly: true
       volumes:
+        # redis.conf, sentinel.conf and init.sh.
         - name: config
           configMap:
             name: redis-config
+        # The configs init.sh writes, which Redis and Sentinel rewrite.
+        - name: run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
         - name: certs
           secret:
             secretName: redis-tls
@@ -186,3 +280,17 @@ spec:
         resources:
           requests:
             storage: 2Gi
+---
+# Two of the three stay up in a drain: a master and a replica, and two sentinels to agree on a
+# failover.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis

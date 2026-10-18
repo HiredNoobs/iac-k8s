@@ -1,7 +1,8 @@
-# Redis (apps/base/redis), from the redis-exporter sidecar (vmagent's pods job): whether Redis
+# Redis (apps/base/redis), from the redis-exporter sidecars (vmagent's pods job): whether Redis
 # answers, persistence (the AOF, appendonly yes), memory against the container's limit (from
-# kube-state-metrics; no maxmemory: Redis grows until the kernel kills it), refused clients.
-# The exporter itself being gone is TargetDown's.
+# kube-state-metrics; no maxmemory: Redis grows until the kernel kills it), refused clients, and
+# replication (one master, two replicas in sync, which Sentinel keeps). The exporter itself
+# being gone is TargetDown's.
 groups:
   - name: Redis
     interval: 60s
@@ -44,3 +45,40 @@ groups:
         annotations:
           summary: Redis refused {{ $value | humanize }} connections in 10 minutes ({{ $labels.pod }})
           description: "Redis hit maxclients ({{ $labels.pod }}): a client is leaking connections. redis CLIENT LIST shows who holds them."
+
+      # During a failover there's no master for a few seconds (the sentinels agree after 10).
+      - alert: RedisNoMaster
+        expr: 'count(redis_instance_info{namespace="redis", role="master"}) < 1 or absent(redis_instance_info{namespace="redis", role="master"})'
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis has no master
+          description: "None of the Redis pods is a master, so nothing can write (contentbot fails). The sentinels decide: redis SENTINEL masters, their logs (container sentinel) say why they haven't failed over (fewer than two up, no replica in sync)."
+
+      - alert: RedisMoreThanOneMaster
+        expr: 'count(redis_instance_info{namespace="redis", role="master"}) > 1'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} Redis pods are masters"
+          description: "More than one Redis pod is a master: clients may be writing to different ones and the data splits. Usually a pod that came back after a failover without being told: the sentinels should turn it into a replica within a minute. If it lasts, ask them (SENTINEL get-master-addr-by-name redis) and restart the stray pod."
+
+      - alert: RedisReplicaNotSyncing
+        expr: 'redis_master_link_up{namespace="redis"} == 0'
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis replica {{ $labels.pod }} isn't connected to its master
+          description: "{{ $labels.pod }} has lost its master link (or never finished the first sync): it serves stale data and can't take over cleanly. Its log says why (the replica user's password, the master's name or certificate)."
+
+      - alert: RedisMissingReplicas
+        expr: 'max by (pod) (redis_connected_slaves{namespace="redis"} and on (pod) redis_instance_info{namespace="redis", role="master"}) < 2'
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The Redis master has {{ $value }} of 2 replicas
+          description: "The master ({{ $labels.pod }}) has fewer than two replicas connected: one more failure and there's nothing to fail over to. A pod down or not syncing (RedisReplicaNotSyncing)."
