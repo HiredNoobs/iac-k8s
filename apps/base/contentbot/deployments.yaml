@@ -4,10 +4,9 @@
 # clean shutdown, Kubernetes starts a replacement about 5 minutes later, before the old pod is
 # confirmed gone, so a second chatbot can briefly be in the channel. One replica, no PDB.
 #
-# The image runs as root, its dictionary (/etc/contentbot/eng_dict.txt) is only readable by root,
-# so the pods meet the baseline pod security standard, not restricted (to fix in app-contentbot's
-# Dockerfile). Root needs no capability to read its own file. The config files are mounted one
-# by one so the dictionary isn't hidden.
+# The image's user is 10001 (the restricted pod security standard); its dictionary
+# (/etc/contentbot/eng_dict.txt) and the mounted files are readable by anyone. The config files
+# are mounted one by one so the dictionary isn't hidden.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,11 +31,14 @@ spec:
         app.kubernetes.io/component: chatbot
     spec:
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: chatbot
-          image: hirednoobs/contentbot:0.0.94@sha256:8855a0b9120cf9fd762084628e236f6aa208fd75764f94b08fa4e5313811a62a
+          image: hirednoobs/contentbot:4.0.0-rc1@sha256:112dd2fc3720aca2b5976c014b668c5a87a297eba1c87393009e9e70a35ae1a5
           args: ["chatbot"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -120,11 +122,14 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: worker
-          image: hirednoobs/contentbot:0.0.94@sha256:8855a0b9120cf9fd762084628e236f6aa208fd75764f94b08fa4e5313811a62a
+          image: hirednoobs/contentbot:4.0.0-rc1@sha256:112dd2fc3720aca2b5976c014b668c5a87a297eba1c87393009e9e70a35ae1a5
           args: ["worker"]
           securityContext:
             allowPrivilegeEscalation: false
