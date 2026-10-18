@@ -39,26 +39,3 @@ spec:
       port: 26379
       targetPort: sentinel-tls
       protocol: TCP
----
-# redis.hirednoobs.com for clients outside the cluster (Pi-hole's record for the LoadBalancer IP
-# set per cluster, see apps/<cluster>/), and redis-tls.redis.svc as before. Only redis-0, the
-# master until the first failover: an outside client can't reach the pod names the sentinels
-# give, so it can't follow a failover. To be removed once nothing outside uses it (CLIENT LIST's
-# addr shows who connects). kube-vip announces the IP from redis-0's node.
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis-tls
-  labels:
-    app.kubernetes.io/name: redis
-spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  selector:
-    app.kubernetes.io/name: redis
-    statefulset.kubernetes.io/pod-name: redis-0
-  ports:
-    - name: redis-tls
-      port: 6379
-      targetPort: redis-tls
-      protocol: TCP

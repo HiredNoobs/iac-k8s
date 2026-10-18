@@ -255,11 +255,8 @@ scrape_configs:
         targets: ["192.168.111.100"]
       - labels: { __param_module: dns_recursive }
         targets: ["192.168.111.100"]
-      # The other LoadBalancer IPs: Redis (.102, over TLS with a client certificate), RabbitMQ
-      # (.103, its plain metrics port rather than AMQPS, which wants a client certificate) and
-      # rsyslog (.104).
-      - labels: { __param_module: redis_tls }
-        targets: ["redis.hirednoobs.com:6379"]
+      # The other LoadBalancer IPs: RabbitMQ (.103, its plain metrics port rather than AMQPS,
+      # which wants a client certificate) and rsyslog (.104).
       - labels: { __param_module: tcp_connect }
         targets: ["rsyslog.hirednoobs.com:514"]
       - labels: { __param_module: http }
