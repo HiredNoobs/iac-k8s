@@ -92,9 +92,11 @@ spec:
               value: https://auth.hirednoobs.com/api/oidc/token
             - name: GF_AUTH_GENERIC_OAUTH_API_URL
               value: https://auth.hirednoobs.com/api/oidc/userinfo
-            # The client's token_endpoint_auth_method: client_secret_basic.
+            # The client's token_endpoint_auth_method: client_secret_basic. Grafana only knows
+            # InHeader, InParams and AutoDetect (anything else is AutoDetect, which retries a failed
+            # token request with the secret in the body, which Authelia then refuses as well).
             - name: GF_AUTH_GENERIC_OAUTH_AUTH_STYLE
-              value: AuthStyleInHeader
+              value: InHeader
             - name: GF_AUTH_GENERIC_OAUTH_USE_PKCE
               value: "true"
             - name: GF_AUTH_GENERIC_OAUTH_USE_REFRESH_TOKEN
