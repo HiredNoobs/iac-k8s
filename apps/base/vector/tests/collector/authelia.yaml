@@ -89,13 +89,13 @@ tests:
               assert_eq!(get!(., ["url.path"]), "/")
               assert_eq!(get!(., ["error.message"]), "read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout")
 
-  - name: Authelia access decision (the sample line)
+  - name: Authelia access decision (the sample line, from a visitor)
     inputs:
       - insert_at: pods
         type: vrl
         source: |
           . = {
-            "message": "{\"level\":\"info\",\"method\":\"GET\",\"msg\":\"Access to https://victoriametrics.hirednoobs.com/ (method GET) is not authorized to user <anonymous>, responding with status code 302 with location redirect to https://auth.hirednoobs.com/?rd=https%3A%2F%2Fvictoriametrics.hirednoobs.com%2F&rm=GET\",\"path\":\"/api/authz/ext-authz\",\"remote_ip\":\"10.244.6.37\"}",
+            "message": "{\"level\":\"info\",\"method\":\"GET\",\"msg\":\"Access to https://victoriametrics.hirednoobs.com/ (method GET) is not authorized to user <anonymous>, responding with status code 302 with location redirect to https://auth.hirednoobs.com/?rd=https%3A%2F%2Fvictoriametrics.hirednoobs.com%2F&rm=GET\",\"path\":\"/api/authz/ext-authz\",\"remote_ip\":\"192.168.50.140\"}",
             "timestamp": t'2026-10-13T12:00:00.100Z', "stream": "stdout",
             "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
           }
@@ -138,6 +138,38 @@ tests:
               assert_eq!(get!(., ["url.path"]), "/x")
               assert_eq!(.method, "POST")
               assert_eq!(.path, "/somewhere/else")
+              # A 401 from a pod address isn't a probe's redirect: kept.
+              assert_eq!(get!(., ["source.ip"]), "10.244.6.37")
+
+  - name: Authelia anonymous redirect from a pod address (a probe) is dropped
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"method\":\"GET\",\"msg\":\"Access to https://homepage.hirednoobs.com/ (method GET) is not authorized to user <anonymous>, responding with status code 302 with location redirect to https://auth.hirednoobs.com/?rd=https%3A%2F%2Fhomepage.hirednoobs.com%2F&rm=GET\",\"path\":\"/api/authz/ext-authz/\",\"remote_ip\":\"10.244.5.189\",\"time\":\"2026-10-18T14:47:04Z\"}",
+            "timestamp": t'2026-10-18T14:47:04.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    no_outputs_from: [final, unparsed]
+
+  - name: Authelia redirect of a logged-in user from a pod address is kept
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"level\":\"info\",\"method\":\"GET\",\"msg\":\"Access to https://vmalert.hirednoobs.com/ (method GET) is not authorized to user alice, responding with status code 302 with location redirect to https://auth.hirednoobs.com/?rd=https%3A%2F%2Fvmalert.hirednoobs.com%2F&rm=GET\",\"path\":\"/api/authz/ext-authz/\",\"remote_ip\":\"10.244.5.189\"}",
+            "timestamp": t'2026-10-18T14:47:04.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["user.name"]), "alice")
+              assert_eq!(get!(., ["http.response.status_code"]), 302)
 
   - name: "format mismatch: Authelia line that isn't its JSON"
     inputs:
