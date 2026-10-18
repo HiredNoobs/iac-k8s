@@ -62,7 +62,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        # This month's geo data into the volume, or the copy there if DB-IP can't be reached.
+        # This month's geo data into the volume, or the copy there if DB-IP can't be reached, or
+        # an empty database without either (no geo fields, vmalert-logs' VectorGeoDataMissing).
         - name: geodata
           image: docker.io/library/alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
           command: ["sh", "/scripts/geodata.sh"]

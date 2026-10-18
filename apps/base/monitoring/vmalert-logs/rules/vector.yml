@@ -2,7 +2,8 @@
 # pipeline_error: a remap failed on them (error.type remap_error), or they looked like their
 # source's format but didn't match it (format_mismatch, e.g. after an upgrade changed it). Either
 # way they lack that source's fields, so the detections that use them miss them. Lines without a
-# parser of their own aren't errors (tags generic).
+# parser of their own aren't errors (tags generic). Also vector-aggregator starting without its
+# geo data.
 #
 # Each group's interval is also the window its queries count over.
 groups:
@@ -31,3 +32,28 @@ groups:
             deploy/mealie -- sh -c 'echo "WARNING  not mealie format" > /proc/1/fd/1' (a
             format_mismatch in mealie.log; the exec itself raises KubeExecIntoPod).
           tested: "2026-10-13"
+
+      # vector-aggregator started without geo data (apps/base/vector/scripts/geodata.sh: DB-IP
+      # unreachable and no copy in its volume, e.g. a new one). Its init container logs this each
+      # start until it has the data, so it fires again at each restart (every 6 hours).
+      - alert: VectorGeoDataMissing
+        expr: >-
+          {event.dataset="vector.geodata"} _msg:"no data, starting without it"
+          | extract "<database>: no data"
+          | copy kubernetes.pod.name as pod
+          | stats by (pod, database) count() as lines
+        labels:
+          severity: warning
+          source: vector
+        annotations:
+          summary: "vector-aggregator started without DB-IP's {{ $labels.database }} data ({{ $labels.pod }})"
+          description: >-
+            It runs with an empty {{ $labels.database }}.mmdb: syslog and the prx-999 journals
+            get no source/destination .geo (city) or .as (asn) fields, so the Network
+            dashboard's map, countries and networks miss those lines. Threat intel still works.
+          runbook: >-
+            Why: {event.dataset="vector.geodata"} | fields _time, _msg (each download's error).
+            Once https://download.db-ip.com/free/ answers, restart it: kubectl -n vector
+            rollout restart deploy/vector-aggregator. Trigger: kubectl -n vector run geodata
+            --rm -i --restart=Never --image=alpine:3.24 -- echo "city: no data, starting
+            without it" (a container named geodata in vector: event.dataset vector.geodata).
