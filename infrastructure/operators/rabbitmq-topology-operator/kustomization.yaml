@@ -48,7 +48,7 @@ patches:
           spec:
             containers:
               - name: manager
-                image: ghcr.io/rabbitmq/messaging-topology-operator:1.20.4@sha256:27988ec3a9f23dfa9f4581985e0fdaf9c1267b0a8708acdc50fe5ba04d6e9254
+                image: rabbitmqoperator/messaging-topology-operator:1.20.4@sha256:27988ec3a9f23dfa9f4581985e0fdaf9c1267b0a8708acdc50fe5ba04d6e9254
                 # Upstream requests 300m, far more than it uses here.
                 resources:
                   requests:

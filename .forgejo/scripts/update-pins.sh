@@ -24,7 +24,7 @@ LINT=.forgejo/workflows/lint.yml
 # Vendored manifests: directory, file, image (its tag is the release's, without the v).
 VENDORED=(
   "infrastructure/controllers/kubelet-serving-cert-approver standalone-install.yaml ghcr.io/alex1989hu/kubelet-serving-cert-approver"
-  "infrastructure/operators/rabbitmq-topology-operator messaging-topology-operator-with-certmanager.yaml ghcr.io/rabbitmq/messaging-topology-operator"
+  "infrastructure/operators/rabbitmq-topology-operator messaging-topology-operator-with-certmanager.yaml rabbitmqoperator/messaging-topology-operator"
 )
 
 function log {
