@@ -415,3 +415,46 @@ groups:
             Expected exactly 1 active node, got {{ $value }}.
             VALUE = {{ $value }}
             LABELS = {{ $labels }}
+
+  # The prx-999 VMs' backup timers (iac-homelab roles vault_backup, forgejo_backup,
+  # terraform_state). A failed run is HostSystemdServiceCrashed; these catch a timer that stopped
+  # firing. The timers are Persistent=true, so the last trigger survives a reboot.
+  - name: Backups
+    interval: 60s
+    concurrency: 1
+    rules:
+      # The nightly ones (03:15, 03:30) get 2 hours' slack, the hourly export 1 hour.
+      - alert: BackupTimerLate
+        expr: |
+          time() - node_systemd_timer_last_trigger_seconds{job="node", name=~"vault-backup.timer|forgejo-backup.timer"} > 26 * 3600
+          or
+          time() - node_systemd_timer_last_trigger_seconds{job="node", name="terraform-state-export.timer"} > 2 * 3600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backup timer late ({{ $labels.name }} on {{ $labels.instance }})
+          description: |
+            {{ $labels.name }} on {{ $labels.instance }} last fired {{ $value | humanizeDuration }} ago.
+            A timer that has never fired reads 0 (a rebuilt VM before its first run), so this fires until then.
+            VALUE = {{ $value }}
+            LABELS = {{ $labels }}
+
+      # The timer gone (removed, renamed, moved to another VM) or the VM's node_exporter not
+      # scraped (TargetDown fires too).
+      - alert: BackupTimerMissing
+        expr: |
+          absent(node_systemd_timer_last_trigger_seconds{job="node", instance="prx-999-srv-vault-001", name="vault-backup.timer"})
+          or
+          absent(node_systemd_timer_last_trigger_seconds{job="node", instance="prx-999-srv-git-001", name="forgejo-backup.timer"})
+          or
+          absent(node_systemd_timer_last_trigger_seconds{job="node", instance="prx-999-srv-git-001", name="terraform-state-export.timer"})
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backup timer missing ({{ $labels.name }} on {{ $labels.instance }})
+          description: |
+            No node_systemd_timer_last_trigger_seconds for {{ $labels.name }} on {{ $labels.instance }}.
+            VALUE = {{ $value }}
+            LABELS = {{ $labels }}
