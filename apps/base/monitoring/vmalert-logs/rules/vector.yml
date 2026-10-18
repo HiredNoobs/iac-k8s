@@ -55,5 +55,8 @@ groups:
             Why: {event.dataset="vector.geodata"} | fields _time, _msg (each download's error).
             Once https://download.db-ip.com/free/ answers, restart it: kubectl -n vector
             rollout restart deploy/vector-aggregator. Trigger: kubectl -n vector run geodata
-            --rm -i --restart=Never --image=alpine:3.24 -- echo "city: no data, starting
-            without it" (a container named geodata in vector: event.dataset vector.geodata).
+            --restart=Never --image=alpine:3.24 -- sh -c 'echo "city: no data, starting without
+            it"; sleep 60' (a container named geodata in vector: event.dataset vector.geodata;
+            the sleep lets the collector read the line before the pod goes), then kubectl -n
+            vector delete pod geodata.
+          tested: "2026-10-18"
