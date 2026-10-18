@@ -1,6 +1,6 @@
-# Redis' server certificate, renewed by cert-manager (Reloader restarts Redis to load it). Also
-# used as the client certificate of the readiness probe. The secret holds tls.crt, tls.key and
-# ca.crt (redis-ca, which clients are checked against).
+# Redis' server certificate, renewed by cert-manager (Reloader restarts Redis to load it). Every
+# pod has the same one, also as its client certificate (replication, the sentinels, the probes).
+# The secret holds tls.crt, tls.key and ca.crt (redis-ca, which clients are checked against).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -13,7 +13,16 @@ spec:
     - redis-tls.redis.svc.cluster.local
     - redis-0.redis.redis.svc
     - redis-0.redis.redis.svc.cluster.local
+    - redis-1.redis.redis.svc
+    - redis-1.redis.redis.svc.cluster.local
+    - redis-2.redis.redis.svc
+    - redis-2.redis.redis.svc.cluster.local
+    - redis-sentinel
+    - redis-sentinel.redis.svc
+    - redis-sentinel.redis.svc.cluster.local
     - redis.hirednoobs.com
+    # The probes and the exporter, in the pod.
+    - localhost
   usages:
     - digital signature
     - key encipherment

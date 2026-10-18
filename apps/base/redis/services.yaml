@@ -1,4 +1,6 @@
-# Gives the pod a stable name, redis-0.redis.redis.svc, for when replication is added.
+# Gives each pod its stable name, redis-<n>.redis.redis.svc, which Redis and the sentinels know
+# each other by. Published before a pod is ready so init.sh and Redis can resolve the others at
+# boot.
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,6 +9,7 @@ metadata:
     app.kubernetes.io/name: redis
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     app.kubernetes.io/name: redis
   ports:
@@ -14,10 +17,34 @@ spec:
       port: 6379
       targetPort: redis-tls
       protocol: TCP
+    - name: sentinel-tls
+      port: 26379
+      targetPort: sentinel-tls
+      protocol: TCP
 ---
-# Clients in the cluster use redis-tls.redis.svc, clients outside it redis.hirednoobs.com
-# (Pi-hole's record for the LoadBalancer IP set per cluster, see apps/<cluster>/). kube-vip
-# announces the IP from the node running Redis.
+# The sentinels, which clients in the cluster ask where the master is (master name redis):
+# redis-sentinel.redis.svc:26379, over TLS with a client certificate from redis-ca, as their
+# ACL user. Any of the three can answer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: sentinel-tls
+      port: 26379
+      targetPort: sentinel-tls
+      protocol: TCP
+---
+# redis.hirednoobs.com for clients outside the cluster (Pi-hole's record for the LoadBalancer IP
+# set per cluster, see apps/<cluster>/), and redis-tls.redis.svc as before. Only redis-0, the
+# master until the first failover: an outside client can't reach the pod names the sentinels
+# give, so it can't follow a failover. To be removed once nothing outside uses it (CLIENT LIST's
+# addr shows who connects). kube-vip announces the IP from redis-0's node.
 apiVersion: v1
 kind: Service
 metadata:
@@ -29,6 +56,7 @@ spec:
   externalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: redis
+    statefulset.kubernetes.io/pod-name: redis-0
   ports:
     - name: redis-tls
       port: 6379

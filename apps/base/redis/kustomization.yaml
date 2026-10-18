@@ -1,7 +1,7 @@
-# Redis, TLS only with ACL users from git (external-secret.yaml). A single instance with its
-# data (the AOF) on a Longhorn volume. Clients need a certificate from the redis-ca
-# ClusterIssuer (infrastructure/configs/cluster-issuer/redis-ca.yaml) and their ACL
-# user's password.
+# Redis, TLS only with ACL users from git (external-secret.yaml). Three pods with Sentinel
+# (statefulset.yaml), each with its data (the AOF) on a Longhorn volume. Clients need a
+# certificate from the redis-ca ClusterIssuer (infrastructure/configs/cluster-issuer/redis-ca.yaml)
+# and their ACL user's password, and ask the sentinels where the master is.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: redis
@@ -16,3 +16,5 @@ configMapGenerator:
   - name: redis-config
     files:
       - config/redis.conf
+      - config/sentinel.conf
+      - config/init.sh
