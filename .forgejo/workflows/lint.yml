@@ -64,6 +64,32 @@ jobs:
             fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
           git checkout -q FETCH_HEAD
 
+      # The Vector step takes minutes (each test file in its own run): it's skipped when the push
+      # changes nothing in apps/base/vector/ or this workflow. Compared with the commit the push
+      # replaced, or master for a new branch (which also counts master's changes since the
+      # branch). Whenever that can't be fetched or compared (a force-push's old commit gone, ...),
+      # Vector runs.
+      - name: Changes
+        id: changes
+        env:
+          TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          case "$BEFORE" in
+            "" | *[!0]*) base=${BEFORE:-master} ;;
+            *) base=master ;;
+          esac
+          vector=true
+          if git -c http.extraHeader="Authorization: Basic $auth" \
+               fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$base" &&
+             changed=$(git diff --name-only FETCH_HEAD "$GITHUB_SHA"); then
+            printf '%s\n' "$changed" | grep -qE '^(apps/base/vector/|\.forgejo/workflows/lint\.yml$)' ||
+              vector=false
+          fi
+          echo "Vector tests: $vector (compared with $base)"
+          echo "vector=$vector" >> "$GITHUB_OUTPUT"
+
       - name: Install tools
         run: |
           apt-get update
@@ -84,12 +110,6 @@ jobs:
           echo "${FLUX_CRD_SCHEMAS_SHA256}  /tmp/flux-crd-schemas.tar.gz" | sha256sum -c -
           mkdir -p /tmp/flux-crd-schemas
           tar -xzf /tmp/flux-crd-schemas.tar.gz -C /tmp/flux-crd-schemas
-
-          curl -fsSLo /tmp/vector.tar.gz \
-            "https://github.com/vectordotdev/vector/releases/download/v${VECTOR_VERSION}/vector-${VECTOR_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          echo "${VECTOR_SHA256}  /tmp/vector.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/vector.tar.gz -C /usr/local/bin --strip-components=3 \
-            ./vector-x86_64-unknown-linux-musl/bin/vector
 
       # The controllers' CRDs converted to schemas, named like Flux's.
       - name: Controller CRD schemas
@@ -113,13 +133,20 @@ jobs:
           python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
 
       # Both Vectors' configs load (the common files and their side's), and their transforms do
-      # what tests/<side>/ expects.
+      # what tests/<side>/ expects. Only when they changed (Changes).
       - name: Vector
+        if: steps.changes.outputs.vector != 'false'
         env:
           NODE_NAME: cp-1
           NODE_DOMAIN: hirednoobs.com
           VECTOR_SELF_NODE_NAME: cp-1
         run: |
+          curl -fsSLo /tmp/vector.tar.gz \
+            "https://github.com/vectordotdev/vector/releases/download/v${VECTOR_VERSION}/vector-${VECTOR_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${VECTOR_SHA256}  /tmp/vector.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/vector.tar.gz -C /usr/local/bin --strip-components=3 \
+            ./vector-x86_64-unknown-linux-musl/bin/vector
+
           # From tests/: the aggregator's geo data paths are relative (geo/, MaxMind's test
           # databases there, tests/geo/README.md).
           cd apps/base/vector/tests
