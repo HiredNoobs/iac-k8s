@@ -55,3 +55,16 @@ transforms:
         if is_string(.method) { ."http.request.method" = del(.method) }
         if is_string(.path) { ."url.path" = del(.path) }
       }
+
+  # In-cluster checks of the sites behind Authelia (blackbox's https_authelia probes, every minute)
+  # get the portal redirect, which Authelia logs at info with no way to skip them: each would be a
+  # line a minute per site. Dropped here: anonymous redirects from a pod address. Visitors come
+  # through the Gateway with their own address (it overwrites X-Forwarded-For), so their
+  # redirects stay, as do 401s/403s and any decision about a logged-in user.
+  authelia_kept:
+    type: filter
+    inputs: [authelia]
+    condition: |
+      !(."event.action" == "authorization" && !exists(."user.name") &&
+        ."http.response.status_code" == 302 &&
+        (ip_cidr_contains("10.244.0.0/16", string(."source.ip") ?? "") ?? false))
