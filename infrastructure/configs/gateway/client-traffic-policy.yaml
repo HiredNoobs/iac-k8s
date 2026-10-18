@@ -1,0 +1,23 @@
+# Clients can't name their own address. Envoy trusts no hops, so it already takes the client IP
+# from the connection (externalTrafficPolicy: Local keeps it), but it appends that to any
+# X-Forwarded-For the client sent, and apps read the leftmost entry (Authelia's remote_ip, the
+# sign-in alerts). Removing the client's headers before Envoy's own handling leaves an
+# X-Forwarded-For of the connection's address alone; X-Real-IP and Forwarded, which Envoy
+# doesn't set, go too. Nothing proxies in front of the Gateway: one that did would need
+# clientIPDetection's trusted hops instead.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: public
+  namespace: gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: public
+  headers:
+    earlyRequestHeaders:
+      remove:
+        - X-Forwarded-For
+        - X-Real-IP
+        - Forwarded
