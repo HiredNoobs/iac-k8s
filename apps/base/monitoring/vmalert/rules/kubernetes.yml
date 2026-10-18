@@ -161,6 +161,7 @@ groups:
         annotations:
           summary: CronJob's last run failed ({{ $labels.namespace }}/{{ $labels.owner_name }})
           description: "The latest finished run of CronJob {{ $labels.namespace }}/{{ $labels.owner_name }} failed, and it stays firing until a run succeeds. Its failed Job's pods have the logs: kubectl -n {{ $labels.namespace }} get jobs, then kubectl -n {{ $labels.namespace }} logs job/<name>. To check a fix without waiting for the schedule: kubectl -n {{ $labels.namespace }} create job --from=cronjob/{{ $labels.owner_name }} <name>."
+          tested: "2026-10-18"
 
       - alert: KubePersistentVolumeClaimPending
         expr: 'kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1'
