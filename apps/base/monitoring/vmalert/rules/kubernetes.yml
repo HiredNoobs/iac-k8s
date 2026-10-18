@@ -269,8 +269,8 @@ groups:
         labels:
           severity: warning
           source: flux
-          mitre_tactic: defense-evasion
-          mitre_technique: T1562.001
+          mitre_tactic: defense-impairment
+          mitre_technique: T1685
         annotations:
           summary: Flux {{ $labels.customresource_kind }} suspended ({{ $labels.exported_namespace }}/{{ $labels.name }})
           description: "{{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} has been suspended for 2 hours: flux resume ..."

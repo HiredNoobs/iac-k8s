@@ -132,8 +132,8 @@ groups:
         labels:
           severity: warning
           source: envoy
-          mitre_tactic: defense-evasion
-          mitre_technique: T1562.006
+          mitre_tactic: defense-impairment
+          mitre_technique: T1685
         annotations:
           summary: "{{ $value }} Alertmanager silences created from {{ $labels.remote_ip }}"
           description: >-
@@ -156,7 +156,7 @@ groups:
         labels:
           severity: warning
           source: envoy
-          mitre_tactic: defense-evasion
+          mitre_tactic: stealth
           mitre_technique: T1070
         annotations:
           summary: "{{ $labels.remote_ip }} called the delete API on {{ $labels.host }} ({{ $labels.response_code }})"

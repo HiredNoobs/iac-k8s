@@ -152,8 +152,8 @@ groups:
         labels:
           severity: critical
           source: vault
-          mitre_tactic: defense-evasion
-          mitre_technique: T1562.008
+          mitre_tactic: defense-impairment
+          mitre_technique: T1685.002
         annotations:
           summary: "Vault audit device {{ $labels.operation }} {{ $labels.path }} by {{ $labels.user }} from {{ $labels.remote_ip }}"
           description: >-

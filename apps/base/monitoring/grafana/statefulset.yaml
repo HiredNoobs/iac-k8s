@@ -67,7 +67,7 @@ spec:
               value: /etc/grafana/dashboards/Overview/overview.json
             # Installed on start (into the data volume) when missing, pinned like everything else.
             - name: GF_PLUGINS_PREINSTALL
-              value: victoriametrics-logs-datasource@0.32.0,victoriametrics-metrics-datasource@0.26.1
+              value: victoriametrics-logs-datasource@0.32.0,victoriametrics-metrics-datasource@0.26.1,marcusolsson-dynamictext-panel@6.3.0
             # Logins through Authelia (OIDC, client `grafana` in apps/base/authelia). Only members
             # of `admins`, as Grafana server admins; the role is set again at every login, so a
             # change in LLDAP applies at the next one. Anyone else is refused.

@@ -1,6 +1,7 @@
 {
   "name": "Homelab detections",
   "versions": {
+    "attack": "20",
     "navigator": "5.2.0",
     "layer": "4.5"
   },
@@ -85,28 +86,21 @@
     },
     {
       "techniqueID": "T1070",
-      "tactic": "defense-evasion",
+      "tactic": "stealth",
       "score": 2,
       "comment": "MonitoringDataDeletion (tested 2026-10-13)",
       "enabled": true
     },
     {
-      "techniqueID": "T1562.001",
-      "tactic": "defense-evasion",
-      "score": 1,
-      "comment": "FluxResourceSuspended (untested)",
-      "enabled": true
-    },
-    {
-      "techniqueID": "T1562.006",
-      "tactic": "defense-evasion",
+      "techniqueID": "T1685",
+      "tactic": "defense-impairment",
       "score": 2,
-      "comment": "AlertSilenced (tested 2026-10-14)",
+      "comment": "AlertSilenced (tested 2026-10-14)\nFluxResourceSuspended (untested)",
       "enabled": true
     },
     {
-      "techniqueID": "T1562.008",
-      "tactic": "defense-evasion",
+      "techniqueID": "T1685.002",
+      "tactic": "defense-impairment",
       "score": 2,
       "comment": "VaultAuditDeviceChange (tested 2026-10-14)",
       "enabled": true
