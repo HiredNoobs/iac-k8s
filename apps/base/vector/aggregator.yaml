@@ -172,7 +172,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: vector-aggregator
+            name: vector-aggregator-config
         - name: data
           persistentVolumeClaim:
             claimName: vector-aggregator

@@ -44,7 +44,10 @@ configMapGenerator:
       - config/collector/pods.yaml
       - config/collector/talos.yaml
       - config/collector/vaultwarden.yaml
-  - name: vector-aggregator
+  # Not named after the Deployment: kustomize rewrites a Role's resourceNames that match a
+  # generated ConfigMap to its hashed name, which took aggregator-refresh's access to the
+  # Deployment.
+  - name: vector-aggregator-config
     files:
       - config/common/pipeline.yaml
       - config/aggregator/geo.yaml
