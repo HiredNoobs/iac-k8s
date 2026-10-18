@@ -132,7 +132,8 @@ jobs:
           done
           exit "$failed"
 
-      # The Security folder's ATT&CK coverage dashboard is generated from the alert rules' labels.
+      # The Security folder's ATT&CK coverage dashboard and Navigator layer are generated from the
+      # alert rules' labels.
       - name: ATT&CK coverage
         run: python3 .forgejo/scripts/attack-coverage.py --check
 
