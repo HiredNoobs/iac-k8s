@@ -1,6 +1,7 @@
 # Unit tests for config/aggregator/threat-intel.yaml (how to run them: tests/collector/pipeline.yaml),
 # run from tests/ so threat/indicators.csv is the made-up indicators there: bad.example.com
-# (ThreatFox), malware.example.net (URLhaus) and 198.51.100.66 (in both).
+# (ThreatFox), malware.example.net (URLhaus), 198.51.100.66 (in both), and 192.0.2.0/24 and
+# 2001:db8:dead::/48 (Spamhaus DROP).
 tests:
   - name: a LAN device looking up a known-bad domain, end to end
     inputs:
@@ -98,12 +99,61 @@ tests:
               assert!(!exists(."threat.enrichments.matched.atomic"))
               assert!(!exists(."threat.enrichments.indicator.provider"))
 
-  - name: a parent or child domain isn't a match (exact values only)
+  - name: a subdomain of a listed domain matches it
     inputs:
       - insert_at: geo
         type: vrl
         source: |
-          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "dns.question.name": "www.bad.example.com"}
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "dns.question.name": "cdn.www.bad.example.com"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["bad.example.com"])
+              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["dns.question.name"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["ThreatFox"])
+
+  - name: a listed domain's parent isn't a match
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "dns.question.name": "example.com"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(!exists(."threat.enrichments.matched.atomic"))
+
+  - name: an address in a listed network matches the network
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "192.0.2.77", "destination.ip": "2001:DB8:DEAD:1::5"}
+          %dataset = "syslog.log"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["source.ip", "destination.ip"])
+              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["192.0.2.0/24", "2001:db8:dead::/48"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.type"]), ["ipv4-addr", "ipv6-addr"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["Spamhaus", "Spamhaus"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.description"]), ["DROP SBL000001 (192.0.2.0/24)", "DROP SBL000002 (2001:db8:dead::/48)"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.reference"]), ["https://check.spamhaus.org/sbl/query/SBL000001", "https://check.spamhaus.org/sbl/query/SBL000002"])
+
+  - name: an address next to a listed network isn't a match
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {"_msg": "x", "_time": t'2026-10-17T12:00:00Z', "source.ip": "192.0.3.1", "destination.ip": "2001:db8:deae::1"}
           %dataset = "syslog.log"
     outputs:
       - extract_from: final

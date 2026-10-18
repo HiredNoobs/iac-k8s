@@ -8,7 +8,7 @@
 # syslog, relayed by rsyslog (apps/base/rsyslog) to service.yaml, and the prx-999 VMs' journals,
 # sent by their own Vector (iac-homelab's vector role) through journald-route.yaml, with where
 # their public addresses are (config/aggregator/geo.yaml, DB-IP's data, scripts/geodata.sh) and
-# what's known-bad (config/aggregator/threat-intel.yaml, abuse.ch's, scripts/threatintel.py), both
+# what's known-bad (config/aggregator/threat-intel.yaml, abuse.ch's and Spamhaus's, scripts/threatintel.py), both
 # refreshed by aggregator-refresh.yaml. Both end in config/common/.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

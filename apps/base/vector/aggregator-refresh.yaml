@@ -1,4 +1,4 @@
-# Restarts vector-aggregator every 6 hours, so its init containers fetch abuse.ch's threat intel
+# Restarts vector-aggregator every 6 hours, so its init containers fetch the threat intel
 # again (scripts/threatintel.py: ThreatFox adds indicators all day) and DB-IP's new month
 # (scripts/geodata.sh, which downloads nothing while it has the newest): Vector only reads them
 # when it starts (aggregator.yaml). Each restart is a few seconds of syslog and journals queued

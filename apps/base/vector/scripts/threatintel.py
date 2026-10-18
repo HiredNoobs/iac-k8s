@@ -1,7 +1,9 @@
 """vector-aggregator's threat intel (config/aggregator/threat-intel.yaml), run by its init
 container (aggregator.yaml): abuse.ch's ThreatFox recent domains and IP:ports (the last 48
-hours, CC0) and URLhaus's host file (hosts serving malware now), as one CSV table in $TI_DIR
-that Vector looks values up in exactly.
+hours, CC0), URLhaus's host file (hosts serving malware now) and Spamhaus's DROP, IPv4 and IPv6
+(networks run by criminals, free to use under https://www.spamhaus.org/drop/terms/), as one CSV
+table in $TI_DIR that Vector looks values up in (a name's parents and an address's networks
+too, threat-intel.yaml).
 
 Each feed's last good copy is kept (<feed>.csv): a feed that can't be fetched, or comes back
 empty, keeps its previous rows, so the aggregator always starts. With no copy at all, a feed
@@ -12,6 +14,7 @@ The aggregator is restarted every 6 hours to fetch them again (aggregator-refres
 import csv
 import io
 import ipaddress
+import json
 import os
 import sys
 import urllib.request
@@ -95,10 +98,43 @@ def urlhaus_hosts(url):
     return rows
 
 
+# The prefix lengths threat-intel.yaml looks an address's networks up at.
+PREFIXES = {4: range(8, 33), 6: range(16, 65)}
+
+
+def spamhaus_drop(url):
+    """Spamhaus's DROP as JSON lines: {"cidr", "sblid", "rir"} per network, then a metadata line.
+    Networks are written as Vector's ip_subnet writes them (Python's and Rust's forms agree)."""
+    rows = []
+    for line in fetch(url).splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        if "cidr" not in record:
+            continue
+        network = ipaddress.ip_network(record["cidr"], strict=False)
+        if network.prefixlen not in PREFIXES[network.version]:
+            print(f"{url}: {network} is outside the prefix lengths looked up, it can't match", file=sys.stderr)
+            continue
+        sbl = record.get("sblid", "")
+        rows.append({
+            "value": str(network),
+            "type": "ipv6-addr" if network.version == 6 else "ipv4-addr",
+            "provider": "Spamhaus",
+            "description": f"DROP {sbl} ({network})",
+            "confidence": "High",
+            "first_seen": "",
+            "reference": f"https://check.spamhaus.org/sbl/query/{sbl}",
+        })
+    return rows
+
+
 FEEDS = {
     "threatfox-domains": lambda: threatfox("https://threatfox.abuse.ch/export/csv/domains/recent/"),
     "threatfox-ip-port": lambda: threatfox("https://threatfox.abuse.ch/export/csv/ip-port/recent/"),
     "urlhaus-hosts": lambda: urlhaus_hosts("https://urlhaus.abuse.ch/downloads/hostfile/"),
+    "spamhaus-drop-v4": lambda: spamhaus_drop("https://www.spamhaus.org/drop/drop_v4.json"),
+    "spamhaus-drop-v6": lambda: spamhaus_drop("https://www.spamhaus.org/drop/drop_v6.json"),
 }
 
 

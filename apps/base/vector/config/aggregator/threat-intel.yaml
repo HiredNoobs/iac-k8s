@@ -1,19 +1,24 @@
 # Known-bad domains and addresses, after geo.yaml: a line's dns.question.name, dns.resolved_ip,
-# source.ip and destination.ip looked up exactly (no parent domains, no ranges) in abuse.ch's
-# ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), which the aggregator's
-# init container fetches each start (../../scripts/threatintel.py, ../../aggregator.yaml).
+# source.ip and destination.ip looked up in abuse.ch's ThreatFox (the last 48 hours) and URLhaus
+# (hosts serving malware now), and the addresses in Spamhaus's DROP (networks run by criminals),
+# which the aggregator's init container fetches each start (../../scripts/threatintel.py,
+# ../../aggregator.yaml). A name matches an indicator for it or for any of its parents down to
+# two labels (www.bad.example matches bad.example, not the other way round); an address matches
+# an indicator for it or for a network it's in (/8 to /32, IPv6 /16 to /64: the table holds
+# networks as written by ip_subnet, 192.0.2.0/24).
 #
 # A match is recorded as Elastic records an indicator match, under threat.enrichments: arrays,
 # an item per match (a line can match more than one), in step with each other:
-#   threat.enrichments.matched.atomic       the value that matched
-#   threat.enrichments.matched.field        the field it was in (dns.question.name, ...)
+#   threat.enrichments.matched.atomic       the indicator that matched (the value, a parent, a network)
+#   threat.enrichments.matched.field        the field the value was in (dns.question.name, ...)
 #   threat.enrichments.matched.type         enrichment (matched as the line came in)
 #   threat.enrichments.indicator.type       domain-name, ipv4-addr, ipv6-addr
-#   threat.enrichments.indicator.provider   ThreatFox, URLhaus
-#   threat.enrichments.indicator.description  the malware and threat type (Vidar (botnet_cc))
+#   threat.enrichments.indicator.provider   ThreatFox, URLhaus, Spamhaus
+#   threat.enrichments.indicator.description  the malware and threat type (Vidar (botnet_cc)),
+#                                             DROP's SBL record and network
 #   threat.enrichments.indicator.confidence   High, Medium, Low, Not Specified
 #   threat.enrichments.indicator.first_seen   when the feed first had it
-#   threat.enrichments.indicator.reference    its page on abuse.ch
+#   threat.enrichments.indicator.reference    its page on abuse.ch or Spamhaus
 # The detections are apps/base/monitoring/vmalert-logs/rules/threat-intel.yml.
 #
 # The path is relative to the working directory, as geo.yaml's: /var/lib/vector for the
@@ -32,16 +37,41 @@ transforms:
     type: remap
     inputs: [geo]
     source: |
+      ipv4_prefixes = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+      ipv6_prefixes = [
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64
+      ]
       matches = []
       for_each(["dns.question.name", "dns.resolved_ip", "source.ip", "destination.ip"]) -> |_i, field| {
         value = get!(., [field])
         values = if is_array(value) { array!(value) } else { [value] }
         for_each(values) -> |_j, candidate| {
           if is_string(candidate) && candidate != "" {
-            atomic = downcase(string!(candidate))
-            rows = find_enrichment_table_records("threat_intel", {"value": atomic}) ?? []
-            for_each(rows) -> |_k, row| {
-              matches = push(matches, {"field": field, "atomic": atomic, "row": row})
+            value = downcase(string!(candidate))
+            # What could be listed: the value, and a name's parents or an address's networks.
+            atomics = [value]
+            if field == "dns.question.name" {
+              labels = split(value, ".")
+              for_each(labels) -> |k, _label| {
+                if k > 0 && k < length(labels) - 1 {
+                  atomics = push(atomics, join(slice!(labels, k), "."))
+                }
+              }
+            } else {
+              prefixes = if is_ipv4(value) { ipv4_prefixes } else if is_ipv6(value) { ipv6_prefixes } else { [] }
+              for_each(prefixes) -> |_k, prefix| {
+                network = ip_subnet(value, "/" + to_string(prefix)) ?? null
+                if is_string(network) {
+                  atomics = push(atomics, string!(network) + "/" + to_string(prefix))
+                }
+              }
+            }
+            for_each(atomics) -> |_k, atomic| {
+              rows = find_enrichment_table_records("threat_intel", {"value": atomic}) ?? []
+              for_each(rows) -> |_l, row| {
+                matches = push(matches, {"field": field, "atomic": atomic, "row": row})
+              }
             }
           }
         }

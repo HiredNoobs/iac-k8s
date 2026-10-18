@@ -3,3 +3,5 @@ bad.example.com,domain-name,ThreatFox,Vidar (botnet_cc),High,2026-10-17T18:05:48
 198.51.100.66,ipv4-addr,ThreatFox,Remcos (botnet_cc),High,2026-10-17T17:11:16Z,https://threatfox.abuse.ch/ioc/2/
 198.51.100.66,ipv4-addr,URLhaus,Malware distribution (payload_delivery),Not Specified,,https://urlhaus.abuse.ch/host/198.51.100.66/
 malware.example.net,domain-name,URLhaus,Malware distribution (payload_delivery),Not Specified,,https://urlhaus.abuse.ch/host/malware.example.net/
+192.0.2.0/24,ipv4-addr,Spamhaus,DROP SBL000001 (192.0.2.0/24),High,,https://check.spamhaus.org/sbl/query/SBL000001
+2001:db8:dead::/48,ipv6-addr,Spamhaus,DROP SBL000002 (2001:db8:dead::/48),High,,https://check.spamhaus.org/sbl/query/SBL000002

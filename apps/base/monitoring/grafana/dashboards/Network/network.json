@@ -2249,7 +2249,7 @@
     },
     {
       "type": "row",
-      "title": "Known-bad (abuse.ch threat intel)",
+      "title": "Known-bad (abuse.ch and Spamhaus threat intel)",
       "id": 31,
       "collapsed": false,
       "gridPos": {
@@ -2264,7 +2264,7 @@
       "type": "stat",
       "title": "Known-bad lookups",
       "id": 32,
-      "description": "DNS lookups of a domain on the lists (DnsLookupOfKnownBadDomain). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "description": "DNS lookups of a domain on the lists (DnsLookupOfKnownBadDomain). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), and Spamhaus's DROP for addresses (networks run by criminals); subdomains of a listed domain and addresses in a listed network match too; matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2324,7 +2324,7 @@
       "type": "stat",
       "title": "Known-bad answers",
       "id": 33,
-      "description": "Answers resolving an unlisted name to a listed address (DnsAnswerWithKnownBadIp). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "description": "Answers resolving an unlisted name to a listed address (DnsAnswerWithKnownBadIp). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), and Spamhaus's DROP for addresses (networks run by criminals); subdomains of a listed domain and addresses in a listed network match too; matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2384,7 +2384,7 @@
       "type": "stat",
       "title": "Known-bad addresses seen",
       "id": 34,
-      "description": "Lines with a listed address as source or destination, without the internet's dropped packets (TrafficWithKnownBadIp). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "description": "Lines with a listed address as source or destination, without the internet's dropped packets (TrafficWithKnownBadIp). abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), and Spamhaus's DROP for addresses (networks run by criminals); subdomains of a listed domain and addresses in a listed network match too; matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2444,7 +2444,7 @@
       "type": "stat",
       "title": "Dropped from known-bad",
       "id": 35,
-      "description": "Packets from listed addresses on the internet the firewall dropped: expected, no alert. abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "description": "Packets from listed addresses on the internet the firewall dropped: expected, no alert. abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), and Spamhaus's DROP for addresses (networks run by criminals); subdomains of a listed domain and addresses in a listed network match too; matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2504,7 +2504,7 @@
       "type": "table",
       "title": "Matches",
       "id": 36,
-      "description": "Every line that matched, by what matched and where: the indicator's page on abuse.ch in Reference. abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
+      "description": "Every line that matched, by what matched and where: the indicator's page on abuse.ch or Spamhaus in Reference. abuse.ch's ThreatFox (the last 48 hours) and URLhaus (hosts serving malware now), and Spamhaus's DROP for addresses (networks run by criminals); subdomains of a listed domain and addresses in a listed network match too; matched as the lines came in (vector-aggregator, refreshed every 6 hours).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
