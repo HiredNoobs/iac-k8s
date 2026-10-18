@@ -78,6 +78,12 @@
       "enabled": false
     },
     {
+      "description": "Charts whose values set image.repository: the regex manager (the comment above the tag) updates the tag and digest, the flux manager would only change the tag",
+      "matchManagers": ["flux"],
+      "matchPackageNames": ["plndr/kube-vip", "stakater/reloader"],
+      "enabled": false
+    },
+    {
       "description": "A chart, the image it runs (its appVersion, pinned by digest) and lint.yml's CRD schemas move together",
       "matchPackageNames": ["cert-manager", "quay.io/jetstack/cert-manager-*"],
       "groupName": "cert-manager"
@@ -92,7 +98,7 @@
       "prBodyNotes": ["Also check the Gateway API version the chart installs and bump `GATEWAY_API_VERSION` and its checksum in lint.yml by hand."]
     },
     {
-      "matchPackageNames": ["kube-vip", "ghcr.io/kube-vip/kube-vip"],
+      "matchPackageNames": ["kube-vip", "plndr/kube-vip"],
       "groupName": "kube-vip"
     },
     {
@@ -100,7 +106,7 @@
       "groupName": "metrics-server"
     },
     {
-      "matchPackageNames": ["reloader", "ghcr.io/stakater/reloader"],
+      "matchPackageNames": ["reloader", "stakater/reloader"],
       "groupName": "reloader"
     },
     {
@@ -108,7 +114,7 @@
       "groupName": "kube-state-metrics"
     },
     {
-      "matchPackageNames": ["prometheus-blackbox-exporter", "quay.io/prometheus/blackbox-exporter"],
+      "matchPackageNames": ["prometheus-blackbox-exporter", "prom/blackbox-exporter"],
       "groupName": "blackbox-exporter"
     },
     {
@@ -138,7 +144,7 @@
     },
     {
       "description": "Vendored manifests: update-pins.sh re-vendors them when the image changes",
-      "matchPackageNames": ["ghcr.io/alex1989hu/kubelet-serving-cert-approver", "ghcr.io/rabbitmq/messaging-topology-operator"],
+      "matchPackageNames": ["ghcr.io/alex1989hu/kubelet-serving-cert-approver", "rabbitmqoperator/messaging-topology-operator"],
       "prBodyNotes": ["The vendored release manifest was replaced with the new version's: review its diff."]
     },
     {

@@ -17,9 +17,10 @@ spec:
   values:
     image:
       # Only the digest is used once it's set, the tag says which version it is.
-      # renovate: image=ghcr.io/stakater/reloader
+      repository: stakater/reloader
+      # renovate: image=stakater/reloader
       tag: v1.4.22
-      digest: sha256:def2480040adc164b3a57340e77674eadfd88fb7f0593df25e93297f29c7fd7c
+      digest: sha256:96cc6bad219032f01a795803f23093ee0277b9308999ec4ce25a8382a22910df
     reloader:
       # Restarts by changing a pod template annotation rather than adding env vars to the
       # containers, which stays out of the way of Flux's manifests.
