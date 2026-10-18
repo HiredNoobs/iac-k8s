@@ -62,9 +62,16 @@ groups:
           summary: Pod crash looping ({{ $labels.namespace }}/{{ $labels.pod }})
           description: "Container {{ $labels.container }} of {{ $labels.namespace }}/{{ $labels.pod }} is in CrashLoopBackOff."
 
-      # Pending (unschedulable, image pull, volume not attaching), Unknown or Failed.
+      # Pending (unschedulable, image pull, volume not attaching), Unknown or Failed. Not a Job's
+      # Failed pods: its retries leave them even when it then succeeds, and KubeJobFailed and
+      # KubeCronJobFailing say when the Job itself failed.
       - alert: KubePodNotReady
-        expr: 'sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"}) > 0'
+        expr: >-
+          sum by (namespace, pod) (
+            kube_pod_status_phase{phase=~"Pending|Unknown|Failed"}
+            unless on (namespace, pod)
+              (kube_pod_status_phase{phase="Failed"} == 1 and on (namespace, pod) kube_pod_owner{owner_kind="Job"})
+          ) > 0
         for: 15m
         labels:
           severity: warning
@@ -108,16 +115,52 @@ groups:
           summary: DaemonSet not ready ({{ $labels.namespace }}/{{ $labels.daemonset }})
           description: "{{ $labels.namespace }}/{{ $labels.daemonset }} has pods that aren't ready on some nodes."
 
-      # A failed Job stays until it's deleted (or pushed out by its CronJob's failedJobsHistoryLimit),
-      # so this keeps firing until then: delete the Job once dealt with.
+      # A failed Job (its Failed condition: out of retries or past its deadline, not a pod that
+      # failed before a retry succeeded) that no CronJob runs: CronJobs' are KubeCronJobFailing's.
+      # It stays until it's deleted, so this keeps firing until then: delete the Job once dealt
+      # with.
       - alert: KubeJobFailed
-        expr: 'kube_job_status_failed > 0'
+        expr: >-
+          kube_job_failed{condition="true"} == 1
+          unless on (namespace, job_name) kube_job_owner{owner_kind="CronJob"}
         for: 0m
         labels:
           severity: warning
         annotations:
           summary: Job failed ({{ $labels.namespace }}/{{ $labels.job_name }})
           description: "{{ $labels.namespace }}/{{ $labels.job_name }} failed, see its pods' logs (kubectl -n {{ $labels.namespace }} logs job/{{ $labels.job_name }})."
+
+      # A CronJob whose latest finished run failed, by start time; a run still going doesn't
+      # count. Each run is a new Job and a failure deletes the previous failed one, so a per-Job
+      # alert would resolve and fire again every run; this one is the CronJob's, firing from the
+      # first failed run until one succeeds.
+      - alert: KubeCronJobFailing
+        expr: >-
+          max by (namespace, owner_name) (
+            (kube_job_status_start_time and on (namespace, job_name) kube_job_failed{condition="true"} == 1)
+            * on (namespace, job_name) group_left (owner_name) kube_job_owner{owner_kind="CronJob"}
+          )
+          > on (namespace, owner_name)
+          max by (namespace, owner_name) (
+            (kube_job_status_start_time and on (namespace, job_name) kube_job_complete{condition="true"} == 1)
+            * on (namespace, job_name) group_left (owner_name) kube_job_owner{owner_kind="CronJob"}
+          )
+          or
+          max by (namespace, owner_name) (
+            (kube_job_status_start_time and on (namespace, job_name) kube_job_failed{condition="true"} == 1)
+            * on (namespace, job_name) group_left (owner_name) kube_job_owner{owner_kind="CronJob"}
+          )
+          unless on (namespace, owner_name)
+          max by (namespace, owner_name) (
+            (kube_job_status_start_time and on (namespace, job_name) kube_job_complete{condition="true"} == 1)
+            * on (namespace, job_name) group_left (owner_name) kube_job_owner{owner_kind="CronJob"}
+          )
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: CronJob's last run failed ({{ $labels.namespace }}/{{ $labels.owner_name }})
+          description: "The latest finished run of CronJob {{ $labels.namespace }}/{{ $labels.owner_name }} failed, and it stays firing until a run succeeds. Its failed Job's pods have the logs: kubectl -n {{ $labels.namespace }} get jobs, then kubectl -n {{ $labels.namespace }} logs job/<name>. To check a fix without waiting for the schedule: kubectl -n {{ $labels.namespace }} create job --from=cronjob/{{ $labels.owner_name }} <name>."
 
       - alert: KubePersistentVolumeClaimPending
         expr: 'kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1'
