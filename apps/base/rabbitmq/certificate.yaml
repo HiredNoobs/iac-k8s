@@ -1,5 +1,6 @@
 # RabbitMQ's server certificate, renewed by cert-manager (Reloader restarts RabbitMQ to load
-# it). The secret holds tls.crt, tls.key and ca.crt (rabbitmq-ca, which clients are checked
+# it). Every node has the same one, also as its client certificate between nodes (and the CLI's,
+# inter_node_tls.config). The secret holds tls.crt, tls.key and ca.crt (rabbitmq-ca, which clients are checked
 # against). No commonName: the CA's is "rabbitmq", OpenSSL would take a certificate with the
 # same one for self-signed.
 apiVersion: cert-manager.io/v1
@@ -14,6 +15,10 @@ spec:
     - rabbitmq-broker.rabbitmq.svc.cluster.local
     - rabbitmq-0.rabbitmq.rabbitmq.svc
     - rabbitmq-0.rabbitmq.rabbitmq.svc.cluster.local
+    - rabbitmq-1.rabbitmq.rabbitmq.svc
+    - rabbitmq-1.rabbitmq.rabbitmq.svc.cluster.local
+    - rabbitmq-2.rabbitmq.rabbitmq.svc
+    - rabbitmq-2.rabbitmq.rabbitmq.svc.cluster.local
     - rabbitmq-broker.hirednoobs.com
     # The CLI in the pod.
     - localhost
@@ -21,6 +26,7 @@ spec:
     - digital signature
     - key encipherment
     - server auth
+    - client auth
   issuerRef:
     kind: ClusterIssuer
     name: rabbitmq-ca

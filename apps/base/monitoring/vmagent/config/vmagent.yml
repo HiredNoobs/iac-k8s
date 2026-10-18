@@ -165,18 +165,6 @@ scrape_configs:
       - action: labeldrop
         regex: vm
 
-  # namespace for RabbitMQ's dashboard, which picks the cluster by it.
-  - job_name: "rabbitmq"
-    metrics_path: /metrics
-    scheme: http
-    static_configs:
-      - targets:
-          - "rabbitmq-broker.rabbitmq.svc:15692"
-        labels: { namespace: rabbitmq }
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-
   # The monitoring components themselves, by their service names (single instances), verified
   # with the monitoring CA. vmagent scrapes itself the same way. Each one's job is its name
   # (victoriametrics, vmagent, ...), which VictoriaMetrics' dashboards select by.

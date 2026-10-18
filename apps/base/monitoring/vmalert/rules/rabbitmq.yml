@@ -1,0 +1,43 @@
+# RabbitMQ (apps/base/rabbitmq), from each node's rabbitmq_prometheus endpoint (vmagent's pods
+# job, job rabbitmq): the cluster missing a node (its quorum queues then have no spare), and the
+# alarms that block publishers. A node whose metrics can't be scraped at all is TargetDown's.
+groups:
+  - name: RabbitMQ
+    interval: 60s
+    rules:
+      # rabbitmq_identity_info is one series per running node, with the cluster it's in.
+      - alert: RabbitmqNodesMissing
+        expr: 'count(rabbitmq_identity_info{namespace="rabbitmq"}) < 3 or absent(rabbitmq_identity_info{namespace="rabbitmq"}) - 1'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ has {{ $value }} of 3 nodes
+          description: "Fewer than three RabbitMQ nodes are running: one more down and its quorum queues stop (contentbot with them). rabbitmq cluster_status says which; the missing pod's log why."
+
+      - alert: RabbitmqMoreThanOneCluster
+        expr: 'count(count by (rabbitmq_cluster) (rabbitmq_identity_info{namespace="rabbitmq"})) > 1'
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The RabbitMQ nodes are in {{ $value }} clusters
+          description: "The nodes don't all report the same cluster name: one formed its own cluster instead of joining rabbitmq-0 (a lost volume, a wrong cookie). rabbitmq cluster_status on each node; the stray one must be reset and joined again."
+
+      - alert: RabbitmqMemoryAlarm
+        expr: 'max by (pod) (rabbitmq_alarms_memory_used_watermark{namespace="rabbitmq"}) == 1'
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ blocks publishers, {{ $labels.pod }} is over its memory watermark
+          description: "{{ $labels.pod }} uses more than 60% of its memory limit (statefulset.yaml, RabbitMQ's default watermark): RabbitMQ blocks every publishing connection in the cluster until it's back under. Messages piling up unconsumed (rabbitmq list_queues name messages consumers)."
+
+      - alert: RabbitmqDiskAlarm
+        expr: 'max by (pod) (rabbitmq_alarms_free_disk_space_watermark{namespace="rabbitmq"}) == 1'
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ blocks publishers, {{ $labels.pod }} is low on disk
+          description: "{{ $labels.pod }}'s volume has less free space than its disk_free_limit: RabbitMQ blocks every publishing connection in the cluster. Grow the volume (Longhorn) or find what fills it."

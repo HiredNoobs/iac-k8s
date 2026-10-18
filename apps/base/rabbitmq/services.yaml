@@ -1,5 +1,6 @@
-# Gives the pod its stable name, rabbitmq-0.rabbitmq.rabbitmq.svc, which is also the RabbitMQ
-# node name. Published before the pod is ready so RabbitMQ can resolve itself at boot.
+# Gives each pod its stable name, rabbitmq-<n>.rabbitmq.rabbitmq.svc, which is also its RabbitMQ
+# node name and how the nodes find each other. Published before the pods are ready so they can
+# resolve themselves and each other at boot.
 apiVersion: v1
 kind: Service
 metadata:
@@ -19,8 +20,9 @@ spec:
 ---
 # Clients in the cluster use rabbitmq-broker.rabbitmq.svc, clients outside it
 # rabbitmq-broker.hirednoobs.com (Pi-hole's record for the LoadBalancer IP set per cluster, see
-# apps/<cluster>/). kube-vip announces the IP from the node running RabbitMQ. The web UI is
-# rabbitmq.hirednoobs.com (routes.yaml), the metrics port is scraped by vmagent.
+# apps/<cluster>/). Any node serves any queue, so it's all three; kube-vip announces the IP from
+# a node with a ready one. The web UI is rabbitmq.hirednoobs.com (routes.yaml); vmagent scrapes
+# each pod's metrics port itself.
 apiVersion: v1
 kind: Service
 metadata:
