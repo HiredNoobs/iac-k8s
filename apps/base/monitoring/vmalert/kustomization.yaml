@@ -18,3 +18,4 @@ configMapGenerator:
       - rules/logging.yml
       - rules/falco.yml
       - rules/redis.yml
+      - rules/rabbitmq.yml

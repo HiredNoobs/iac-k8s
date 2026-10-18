@@ -1,6 +1,12 @@
-# A single RabbitMQ node, its data (definitions, users and durable queues) on a Longhorn volume
-# that follows the pod to any node. No PDB: with one node there's nothing to keep up during a
-# drain.
+# A three-node RabbitMQ cluster: rabbitmq-0 forms it, rabbitmq-1 and -2 join it (rabbitmq.conf).
+# Queues are quorum queues, replicated to all three, so any one node can be down. Each node's
+# data (its definitions, users and queues) is on its own Longhorn volume that follows the pod to
+# any node.
+#
+# The pods start together (Parallel): after a full stop the last node to stop has the newest
+# metadata and the others wait for it, so starting them one after another could wait forever.
+# One per node and preferably one per Proxmox host (zone); the PDB and the preStop hook keep a
+# majority up in a drain.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -8,13 +14,13 @@ metadata:
   labels:
     app.kubernetes.io/name: rabbitmq
   annotations:
-    # Restart to load a renewed certificate or a changed default user.
-    secret.reloader.stakater.com/reload: rabbitmq-tls,rabbitmq-default-user
+    # Restart to load a renewed certificate, a changed default user or cookie.
+    secret.reloader.stakater.com/reload: rabbitmq-tls,rabbitmq-default-user,rabbitmq-erlang-cookie
 spec:
   serviceName: rabbitmq
-  # Clustering isn't set up yet, a second independent node would split the queues.
-  replicas: 1
-  # The volume outlives the StatefulSet, removing RabbitMQ from git doesn't delete the data.
+  replicas: 3
+  podManagementPolicy: Parallel
+  # The volumes outlive the StatefulSet, removing RabbitMQ from git doesn't delete the data.
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: Retain
     whenScaled: Retain
@@ -25,6 +31,10 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: rabbitmq
+      annotations:
+        # Scraped by vmagent's pods job (job rabbitmq), each node's own metrics.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15692"
     spec:
       # The rabbitmq user from the image, fsGroup lets it read the certs and write its data.
       securityContext:
@@ -35,8 +45,52 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
-      # Time to close connections and sync queues to disk on shutdown.
-      terminationGracePeriodSeconds: 120
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: rabbitmq
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/zone
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: rabbitmq
+      # The preStop hook waits for the queues to have a majority without this node, then closes
+      # its connections; the rest is closing them and syncing queues to disk.
+      terminationGracePeriodSeconds: 600
+      initContainers:
+        # The cookie into the data directory ($HOME of the rabbitmq user), where the node and the
+        # CLI tools read it; RabbitMQ wants it readable by its owner only.
+        - name: erlang-cookie
+          image: rabbitmq:4.2.4-management@sha256:aeee1db0ff9fdb1347f3585242c14ed10877b56c22eeaa113b21208ef3dd3edf
+          command:
+            - sh
+            - -c
+            - >-
+              rm -f /var/lib/rabbitmq/.erlang.cookie &&
+              cp /etc/rabbitmq-cookie/cookie /var/lib/rabbitmq/.erlang.cookie &&
+              chmod 0400 /var/lib/rabbitmq/.erlang.cookie
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: erlang-cookie
+              mountPath: /etc/rabbitmq-cookie
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/rabbitmq
       containers:
         - name: rabbitmq
           image: rabbitmq:4.2.4-management@sha256:aeee1db0ff9fdb1347f3585242c14ed10877b56c22eeaa113b21208ef3dd3edf
@@ -55,13 +109,19 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             # The data directory is named after the node, so it's the pod's stable FQDN
-            # (rabbit@rabbitmq-0.rabbitmq.rabbitmq.svc.cluster.local), which won't change when
-            # clustering is added. Changing it (e.g. the namespace) starts an empty node.
+            # (rabbit@rabbitmq-0.rabbitmq.rabbitmq.svc.cluster.local), which is also how the
+            # nodes find each other. Changing it (e.g. the namespace) starts an empty node.
             - name: RABBITMQ_USE_LONGNAME
               value: "true"
             - name: RABBITMQ_NODENAME
               value: "rabbit@$(POD_NAME).rabbitmq.$(POD_NAMESPACE).svc.cluster.local"
-          # RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS, only used when the volume is empty.
+            # Erlang distribution (node to node, and the CLI tools in the pod, probes included)
+            # over TLS.
+            - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
+              value: "-proto_dist inet_tls -ssl_dist_optfile /etc/rabbitmq/inter_node_tls.config"
+            - name: RABBITMQ_CTL_ERL_ARGS
+              value: "-proto_dist inet_tls -ssl_dist_optfile /etc/rabbitmq/inter_node_tls.config"
+          # RABBITMQ_DEFAULT_USER and RABBITMQ_DEFAULT_PASS, only used when the cluster is new.
           envFrom:
             - secretRef:
                 name: rabbitmq-default-user
@@ -74,6 +134,12 @@ spec:
               protocol: TCP
             - name: prometheus
               containerPort: 15692
+              protocol: TCP
+            - name: epmd
+              containerPort: 4369
+              protocol: TCP
+            - name: cluster
+              containerPort: 25672
               protocol: TCP
           startupProbe:
             tcpSocket:
@@ -92,6 +158,18 @@ spec:
             periodSeconds: 60
             timeoutSeconds: 30
             failureThreshold: 3
+          # Before stopping, wait until every quorum queue has a majority on the other nodes (so
+          # stopping this one doesn't take any offline), then hand its queue leaders and clients
+          # to the others. Times out rather than block a drain for good.
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - >-
+                    rabbitmq-upgrade await_online_quorum_plus_one -t 480 &&
+                    rabbitmq-upgrade drain -t 60
           resources:
             requests:
               cpu: 100m
@@ -108,6 +186,10 @@ spec:
               mountPath: /etc/rabbitmq/enabled_plugins
               subPath: enabled_plugins
               readOnly: true
+            - name: config
+              mountPath: /etc/rabbitmq/inter_node_tls.config
+              subPath: inter_node_tls.config
+              readOnly: true
             - name: certs
               mountPath: /etc/rabbitmq/tls
               readOnly: true
@@ -121,6 +203,10 @@ spec:
           secret:
             secretName: rabbitmq-tls
             defaultMode: 0440
+        - name: erlang-cookie
+          secret:
+            secretName: rabbitmq-erlang-cookie
+            defaultMode: 0440
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -132,3 +218,16 @@ spec:
         resources:
           requests:
             storage: 2Gi
+---
+# One node at a time in a drain: two of three keep every quorum queue available.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq
+  labels:
+    app.kubernetes.io/name: rabbitmq
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
