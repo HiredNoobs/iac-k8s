@@ -26,7 +26,7 @@ spec:
   chart:
     spec:
       chart: longhorn
-      version: "1.12.1"
+      version: "1.13.0"
       sourceRef:
         kind: HelmRepository
         name: longhorn
@@ -54,6 +54,10 @@ spec:
       # replacements can't start. This deletes those pods, detaching the volumes: the new pod
       # uses the copy on another host, which has every write Longhorn acknowledged.
       nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+      # After an upgrade, each volume's engine moves to the new version by itself, one volume per
+      # node at a time: attached, healthy volumes live (no detach), detached ones offline. A
+      # failed one keeps its old engine and is retried. 0 (the default) leaves it to the UI.
+      concurrentAutomaticEngineUpgradePerNodeLimit: 1
     # The default StorageClass, longhorn. longhorn-single (one copy) is in
     # infrastructure/configs/longhorn.
     persistence:
@@ -68,13 +72,30 @@ spec:
     # snapshot-controller aren't installed (nothing here uses it; snapshots and backups are
     # Longhorn's own), so it only logged "Failed to watch" errors. A string: the chart passes the
     # value only when it's truthy, and the number 0 isn't (longhorn-manager then defaults to 3).
-    # Not a documented setting (Longhorn's Rancher form allows 1-10, longhorn-manager v1.12.1
+    # Not a documented setting (Longhorn's Rancher form allows 1-10, longhorn-manager v1.13.0
     # doesn't check): after an upgrade, check deploy/csi-snapshotter is still at 0 replicas.
+    #
+    # allowControllerSecretAccess: since 1.13 the CSI controller has its own service account,
+    # which by default may get any Secret in the cluster (for StorageClass Secret parameters).
+    # Nothing here uses them: no StorageClass has csi.storage.k8s.io/*-secret-* parameters and
+    # no volume is encrypted.
     csi:
       snapshotterReplicaCount: "0"
+      allowControllerSecretAccess: false
+    # Longhorn's NetworkPolicies for its own traffic (on by default since 1.13). Flannel doesn't
+    # enforce them; with a CNI that does, only Longhorn's components could reach the managers'
+    # port 9500, so vmagent's longhorn job is added for the metrics on it.
+    networkPolicies:
+      metricsScrapeSources:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
   # The default StorageClass with an SELinux label for its volumes (csi-selinux.yaml), as
   # longhorn-single has: the chart has no value for mountOptions. longhorn-manager makes the class
-  # from this ConfigMap, so it's the chart's as rendered for these values (1.12.1) plus
+  # from this ConfigMap, so it's the chart's as rendered for these values (1.13.0) plus
   # mountOptions; check it against the chart's templates/storageclass.yaml after an upgrade.
   postRenderers:
     - kustomize:
