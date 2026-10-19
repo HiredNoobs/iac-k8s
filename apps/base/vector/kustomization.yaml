@@ -9,7 +9,7 @@
 # sent by their own Vector (iac-homelab's vector role) through journald-route.yaml, with where
 # their public addresses are (config/aggregator/geo.yaml, DB-IP's data, scripts/geodata.sh) and
 # what's known-bad (config/aggregator/threat-intel.yaml, abuse.ch's and Spamhaus's, scripts/threatintel.py), both
-# refreshed by aggregator-refresh.yaml. Both end in config/common/.
+# refreshed in place every 6 hours. Both end in config/common/.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: vector
@@ -19,7 +19,6 @@ resources:
   - rbac.yaml
   - daemonset.yaml
   - aggregator.yaml
-  - aggregator-refresh.yaml
   - service.yaml
   - journald-certificate.yaml
   - journald-route.yaml
@@ -44,9 +43,6 @@ configMapGenerator:
       - config/collector/pods.yaml
       - config/collector/talos.yaml
       - config/collector/vaultwarden.yaml
-  # Not named after the Deployment: kustomize rewrites a Role's resourceNames that match a
-  # generated ConfigMap to its hashed name, which took aggregator-refresh's access to the
-  # Deployment.
   - name: vector-aggregator-config
     files:
       - config/common/pipeline.yaml
@@ -55,7 +51,7 @@ configMapGenerator:
       - config/aggregator/journald.yaml
       - config/aggregator/syslog.yaml
       - config/aggregator/threat-intel.yaml
-  # The aggregator's init containers fetch its geo data and threat intel with them.
+  # The aggregator's init and refresh containers fetch its geo data and threat intel with them.
   - name: vector-scripts
     files:
       - scripts/geodata.sh

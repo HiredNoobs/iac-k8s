@@ -1,13 +1,14 @@
 #!/bin/sh
-# vector-aggregator's geo data (config/aggregator/geo.yaml), run by its init container
-# (aggregator.yaml): DB-IP's IP to City Lite and IP to ASN Lite (https://db-ip.com/db/lite.php,
-# CC BY 4.0, monthly) into $GEO_DIR as city.mmdb and asn.mmdb. Each file is this month's, else
-# last month's (a new month's is out a few days in), else the copy already there: the pod starts
-# with old data when DB-IP can't be reached. Without any copy (a new volume), an empty database:
-# Vector can't start without the file, and with this one its lines just have no geo fields until
-# a later start downloads the data (vmalert-logs' VectorGeoDataMissing). A file that's already
-# the newest month isn't downloaded again, so restarts are cheap (aggregator-refresh.yaml restarts
-# the aggregator every 6 hours, for its threat intel).
+# vector-aggregator's geo data (config/aggregator/geo.yaml), run by its init container and every
+# 6 hours by its refresh container (aggregator.yaml): DB-IP's IP to City Lite and IP to ASN Lite
+# (https://db-ip.com/db/lite.php, CC BY 4.0, monthly) into $GEO_DIR as city.mmdb and asn.mmdb.
+# Each file is this month's, else last month's (a new month's is out a few days in), else the
+# copy already there: Vector keeps old data when DB-IP can't be reached. Without any copy (a new
+# volume), an empty database: Vector can't start without the file, and with this one its lines
+# just have no geo fields until a later run downloads the data (vmalert-logs'
+# VectorGeoDataMissing). A file that's already the newest month isn't downloaded again, so most
+# runs download nothing. Every file is replaced whole (a rename): Vector reloads them when they
+# change (--watch-config) and mustn't read half.
 set -eu
 
 dir=${GEO_DIR:-/var/lib/vector/geo}
@@ -99,7 +100,8 @@ fetch() {
     echo "$name: keeping ${have:-an older copy}"
     return 0
   fi
-  empty "$dir/$name.mmdb"
+  empty "$dir/$name.tmp"
+  mv "$dir/$name.tmp" "$dir/$name.mmdb"
   echo none > "$dir/$name.month"
   echo "$name: no data, starting without it" >&2
 }

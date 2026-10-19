@@ -7,9 +7,10 @@
 # Its own volume holds the disk buffer for VictoriaLogs, the geo data (config/aggregator/geo.yaml:
 # DB-IP's City and ASN Lite, scripts/geodata.sh) and the threat intel (config/aggregator/
 # threat-intel.yaml: abuse.ch's ThreatFox and URLhaus, Spamhaus's DROP, scripts/threatintel.py), both fetched by
-# init containers each start; it's restarted every 6 hours for new indicators
-# (aggregator-refresh.yaml). Recreate: the volume attaches to one node at a time. If its node goes down, Longhorn's nodeDownPodDeletionPolicy lets the new pod
-# start elsewhere (infrastructure/controllers/longhorn).
+# init containers each start and by the refresh container every 6 hours after that; Vector
+# (--watch-config) reloads the tables when their files change, without restarting. Recreate: the
+# volume attaches to one node at a time. If its node goes down, Longhorn's
+# nodeDownPodDeletionPolicy lets the new pod start elsewhere (infrastructure/controllers/longhorn).
 #
 # app.kubernetes.io/name vector like the collectors, so vmagent scrapes it as job vector and the
 # Vector alerts cover it; app.kubernetes.io/component tells them apart.
@@ -117,7 +118,9 @@ spec:
       containers:
         - name: vector
           image: timberio/vector:0.59.0-distroless-static@sha256:2138c72ef15477d3a60126da851407a198ec61d2ff4cd600a4e69db5f6a29ff7
-          args: ["--config", "/etc/vector/*.yaml"]
+          # --watch-config: also watches the enrichment tables' files (geo.yaml, threat-intel.yaml)
+          # and reloads them when the refresh container replaces them.
+          args: ["--config", "/etc/vector/*.yaml", "--watch-config"]
           # geo.yaml's and threat-intel.yaml's paths are relative to it (geo/city.mmdb, threat/).
           workingDir: /var/lib/vector
           env:
@@ -168,6 +171,42 @@ spec:
               readOnly: true
             - name: journald-tls
               mountPath: /etc/vector/journald-tls
+              readOnly: true
+        # Both scripts again every 6 hours: ThreatFox adds indicators all day, DB-IP has a new
+        # month a few days in. Each replaces its files whole (a rename), so Vector never reads
+        # half a file, and keeps the last good copy when a feed can't be fetched.
+        - name: refresh
+          image: docker.io/library/python:3.14.8-alpine3.24@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
+          command:
+            - sh
+            - -c
+            - >-
+              while sleep 21600; do
+              sh /scripts/geodata.sh;
+              python -B /scripts/threatintel.py;
+              done
+          env:
+            - name: GEO_DIR
+              value: /var/lib/vector/geo
+            - name: TI_DIR
+              value: /var/lib/vector/threat
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # As the geodata init container's: a new month's City file fills the page cache.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/vector
+            - name: scripts
+              mountPath: /scripts
               readOnly: true
       volumes:
         - name: config

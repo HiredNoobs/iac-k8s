@@ -2,7 +2,7 @@
 # and URLhaus and Spamhaus's DROP (addresses) as they came in (apps/base/vector/config/aggregator/threat-intel.yaml), so the
 # router's DNS and firewall lines and the prx-999 VMs' and Proxmox hosts' journals. The match is
 # in threat.enrichments.*: the indicator (the value, a parent domain of it, a network it's in),
-# the field it was in, the feed, the malware and the feed's confidence. Lists change all day: the aggregator fetches them every 6 hours.
+# the field it was in, the feed, the malware and the feed's confidence. Lists change all day: the aggregator fetches them every 6 hours, reloading them in place.
 #
 # The matches are arrays (one item per match): the labels drop their brackets and quotes
 # ("ThreatFox, URLhaus"). Each group's interval is also the window its queries count over.
