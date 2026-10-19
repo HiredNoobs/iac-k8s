@@ -33,12 +33,12 @@ groups:
             format_mismatch in mealie.log; the exec itself raises KubeExecIntoPod).
           tested: "2026-10-13"
 
-      # vector-aggregator started without geo data (apps/base/vector/scripts/geodata.sh: DB-IP
-      # unreachable and no copy in its volume, e.g. a new one). Its init container logs this each
-      # start until it has the data, so it fires again at each restart (every 6 hours).
+      # vector-aggregator has no geo data (apps/base/vector/scripts/geodata.sh: DB-IP unreachable
+      # and no copy in its volume, e.g. a new one). Its init container logs this at start and its
+      # refresh container every 6 hours until it has the data, so it fires again each time.
       - alert: VectorGeoDataMissing
         expr: >-
-          {event.dataset="vector.geodata"} _msg:"no data, starting without it"
+          event.dataset:in("vector.geodata", "vector.refresh") _msg:"no data, starting without it"
           | extract "<database>: no data"
           | copy kubernetes.pod.name as pod
           | stats by (pod, database) count() as lines
@@ -46,15 +46,16 @@ groups:
           severity: warning
           source: vector
         annotations:
-          summary: "vector-aggregator started without DB-IP's {{ $labels.database }} data ({{ $labels.pod }})"
+          summary: "vector-aggregator has no DB-IP {{ $labels.database }} data ({{ $labels.pod }})"
           description: >-
             It runs with an empty {{ $labels.database }}.mmdb: syslog and the prx-999 journals
             get no source/destination .geo (city) or .as (asn) fields, so the Network
             dashboard's map, countries and networks miss those lines. Threat intel still works.
           runbook: >-
-            Why: {event.dataset="vector.geodata"} | fields _time, _msg (each download's error).
-            Once https://download.db-ip.com/free/ answers, restart it: kubectl -n vector
-            rollout restart deploy/vector-aggregator. Trigger: kubectl -n vector run geodata
+            Why: event.dataset:in("vector.geodata", "vector.refresh") | fields _time, _msg (each
+            download's error). Once https://download.db-ip.com/free/ answers, the next refresh
+            (every 6 hours) downloads it; sooner: kubectl -n vector rollout restart
+            deploy/vector-aggregator. Trigger: kubectl -n vector run geodata
             --restart=Never --image=alpine:3.24 -- sh -c 'echo "city: no data, starting without
             it"; sleep 60' (a container named geodata in vector: event.dataset vector.geodata;
             the sleep lets the collector read the line before the pod goes), then kubectl -n

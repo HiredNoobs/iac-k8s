@@ -1,7 +1,7 @@
 # Known-bad domains and addresses, after geo.yaml: a line's dns.question.name, dns.resolved_ip,
 # source.ip and destination.ip looked up in abuse.ch's ThreatFox (the last 48 hours) and URLhaus
 # (hosts serving malware now), and the addresses in Spamhaus's DROP (networks run by criminals),
-# which the aggregator's init container fetches each start (../../scripts/threatintel.py,
+# which the aggregator fetches at start and every 6 hours (../../scripts/threatintel.py,
 # ../../aggregator.yaml). A name matches an indicator for it or for any of its parents down to
 # two labels (www.bad.example matches bad.example, not the other way round); an address matches
 # an indicator for it or for a network it's in (/8 to /32, IPv6 /16 to /64: the table holds
