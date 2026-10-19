@@ -162,13 +162,14 @@ groups:
           summary: "{{ $labels.remote_ip }} called the delete API on {{ $labels.host }} ({{ $labels.response_code }})"
           description: >-
             Deleting metrics or logs is how tracks are covered. VictoriaMetrics' delete_series
-            works; VictoriaLogs' delete API is disabled, so there it's an attempt.
+            works (POST only, a GET is refused but still an attempt); VictoriaLogs' delete API is
+            disabled, so there it's an attempt.
           tested: "2026-10-13"
           runbook: >-
             The request's url.query has the series or log filter. Check what's missing around that
-            time, and who the client is. Trigger: curl -s
+            time, and who the client is. Trigger: curl -s -X POST
             'https://victoriametrics.hirednoobs.com/api/v1/admin/tsdb/delete_series?match[]=siem_test_nonexistent'
-            with an Authelia session cookie, or from a browser.
+            with an Authelia session cookie.
 
       - alert: GrafanaUserChange
         expr: >-
