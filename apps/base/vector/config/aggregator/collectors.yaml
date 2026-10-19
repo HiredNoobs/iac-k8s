@@ -1,0 +1,16 @@
+# What the collectors hand over, parsed (../collector/envoy.yaml): Envoy's access log, for where
+# the Gateway's clients are and what's known-bad (geo.yaml, threat-intel.yaml), as the LAN's
+# syslog. Vector's own protocol, metadata included (%dataset, %mismatch). Only the collectors
+# get in: TLS with a client certificate from the monitoring CA (vector-tls); this side's is
+# ../../collectors-certificate.yaml. The collectors buffer on their node's disk while this is down.
+
+sources:
+  collectors:
+    type: vector
+    address: 0.0.0.0:6000
+    tls:
+      enabled: true
+      crt_file: /etc/vector/collectors-tls/tls.crt
+      key_file: /etc/vector/collectors-tls/tls.key
+      ca_file: /etc/vector/collectors-tls/ca.crt
+      verify_certificate: true

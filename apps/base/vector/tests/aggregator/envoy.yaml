@@ -1,0 +1,79 @@
+# Unit tests for Envoy's access log on the aggregator (config/aggregator/collectors.yaml): the
+# collectors' parsed lines (tests/collector/envoy.yaml) through geo, threat intel and the common
+# end. How to run them: tests/collector/pipeline.yaml; geo/ and threat/ as in geo.yaml and
+# threat-intel.yaml. The input is what the parser hands over, metadata included.
+tests:
+  - name: a request from the internet gets its client's place, network and the common fields
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {
+            "_msg": "GET grafana.hirednoobs.com/ 302 3ms", "_time": t'2026-10-19T12:00:00.004Z',
+            "kubernetes": {"namespace": "envoy-gateway", "pod": {"name": "envoy-public-1"}, "container": {"name": "envoy"}, "node": {"name": "worker-4"}},
+            "source.ip": "89.160.20.112", "source.port": 51000, "destination.ip": "10.244.3.7",
+            "http.request.method": "GET", "http.response.status_code": 302, "url.domain": "grafana.hirednoobs.com"
+          }
+          %dataset = "envoy.access"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.access")
+              assert_eq!(get!(., ["event.provider"]), "envoy")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["ecs.version"]), "9.5.0")
+              # The pod's node, not the aggregator's.
+              assert_eq!(get!(., ["host.hostname"]), "worker-4")
+              assert_eq!(get!(., ["host.name"]), "worker-4.hirednoobs.com")
+              assert_eq!(get!(., ["related.ip"]), ["89.160.20.112", "10.244.3.7"])
+              assert_eq!(get!(., ["source.geo.country_iso_code"]), "SE")
+              assert_eq!(get!(., ["source.as.number"]), 29518)
+              assert!(!exists(."destination.geo.country_iso_code"))
+              assert!(!exists(."threat.enrichments.matched.field"))
+
+  - name: a request from a known-bad address is matched
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {
+            "_msg": "GET grafana.hirednoobs.com/.env 404 1ms", "_time": t'2026-10-19T12:00:00.001Z',
+            "kubernetes": {"namespace": "envoy-gateway", "pod": {"name": "envoy-public-1"}, "container": {"name": "envoy"}, "node": {"name": "worker-4"}},
+            "source.ip": "192.0.2.10", "source.port": 40000, "http.response.status_code": 404
+          }
+          %dataset = "envoy.access"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.access")
+              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["source.ip"])
+              # Spamhaus lists networks: the one it's in.
+              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["192.0.2.0/24"])
+              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["Spamhaus"])
+
+  - name: a line the parser couldn't fully read is a pipeline error
+    inputs:
+      - insert_at: geo
+        type: vrl
+        source: |
+          . = {
+            "_msg": "GET x/ 200 1ms", "_time": t'2026-10-19T12:00:00.000Z',
+            "kubernetes": {"namespace": "envoy-gateway", "pod": {"name": "envoy-public-1"}, "container": {"name": "envoy"}, "node": {"name": "worker-4"}},
+            "downstream_remote_address": "-", "http.response.status_code": 200
+          }
+          %dataset = "envoy.access"
+          %mismatch = "downstream_remote_address isn't <ip>:<port>"
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "envoy.access")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(get!(., ["error.message"]), "downstream_remote_address isn't <ip>:<port>")
+              assert_eq!(.downstream_remote_address, "-")

@@ -77,7 +77,8 @@ groups:
             address in the name; nothing connects to it).
           tested: "2026-10-17"
 
-      # A known-bad address in a firewall line or a journal (an SSH login attempt, ...).
+      # A known-bad address in a firewall line, a journal (an SSH login attempt, ...) or the
+      # Gateway's access log (a request from it).
       # Packets from the internet the firewall dropped are left out: scanners and botnets hit
       # it all the time, constant and expected (as NetworkScanFromLan).
       - alert: TrafficWithKnownBadIp
@@ -102,11 +103,13 @@ groups:
             An address abuse.ch lists as a malware server, or one in a network Spamhaus's DROP
             lists as run by criminals, showed up in {{ $labels.dataset }} on
             {{ $labels.host }}: a LAN device's packet to it the firewall dropped, or a login
-            attempt or connection from it.
+            attempt, connection or request to the Gateway from it.
           runbook: >-
             The lines: threat.enrichments.matched.atomic:"{{ $labels.address }}" (for a DROP
             network, the addresses are source.ip and destination.ip). Whether it's to or from it: threat.enrichments.matched.field (source.ip, destination.ip). A login
-            from it: the host's auth logs, fail2ban. Trigger: on a prx-999 VM, logger -t sshd
+            from it: the host's auth logs, fail2ban. A request to the Gateway (envoy.access):
+            what it asked for (url.domain, url.path) and what it got (http.response.status_code).
+            Trigger: on a prx-999 VM, logger -t sshd
             "Failed password for invalid user ti-test from <a.b.c.d> port 22 ssh2" with an
             address from https://threatfox.abuse.ch/export/csv/ip-port/recent/ (a test line,
             nothing connects; SshLoginFailure may fire too).

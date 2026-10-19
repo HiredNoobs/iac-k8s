@@ -32,6 +32,23 @@ spec:
       targetPort: journald
       protocol: TCP
 ---
+# Where the collectors hand Envoy's access log to vector-aggregator (config/collector/envoy.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: collectors
+  labels:
+    app.kubernetes.io/name: vector
+spec:
+  selector:
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/component: aggregator
+  ports:
+    - name: collectors
+      port: 6000
+      targetPort: collectors
+      protocol: TCP
+---
 # Where every node's Talos sends its own logs (iac-homelab's talos-cluster module,
 # machine.logging). Talos resolves names with the host's DNS, not the cluster's, so the address
 # is fixed: in the first 256 of the Service range (10.96.0.0/12), which Kubernetes only assigns

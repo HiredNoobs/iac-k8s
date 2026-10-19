@@ -139,3 +139,24 @@ transforms:
         del(.upstream_cluster)
         del(.upstream_local_address)
       }
+
+sinks:
+  # The parsed lines go on to vector-aggregator (../aggregator/collectors.yaml), for where its
+  # clients are and what's known-bad (geo.yaml, threat-intel.yaml, data only the aggregator
+  # has), then its common end. The lines this failed on stay here (handoff.yaml). Metadata
+  # (%dataset, %mismatch) goes with them. TLS both ways: the collectors' client certificate
+  # (vector-tls), the aggregator's server one (../../collectors-certificate.yaml).
+  aggregator:
+    type: vector
+    inputs: [envoy]
+    address: https://collectors.vector.svc:6000
+    tls:
+      ca_file: /etc/vector/tls/ca.crt
+      crt_file: /etc/vector/tls/tls.crt
+      key_file: /etc/vector/tls/tls.key
+    # On the node's disk while the aggregator is down (one replica). When full, newer lines
+    # are dropped rather than holding up every other pod's logs behind them.
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: drop_newest
