@@ -18,7 +18,7 @@ configMapGenerator:
   # restarted and the mounted files follow the ConfigMaps.
   #
   # Upstream's, pinned (below), except Overview, Security, Log pipeline, Gateway logs,
-  # Authelia and Network. Only their data source references are changed, for file
+  # Authelia, Redis and Network. Only their data source references are changed, for file
   # provisioning: import placeholders (${DS_...}) without a matching variable point at the
   # prometheus data source, data source variables have no saved selection (so the default).
   # Overview: ours, the home dashboard (statefulset.yaml). To change it, edit it in Grafana, then
@@ -108,9 +108,10 @@ configMapGenerator:
   # Services: grafana.com 10991 rev 15 (RabbitMQ-Overview, RabbitMQ's own); grafana.com 12904
   # rev 2 (Vault); grafana.com 13659 rev 1 (Blackbox Exporter (HTTP prober), the probes), its
   # instance variable changed to only the HTTP probes (probe_http_status_code): the DNS and TCP
-  # ones have no HTTP phases or status code, so their rows were empty. grafana.com 763 rev 6
-  # (Redis, redis_exporter's own), a DS_PROM data source variable in place of its __inputs.
-  # Authelia: ours (its metrics; who and from where is in Security, from its logs).
+  # ones have no HTTP phases or status code, so their rows were empty.
+  # Authelia: ours (its metrics; who and from where is in Security, from its logs). Redis: ours
+  # (the master, replication and the sentinels' events, then each pod by name; grafana.com 763
+  # was for a single Redis, by scrape address).
   - name: grafana-dashboards-services
     files:
       - dashboards/Services/rabbitmq-overview.json
