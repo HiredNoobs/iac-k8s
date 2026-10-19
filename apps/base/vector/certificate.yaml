@@ -1,5 +1,6 @@
-# Only for its ca.crt: Vector checks VictoriaLogs' certificate (monitoring-ca) with it.
-# VictoriaLogs doesn't ask for a client certificate.
+# Its ca.crt: Vector checks VictoriaLogs' and the aggregator's certificates (monitoring-ca) with
+# it. VictoriaLogs doesn't ask for a client certificate, the aggregator's collectors listener
+# does (config/aggregator/collectors.yaml): this one.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

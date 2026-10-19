@@ -1,0 +1,19 @@
+# The collectors listener's server certificate (config/aggregator/collectors.yaml): the collectors
+# check it against the monitoring CA, and it checks theirs (vector-tls) against the same CA.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vector-collectors
+spec:
+  secretName: vector-collectors-tls
+  commonName: collectors.vector.svc
+  dnsNames:
+    - collectors.vector.svc
+    - collectors.vector.svc.cluster.local
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

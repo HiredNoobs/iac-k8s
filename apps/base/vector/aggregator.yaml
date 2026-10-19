@@ -1,8 +1,10 @@
 # vector-aggregator: what other machines send (config/aggregator/), so the collectors
 # (daemonset.yaml) only read their own node. The LAN's syslog from rsyslog (apps/base/rsyslog),
 # with the Proxmox hosts' journals in it, and the prx-999 VMs' journals from the Gateway
-# (journald-route.yaml), both through service.yaml. One pod: while it's down rsyslog queues
-# (10000 messages, in memory) and the VMs' Vector buffers on disk.
+# (journald-route.yaml), both through service.yaml; and Envoy's access log, parsed by the
+# collectors, for its clients' geo data and threat intel (config/aggregator/collectors.yaml). One
+# pod: while it's down rsyslog queues (10000 messages, in memory), the VMs' Vector and the
+# collectors buffer on disk.
 #
 # Its own volume holds the disk buffer for VictoriaLogs, the geo data (config/aggregator/geo.yaml:
 # DB-IP's City and ASN Lite, scripts/geodata.sh) and the threat intel (config/aggregator/
@@ -143,6 +145,10 @@ spec:
             - name: journald
               containerPort: 8686
               protocol: TCP
+            # Envoy's access log from the collectors (service.yaml).
+            - name: collectors
+              containerPort: 6000
+              protocol: TCP
           # Only sent traffic once it's listening.
           readinessProbe:
             tcpSocket:
@@ -171,6 +177,9 @@ spec:
               readOnly: true
             - name: journald-tls
               mountPath: /etc/vector/journald-tls
+              readOnly: true
+            - name: collectors-tls
+              mountPath: /etc/vector/collectors-tls
               readOnly: true
         # Both scripts again every 6 hours: ThreatFox adds indicators all day, DB-IP has a new
         # month a few days in. Each replaces its files whole (a rename), so Vector never reads
@@ -224,3 +233,6 @@ spec:
         - name: journald-tls
           secret:
             secretName: vector-journald-tls
+        - name: collectors-tls
+          secret:
+            secretName: vector-collectors-tls
