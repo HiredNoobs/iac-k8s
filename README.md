@@ -8,7 +8,7 @@ The upstream is ``git@git.hirednoobs.com:hirednoobs/iac-k8s.git``, every push is
 
 Flux runs in each cluster (``flux-system`` namespace), pulls this repo over SSH with a read-only deploy key and applies it on an interval, pruning whatever was removed. Nothing outside the cluster applies anything: merge to ``master`` and Flux picks it up within ``interval``, or straight away with ``flux reconcile kustomization flux-system --with-source``. Changes made by hand are reverted on the next reconcile, change the repo instead.
 
-CI (``.forgejo/workflows/lint.yml``) only validates: every kustomization is built and checked against the Kubernetes and Flux schemas.
+CI (``.forgejo/workflows/lint.yml``) only validates, and must pass before a pull request merges: every kustomization is built and checked against the Kubernetes and Flux schemas, Vector's config is validated and its unit tests run, and the ATT&CK coverage files match the alert rules. Renovate (the renovate repo) opens a pull request for each new chart, image or tool version, a merge is a deploy.
 
 The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup``) is for the bootstrap, upgrades and troubleshooting (``flux get kustomizations``, ``flux logs``, ``flux suspend``/``resume``).
 
@@ -19,7 +19,7 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | ``clusters/<cluster>/`` | Read by Flux as the cluster's entry point. ``flux-system/`` is written by the bootstrap, don't edit it. |
 | ``clusters/<cluster>/infrastructure.yaml`` | ``infra-controllers`` (``infrastructure/controllers``), then ``infra-configs`` (``infrastructure/configs``) and ``infra-operators`` (``infrastructure/operators``) once the controllers are ready. |
 | ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. Then ``rabbitmq-topology`` (``apps/<cluster>/rabbitmq-topology``), RabbitMQ's users and permissions: the Topology Operator's webhook rejects them until ``apps``' ExternalSecrets have created their Secrets. |
-| ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn. |
+| ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn, metrics-server, kubelet-serving-cert-approver. |
 | ``infrastructure/operators/`` | Controllers whose manifests need the other controllers' CRDs (cert-manager Certificates for their webhooks): RabbitMQ's Topology Operator. |
 | ``infrastructure/configs/`` | Config using the controllers' CRDs: ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway. |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
@@ -31,99 +31,15 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 
 - The namespace is the app's name.
 - Upstream Helm charts as a ``HelmRelease`` at an exact chart version, Kustomize manifests otherwise. Images pinned by digest.
-- No secrets in git. One ``ExternalSecret`` per app from Vault (``labv2/production/<app>``).
+- No secrets in git. One ``ExternalSecret`` per app from Vault (``labv2/production/<app>``), see [Adding an app](docs/apps.md).
 - Placement with replicas, ``topologySpreadConstraints`` on ``topology.kubernetes.io/zone``, PDBs and resource requests. ``nodeSelector`` only for hardware (the Longhorn disk), no stack labels.
 - Upstream release manifests (no chart) are vendored unmodified, with their URL and checksum in the kustomization, and changed with patches.
 - A new controller's CRDs need their schemas added to ``lint.yml`` (download the release's CRDs, pinned by checksum, or pass a vendored manifest, and convert them with ``.forgejo/scripts/crd-schemas.py``), a missing schema fails CI.
 
-## Secrets
+## More
 
-External Secrets Operator syncs them from Vault through the ``vault`` ClusterSecretStore (``infrastructure/configs``). ESO logs in with Vault's ``kubernetes/<cluster>`` auth mount, set up by iac-homelab's ``terraform/vault`` root, and can only read ``labv2/<environment>/*``.
-
-One ``ExternalSecret`` per app, every key of the app's Vault secret becomes a key of the Kubernetes secret:
-
-```yaml
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: <app>
-  namespace: <app>
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: vault
-  target:
-    name: <app>
-  dataFrom:
-    - extract:
-        key: production/<app>
-```
-
-Annotate the workloads reading it with ``reloader.stakater.com/auto: "true"``, Reloader restarts them when the secret changes.
-
-## Routing
-
-Everything on ``*.hirednoobs.com`` goes through one Gateway, ``public`` in ``gateway`` (``infrastructure/configs/gateway``), run by Envoy Gateway on the kube-vip IP in its ``EnvoyProxy``. Port 80 only redirects to HTTPS, which uses the wildcard certificate.
-
-An app adds its own ``HTTPRoute``:
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: <app>
-  namespace: <app>
-spec:
-  parentRefs:
-    - name: public
-      namespace: gateway
-      sectionName: https
-  hostnames:
-    - <app>.hirednoobs.com
-  rules:
-    - backendRefs:
-        - name: <service>
-          port: <port>
-```
-
-Behind Authelia: a ``SecurityPolicy`` targeting the route (copy ``apps/base/homepage/security-policy.yaml``), and the app's namespace added to the ``authelia`` ReferenceGrant in ``apps/base/authelia/reference-grant.yaml``.
-
-HTTPS backends in the cluster are verified, never ``insecureSkipVerify``: a certificate from a cert-manager CA (``internal-ca`` for anything only the Gateway talks to), then either a ``BackendTLSPolicy`` on the Service (``apps/base/authelia/certificate.yaml``) or, for a ``Backend``, its ``tls.caCertificateRefs`` and ``sni`` (``apps/base/pihole/routes.yaml``). The CA's ``ca.crt`` comes from the app's own certificate Secret, in its namespace.
-
-Sites outside the cluster (the NAS, Proxmox) and the stacks not migrated yet are in ``infrastructure/configs/gateway/routes``, with a ``Backend`` for the upstream. Move a stack's route to its app when it's migrated.
-
-## Bootstrap
-
-Once per cluster, from the management VM. ``flux`` must be the version in tools-bin's ``FLUX_VERSION`` (``flux version --client``), that's the version installed in the cluster.
-
-1. Create a Forgejo token (Settings -> Applications) named ``flux-bootstrap`` with ``repository: Read and write`` and ``misc: Read``. It's only used by the CLI, to commit ``flux-system/`` and add the deploy key.
-2. Bootstrap:
-
-   ```bash
-   export GITEA_TOKEN=<token>
-   kubeconfig="$KUBE_CONTEXTS/production.core.yaml"
-
-   flux check --pre --kubeconfig "$kubeconfig"
-   flux bootstrap gitea --kubeconfig "$kubeconfig" \
-     --hostname=git.hirednoobs.com --owner=hirednoobs --repository=iac-k8s --personal --private \
-     --branch=master --path=clusters/production-core
-   unset GITEA_TOKEN
-   ```
-
-3. Delete the token in Forgejo and pull the bootstrap commit.
-4. Check: ``flux check``, ``flux get sources git`` and ``flux get kustomizations`` (all Ready).
-
-## Commit statuses
-
-Flux posts each Kustomization's result on the iac-k8s commit it applied (``infrastructure/configs/flux-notifications``). The token belongs to ``flux-bot``, a plain Forgejo user that's a collaborator with Write access on iac-k8s only: Forgejo tokens can't be scoped to one repo, so a token of the owner would reach every repo. It has ``repository: Read and write`` and is in Vault under the key ``token``:
-
-```bash
-vault kv put -mount=labv2 production/flux-system token=<token>
-```
-
-## Upgrading Flux
-
-Bump ``FLUX_VERSION`` in tools-bin and re-run ``context-setup k8s`` on the management VM, bump ``FLUX_VERSION`` and ``FLUX_CRD_SCHEMAS_SHA256`` in ``lint.yml``, then run the bootstrap again with a new token. It commits the new ``flux-system/`` and Flux upgrades itself.
-
-Re-run the bootstrap too if the git VM is rebuilt: its SSH host key changes and Flux checks it (``known_hosts`` in the ``flux-system`` secret).
+| Page | Covers |
+| --- | --- |
+| [Adding an app](docs/apps.md) | Its secrets (an ExternalSecret from Vault) and its route (an HTTPRoute, Authelia, HTTPS backends). |
+| [Flux](docs/flux.md) | The bootstrap, commit statuses on Forgejo, upgrading Flux. |
+| [Rebuilding a cluster](docs/rebuild.md) | Flux on a new cluster, the Vault secrets it needs, restoring the volumes from Longhorn's backups. |
