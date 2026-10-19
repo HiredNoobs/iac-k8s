@@ -63,7 +63,7 @@ spec:
       terminationGracePeriodSeconds: 60
       initContainers:
         - name: init
-          image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
+          image: redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
           command: ["sh", "/usr/local/etc/redis/init.sh"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -98,7 +98,7 @@ spec:
               mountPath: /etc/redis-run
       containers:
         - name: redis
-          image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
+          image: redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
           command: ["redis-server", "/etc/redis-run/redis.conf"]
           # Talos warns about anything short of the restricted pod security standard.
           securityContext:
@@ -172,7 +172,7 @@ spec:
             - name: data
               mountPath: /data
         - name: sentinel
-          image: redis:8.2.4@sha256:320e9ce6d5c940815a84d989f0e53e3a4d065c0d9132cd9e1222265e78eb6080
+          image: redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
           command: ["redis-sentinel", "/etc/redis-run/sentinel.conf"]
           securityContext:
             allowPrivilegeEscalation: false
