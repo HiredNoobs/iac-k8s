@@ -111,7 +111,10 @@ spec:
               protocol: TCP
           # All three over TLS with Redis' own certificate (a client certificate from redis-ca
           # too): a TCP check would abort the handshake, which Redis logs as an error each time.
-          # Started and alive: Redis answers at all, LOADING (reading the AOF) included.
+          # As the ACL user probe (PING only, any password: external-secret.yaml), so they don't
+          # count as NOAUTH errors.
+          # Started and alive: Redis answers at all, LOADING (reading the AOF) included, NOAUTH
+          # too (a missing probe user fails readiness, not restarts Redis).
           startupProbe:
             exec:
               command:
@@ -122,6 +125,7 @@ spec:
                   --cacert /etc/redis/secrets/ca.crt
                   --cert /etc/redis/secrets/tls.crt
                   --key /etc/redis/secrets/tls.key
+                  --user probe --pass probe --no-auth-warning
                   ping | grep -qE 'PONG|NOAUTH|LOADING'
             periodSeconds: 5
             failureThreshold: 60
@@ -135,11 +139,12 @@ spec:
                   --cacert /etc/redis/secrets/ca.crt
                   --cert /etc/redis/secrets/tls.crt
                   --key /etc/redis/secrets/tls.key
+                  --user probe --pass probe --no-auth-warning
                   ping | grep -qE 'PONG|NOAUTH|LOADING'
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
-          # Ready: serving (not LOADING). NOAUTH, as the default user is off, still means serving.
+          # Ready: serving (not LOADING), as probe.
           readinessProbe:
             exec:
               command:
@@ -150,7 +155,8 @@ spec:
                   --cacert /etc/redis/secrets/ca.crt
                   --cert /etc/redis/secrets/tls.crt
                   --key /etc/redis/secrets/tls.key
-                  ping | grep -qE 'PONG|NOAUTH'
+                  --user probe --pass probe --no-auth-warning
+                  ping | grep -qx PONG
             periodSeconds: 10
             failureThreshold: 3
           resources:
@@ -183,7 +189,7 @@ spec:
             - name: sentinel-tls
               containerPort: 26379
               protocol: TCP
-          # Over TLS as Redis' probes; NOAUTH: the sentinel's default user is off.
+          # Over TLS and as probe, as Redis' probes; NOAUTH still alive (a missing probe user).
           livenessProbe:
             exec:
               command:
@@ -194,6 +200,7 @@ spec:
                   --cacert /etc/redis/secrets/ca.crt
                   --cert /etc/redis/secrets/tls.crt
                   --key /etc/redis/secrets/tls.key
+                  --user probe --pass probe --no-auth-warning
                   ping | grep -qE 'PONG|NOAUTH'
             periodSeconds: 20
             timeoutSeconds: 5
