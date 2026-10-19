@@ -119,7 +119,7 @@ spec:
               value: "true"
             # Straight to Authelia. The local login (the admin account, break-glass when Authelia
             # is down) is still at /login?disableAutoLogin.
-            - name: GF_AUTH_OAUTH_AUTO_LOGIN
+            - name: GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN
               value: "true"
             # Signing out of Grafana signs out of Authelia too, or auto login would sign straight
             # back in.
@@ -145,12 +145,13 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 3
+          # Grafana 13 idles at ~280Mi and was OOMKilled at 512Mi opening the dashboard list.
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
+              memory: 384Mi
             limits:
-              memory: 512Mi
+              memory: 1Gi
           volumeMounts:
             - name: provisioning
               mountPath: /etc/grafana/provisioning/datasources/datasources.yml
