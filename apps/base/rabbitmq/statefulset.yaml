@@ -66,7 +66,7 @@ spec:
         # The cookie into the data directory ($HOME of the rabbitmq user), where the node and the
         # CLI tools read it; RabbitMQ wants it readable by its owner only.
         - name: erlang-cookie
-          image: rabbitmq:4.2.4-management@sha256:aeee1db0ff9fdb1347f3585242c14ed10877b56c22eeaa113b21208ef3dd3edf
+          image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
           command:
             - sh
             - -c
@@ -93,7 +93,7 @@ spec:
               mountPath: /var/lib/rabbitmq
       containers:
         - name: rabbitmq
-          image: rabbitmq:4.2.4-management@sha256:aeee1db0ff9fdb1347f3585242c14ed10877b56c22eeaa113b21208ef3dd3edf
+          image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
           # Talos warns about anything short of the restricted pod security standard.
           securityContext:
             allowPrivilegeEscalation: false
