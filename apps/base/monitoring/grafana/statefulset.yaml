@@ -220,9 +220,14 @@ spec:
         - name: dashboards-control-plane
           configMap:
             name: grafana-dashboards-control-plane
+        # Two ConfigMaps for one folder (kustomization.yaml).
         - name: dashboards-monitoring
-          configMap:
-            name: grafana-dashboards-monitoring
+          projected:
+            sources:
+              - configMap:
+                  name: grafana-dashboards-monitoring-metrics
+              - configMap:
+                  name: grafana-dashboards-monitoring-logs
         - name: dashboards-storage
           configMap:
             name: grafana-dashboards-storage
