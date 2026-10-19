@@ -33,7 +33,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: victoriametrics
-          image: victoriametrics/victoria-metrics:v1.136.0@sha256:593b533bfbea439f2fd8aed306294cb6a5b362e7932681ebb476cc6aaef70841
+          image: victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
