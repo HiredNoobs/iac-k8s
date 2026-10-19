@@ -21,6 +21,9 @@ configMapGenerator:
   # Authelia, Redis and Network. Only their data source references are changed, for file
   # provisioning: import placeholders (${DS_...}) without a matching variable point at the
   # prometheus data source, data source variables have no saved selection (so the default).
+  # Vault, Longhorn and Blackbox also had their Angular panels (graph, grafana-piechart-panel)
+  # converted to timeseries, bargauge (graphs with series on the x axis) and piechart, as
+  # Grafana does when it loads them.
   # Overview: ours, the home dashboard (statefulset.yaml). To change it, edit it in Grafana, then
   # export the JSON (not "for sharing externally") over overview.json.
   - name: grafana-dashboards-overview
