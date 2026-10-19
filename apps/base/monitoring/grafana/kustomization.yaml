@@ -60,13 +60,18 @@ configMapGenerator:
     options:
       disableNameSuffixHash: true
   # Monitoring: VictoriaMetrics/VictoriaMetrics v1.136.0 and VictoriaMetrics/VictoriaLogs
-  # v1.46.0 (dashboards/). Log pipeline: ours (what Vector made of the logs).
-  - name: grafana-dashboards-monitoring
+  # v1.46.0 (dashboards/). Log pipeline: ours (what Vector made of the logs). Two ConfigMaps,
+  # together they'd be over 1 MiB; statefulset.yaml projects both into the folder.
+  - name: grafana-dashboards-monitoring-metrics
+    files:
+      - dashboards/Monitoring/victoriametrics.json
+      - dashboards/Monitoring/vmagent.json
+    options:
+      disableNameSuffixHash: true
+  - name: grafana-dashboards-monitoring-logs
     files:
       - dashboards/Monitoring/log-pipeline.json
       - dashboards/Monitoring/victorialogs.json
-      - dashboards/Monitoring/victoriametrics.json
-      - dashboards/Monitoring/vmagent.json
       - dashboards/Monitoring/vmalert.json
     options:
       disableNameSuffixHash: true
