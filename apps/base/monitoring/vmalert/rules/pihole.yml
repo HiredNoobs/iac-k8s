@@ -5,8 +5,8 @@ groups:
   - name: Pi-hole
     interval: 60s
     rules:
-      # Fewer pods reporting than are ready: sync-lists stopped, or can't reach vmagent (its log
-      # says which).
+      # Fewer pods reporting than are ready: sync-lists stopped, can't read the Pi-hole API, or
+      # can't reach vmagent (its log says which).
       - alert: PiholeMetricsMissing
         expr: |
           (count(pihole_blocking_enabled) or on() vector(0))
