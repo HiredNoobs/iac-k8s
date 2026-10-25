@@ -117,7 +117,7 @@ spec:
         # certificates (LLDAP has its own login). Reloads the certificate hourly, so a renewal
         # doesn't need a restart here.
         - name: ghostunnel
-          image: ghostunnel/ghostunnel:v1.11.3-distroless@sha256:51fa619294acf716e01efcb03ad00dc11229dc1f3829cba984c5b0a4f43f4faf
+          image: ghostunnel/ghostunnel:v1.11.4-distroless@sha256:a38a289844e02ed5c9e6729946c1a0c573a7bf45e9205d74023b9597c46a681c
           args:
             - server
             - --listen=0.0.0.0:17171
