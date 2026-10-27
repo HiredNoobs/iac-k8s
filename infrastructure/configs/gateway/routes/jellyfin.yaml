@@ -1,4 +1,4 @@
-# jellyfin.hirednoobs.com -> http://192.168.111.6:8096, the NAS.
+# jellyfin.hirednoobs.com -> http://192.168.111.6:8096.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -19,6 +19,8 @@ spec:
   parentRefs:
     - name: public
       sectionName: https
+    - name: public
+      sectionName: jellyfin
   hostnames:
     - jellyfin.hirednoobs.com
   rules:

@@ -72,3 +72,15 @@ spec:
           selector:
             matchLabels:
               kubernetes.io/metadata.name: monitoring
+    # Jellyfin alone on its own port, allows for IoT VLAN to only access Jellyfin.
+    - name: jellyfin
+      protocol: HTTPS
+      port: 8443
+      hostname: jellyfin.hirednoobs.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
