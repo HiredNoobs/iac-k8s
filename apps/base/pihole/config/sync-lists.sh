@@ -38,7 +38,8 @@ METRICS_CA="${METRICS_CA:-}"
 SID=""
 LISTS_CHANGED=0
 LAST_SYNC_SUCCESS=0
-PUSH_FAILING=0
+# Why the last metrics push failed, empty when it worked.
+PUSH_ERROR=""
 # Set by a sync that leaves a block list blocking nothing.
 LISTS_FAILED=0
 
@@ -295,9 +296,10 @@ function metrics {
     if $last > 0 then "pihole_sync_last_success_timestamp_seconds \($last)" else empty end'
 }
 
-# Logs only when pushing starts failing or recovers, not every minute while vmagent is away.
+# Logs only when pushing starts failing, fails differently or recovers, not every minute while
+# vmagent is away.
 function push_metrics {
-  local body="" curl_args=(-fsS --max-time 10 --data-binary @-)
+  local body="" error="" curl_args=(-fsS --max-time 10 --data-binary @-)
   local labels="extra_label=job=pihole-sync&extra_label=namespace=pihole&extra_label=pod=${HOSTNAME:-unknown}"
 
   [[ -n "$METRICS_URL" ]] || return 0
@@ -308,13 +310,18 @@ function push_metrics {
   fi
   logout
 
-  if [[ -n "$body" ]] && curl "${curl_args[@]}" "$METRICS_URL?$labels" <<< "$body" > /dev/null; then
-    (( PUSH_FAILING )) && log "Pushing metrics works again."
-    PUSH_FAILING=0
-  else
-    (( PUSH_FAILING )) || log "Pushing metrics to $METRICS_URL failed, retrying every ${CHECK_INTERVAL}s."
-    PUSH_FAILING=1
+  if [[ -z "$body" ]]; then
+    error="Reading the metrics from the Pi-hole API failed"
+  elif ! curl "${curl_args[@]}" "$METRICS_URL?$labels" <<< "$body" > /dev/null; then
+    error="Pushing metrics to $METRICS_URL failed"
   fi
+
+  if [[ -z "$error" ]]; then
+    [[ -n "$PUSH_ERROR" ]] && log "Pushing metrics works again."
+  elif [[ "$error" != "$PUSH_ERROR" ]]; then
+    log "$error, retrying every ${CHECK_INTERVAL}s."
+  fi
+  PUSH_ERROR="$error"
 }
 
 function checksum {

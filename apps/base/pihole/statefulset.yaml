@@ -68,10 +68,13 @@ spec:
               command: ["sh", "-c", "dig +short +time=2 +tries=1 @127.0.0.1 pi.hole | grep -q ."]
             periodSeconds: 10
             failureThreshold: 30
+          # DNS and the API, FTL's web server can hang while DNS keeps working. Any HTTP answer
+          # will do, /api/auth is a 401 without a session.
           livenessProbe:
             exec:
-              command: ["sh", "-c", "dig +short +time=2 +tries=1 @127.0.0.1 pi.hole | grep -q ."]
+              command: ["sh", "-c", "dig +short +time=2 +tries=1 @127.0.0.1 pi.hole | grep -q . && curl -s -o /dev/null --max-time 2 http://127.0.0.1/api/auth"]
             periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
           # Not ready (so no LAN traffic) until the lists have been synced.
           readinessProbe:
