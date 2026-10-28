@@ -6,8 +6,9 @@
 #
 # Longhorn mounts with util-linux's mount, which drops SELinux options (context=, ...) without
 # saying so when libselinux reports SELinux as off, and libselinux does that without
-# /etc/selinux/config, which its images don't have, or without selinuxfs, which a container's /sys
-# doesn't include. So the containers that mount get both (the host's selinuxfs, read-only), added
+# /etc/selinux/config, which its images don't have, or without a writable selinuxfs, which a
+# container's /sys doesn't include (a read-only one counts as off). So the containers that mount get
+# both (what they can do in selinuxfs is still limited by Talos' policy), added
 # when the pod is created (longhorn-manager makes the CSI plugin's DaemonSet and the instance
 # managers itself, so patching them would be undone): longhorn-csi-plugin (volumes),
 # longhorn-manager and instance-manager (the backup share: each mounts it in its own mount
@@ -80,8 +81,7 @@ spec:
                     },
                     Object.spec.containers.volumeMounts{
                       name: "selinuxfs",
-                      mountPath: "/sys/fs/selinux",
-                      readOnly: true
+                      mountPath: "/sys/fs/selinux"
                     }
                   ]
                 }
