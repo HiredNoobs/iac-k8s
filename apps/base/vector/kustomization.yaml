@@ -50,7 +50,6 @@ configMapGenerator:
     files:
       - config/common/pipeline.yaml
       - config/aggregator/collectors.yaml
-      - config/aggregator/crowdsec.yaml
       - config/aggregator/geo.yaml
       - config/aggregator/handoff.yaml
       - config/aggregator/journald.yaml
