@@ -29,7 +29,7 @@ groups:
       # A sink with lines waiting that sent none
       - alert: VectorSinkStalled
         expr: |
-          sum by (pod, component_id) (vector_buffer_events{job="vector"}) > 0
+          sum by (pod, component_id) (vector_buffer_size_events{job="vector"}) > 0
           unless
           sum by (pod, component_id) (increase(vector_component_sent_events_total{job="vector"}[15m])) > 0
         for: 15m
