@@ -25,3 +25,25 @@ groups:
         annotations:
           summary: Vector lost logs ({{ $labels.pod }})
           description: "{{ $labels.component_id }} on {{ $labels.pod }} discarded {{ $value | humanize }} lines in 15 minutes: they never reached VictoriaLogs."
+
+      # A sink with lines waiting that sent none
+      - alert: VectorSinkStalled
+        expr: |
+          sum by (pod, component_id) (vector_buffer_events{job="vector"}) > 0
+          unless
+          sum by (pod, component_id) (increase(vector_component_sent_events_total{job="vector"}[15m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Vector isn't sending ({{ $labels.pod }})
+          description: "{{ $labels.component_id }} on {{ $labels.pod }} has {{ $value | humanize }} lines waiting and sent none in 15 minutes. Its log says why (Retrying after error)."
+
+      # A full buffer drops the newest lines (when_full: drop_newest): they're gone.
+      - alert: VectorBufferDropping
+        expr: 'sum by (pod, component_id) (increase(vector_buffer_discarded_events_total{job="vector"}[15m])) > 0'
+        labels:
+          severity: critical
+        annotations:
+          summary: Vector's buffer is dropping logs ({{ $labels.pod }})
+          description: "{{ $labels.component_id }}'s buffer on {{ $labels.pod }} is full and dropped {{ $value | humanize }} lines in 15 minutes: they never got to where it sends."
