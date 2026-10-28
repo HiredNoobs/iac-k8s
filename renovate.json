@@ -122,10 +122,6 @@
       "groupName": "falco"
     },
     {
-      "matchPackageNames": ["crowdsec", "crowdsecurity/crowdsec"],
-      "groupName": "crowdsec"
-    },
-    {
       "description": "lint.yml tests Vector's config with the image's version",
       "matchPackageNames": ["timberio/vector", "vectordotdev/vector"],
       "groupName": "vector"
