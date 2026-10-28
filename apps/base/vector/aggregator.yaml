@@ -94,7 +94,7 @@ spec:
               readOnly: true
         # abuse.ch's and Spamhaus's indicators into the volume, or each feed's last copy if it can't be fetched.
         - name: threatintel
-          image: docker.io/library/python:3.14.8-alpine3.24@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
+          image: docker.io/library/python:3.15.0-alpine3.24@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
           # -B: no .pyc next to the script (read-only).
           command: ["python", "-B", "/scripts/threatintel.py"]
           env:
@@ -185,7 +185,7 @@ spec:
         # month a few days in. Each replaces its files whole (a rename), so Vector never reads
         # half a file, and keeps the last good copy when a feed can't be fetched.
         - name: refresh
-          image: docker.io/library/python:3.14.8-alpine3.24@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
+          image: docker.io/library/python:3.15.0-alpine3.24@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
           command:
             - sh
             - -c
