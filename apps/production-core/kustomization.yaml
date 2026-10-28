@@ -15,6 +15,7 @@ resources:
   - ../base/vector
   - ../base/kubectl
   - ../base/falco
+  - ../base/crowdsec
   - ../base/vaultwarden
   - ../base/mealie
 patches:

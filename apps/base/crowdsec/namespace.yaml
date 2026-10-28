@@ -1,0 +1,5 @@
+# Talos' default pod security standard (baseline): the images run as root, nothing from the host.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crowdsec
