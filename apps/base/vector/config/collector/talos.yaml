@@ -16,6 +16,10 @@
 #                      event.action, the code as Rpc.Grpc.StatusCode (custom), the authorisation
 #                      reason as Rpc.Authorization (custom), the caller from the metadata
 #   dns-resolve-cache  each query and response, as CoreDNS (coredns.yaml)
+#   syslogd            what processes on the node send to /dev/log (the QEMU guest agent): its
+#                      content as _msg, the syslog header as log.syslog.*
+#   auditd             the kernel's audit records, one event each in talos.audit
+#                      (talos-audit.yaml)
 # The whole line is kept in event.original where _msg became part of it. Talos' controllers (its
 # own, not Kubernetes') as Talos.Controller; component goes when it's the service. Any other key
 # a service logs is kept as it came (tags generic, unless the line was mapped as above).
@@ -79,6 +83,36 @@ transforms:
           .level = k.severity
           mapped = true
         }
+      } else if service == "syslogd" && is_string(.content) {
+        # Talos puts the text in content (msg is empty), the header in facility, severity,
+        # priority, hostname and tag; tag is "unknown" when it found no program name, and the
+        # content then starts with the ": " after it.
+        ._msg = strip_whitespace(replace(string!(del(.content)), r'^: ', ""))
+        # Through string (to_int makes null 0).
+        facility = to_int(string(.facility) ?? "") ?? -1
+        severity = to_int(string(.severity) ?? "") ?? -1
+        if facility >= 0 {
+          ."log.syslog.facility.code" = facility
+          name = get!(["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"], [facility])
+          if name != null { ."log.syslog.facility.name" = name }
+          del(.facility)
+        }
+        if severity >= 0 {
+          ."log.syslog.severity.code" = severity
+          name = get!(["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"], [severity])
+          if name != null {
+            ."log.syslog.severity.name" = name
+            # Normalised with the others (../common/pipeline.yaml's ecs).
+            .level = name
+          }
+          del(.severity)
+        }
+        priority = to_int(string(.priority) ?? "") ?? -1
+        if priority >= 0 { ."log.syslog.priority" = priority; del(.priority) }
+        if is_string(.hostname) { ."log.syslog.hostname" = del(.hostname) }
+        tag = string(del(.tag)) ?? ""
+        if tag != "" && tag != "unknown" { ."log.syslog.appname" = tag }
+        mapped = true
       } else {
         text = msg
         console, err = parse_regex(text, r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z (?P<level>[A-Z]+) (?P<msg>(?s:.*))$')
@@ -197,3 +231,47 @@ transforms:
         }
       }
       if !mismatch && !mapped { .tags = ["generic"] }
+
+  # auditd's audit records to talos-audit.yaml (one event each in talos.audit), the rest on.
+  talos_route:
+    type: route
+    inputs: [talos]
+    route:
+      audit: get!(., ["service.name"]) == "auditd" && match(string(._msg) ?? "", r'^type=\S+ msg=audit\(')
+
+  # Routine lines that say nothing to act on, by exact message and level, so anything new or
+  # louder from the same service still comes through: Talos' controllers' debug lines (the static
+  # pod manifests the kubelet fetches every 20 s, image cleanup, discovery, NTP samples), etcd's
+  # scheduled compaction, hash checks and snapshots (its health is in its metrics) and the QEMU
+  # guest agent's pings from Proxmox (its other commands stay).
+  talos_kept:
+    type: filter
+    inputs: [talos_route._unmatched]
+    condition: |
+      service = get!(., ["service.name"])
+      level = downcase(string(.level) ?? "")
+      msg = ._msg
+      !((service == "controller-runtime" && level == "debug" && includes([
+          "serving static pod manifests",
+          "image is referenced, skipping garbage collection",
+          "running image cleanup",
+          "discovered affiliate",
+          "waiting before attempting next discovery refresh",
+          "sample stats",
+          "NTS response",
+          "adjtime state",
+          "reconciling link aliases",
+        ], msg)) ||
+        (service == "etcd" && level == "info" && includes([
+          "starting compact hash check",
+          "finished compaction hash check",
+          "storing new hash",
+          "compact tree index",
+          "finished scheduled compaction",
+          "successfully checked hash on whole cluster",
+          "purged",
+          "triggering snapshot",
+          "saved snapshot to disk",
+          "created a new WAL segment",
+        ], msg)) ||
+        (service == "syslogd" && msg == "info: guest-ping called"))

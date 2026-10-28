@@ -5,13 +5,13 @@ transforms:
   # The lines a parser failed on, for unparsed.
   to_unparsed:
     type: filter
-    inputs: [pods.dropped, generic.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, talos.dropped]
+    inputs: [pods.dropped, generic.dropped, envoy.dropped, authelia.dropped, falco.dropped, lldap.dropped, vaultwarden.dropped, coredns.dropped, mealie.dropped, grafana.dropped, ghostunnel.dropped, kubectl.dropped, talos.dropped, audit_records.dropped, talos_audit.dropped]
     condition: "true"
 
   # The parsed lines, for the common fields. Not envoy's: the aggregator's (envoy.yaml).
   to_ecs:
     type: filter
-    inputs: [generic, authelia_kept, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, talos]
+    inputs: [generic, authelia_kept, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, talos_kept, talos_audit]
     condition: "true"
 
   # The audit events are ECS already (kubernetes-audit.yaml).

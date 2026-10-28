@@ -1,0 +1,251 @@
+# Unit tests for config/collector/talos-audit.yaml (how to run them: tests/collector/pipeline.yaml).
+# Each test sends one audit event's records to talos as Talos does, one line each. The
+# NETFILTER_CFG event is a real one; the others are made up in the kernel's format.
+tests:
+  - name: "a NETFILTER_CFG event (kube-proxy), its records as one"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=NETFILTER_CFG msg=audit(1793148440.547:19443): table=kube-proxy:1906 family=10 entries=78 op=nft_register_chain pid=209417 subj=system_u:system_r:pod_t:s0 comm=\"nft\"", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=SYSCALL msg=audit(1793148440.547:19443): arch=c000003e syscall=46 success=yes exit=10404 a0=3 a1=7ffcf8e460e0 a2=0 a3=7fc266b9fee8 items=0 ppid=141111 pid=209417 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm=\"nft\" exe=\"/usr/sbin/nft\" subj=system_u:system_r:pod_t:s0 key=(null)", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=PROCTITLE msg=audit(1793148440.547:19443): proctitle=2F7573722F7362696E2F6E6674002D66002D", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=EOE msg=audit(1793148440.547:19443):", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.audit")
+              assert_eq!(get!(., ["event.provider"]), "talos")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["service.name"]), "auditd")
+              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
+              assert_eq!(._time, t'2026-10-28T00:47:20.547Z')
+              assert_eq!(._msg, "table=kube-proxy:1906 family=10 entries=78 op=nft_register_chain pid=209417 subj=system_u:system_r:pod_t:s0 comm=\"nft\"")
+              assert_eq!(get!(., ["event.code"]), "NETFILTER_CFG")
+              assert_eq!(get!(., ["event.action"]), "loaded-firewall-rule-to")
+              assert_eq!(get!(., ["event.category"]), ["configuration"])
+              assert_eq!(get!(., ["event.type"]), ["change"])
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(get!(., ["event.sequence"]), 19443)
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["process.pid"]), 209417)
+              assert_eq!(get!(., ["process.parent.pid"]), 141111)
+              assert_eq!(get!(., ["process.name"]), "nft")
+              assert_eq!(get!(., ["process.executable"]), "/usr/sbin/nft")
+              assert_eq!(get!(., ["process.title"]), "/usr/sbin/nft -f -")
+              assert_eq!(get!(., ["user.id"]), "0")
+              assert_eq!(get!(., ["user.group.id"]), "0")
+              assert_eq!(get!(., ["user.effective.id"]), "0")
+              assert_eq!(get!(., ["user.saved.group.id"]), "0")
+              assert_eq!(get!(., ["user.filesystem.id"]), "0")
+              assert_eq!(get!(., ["host.architecture"]), "x86_64")
+              assert_eq!(get!(., ["Syscall.Name"]), "sendmsg")
+              assert_eq!(get!(., ["Syscall.Exit"]), 10404)
+              assert_eq!(get!(., ["Selinux.Subject.Context"]), "system_u:system_r:pod_t:s0")
+              assert_eq!(get!(., ["Firewall.Table"]), "kube-proxy")
+              assert_eq!(get!(., ["Firewall.Generation"]), 1906)
+              assert_eq!(get!(., ["Firewall.Entries"]), 78)
+              assert_eq!(get!(., ["Firewall.Operation"]), "nft_register_chain")
+              assert_eq!(get!(., ["network.type"]), "ipv6")
+              assert_eq!(length(split(string!(get!(., ["event.original"])), "\n")), 4)
+              assert!(starts_with(string!(get!(., ["event.original"])), "type=NETFILTER_CFG msg=audit(1793148440.547:19443): "))
+              for_each(["user.audit.id", "user.terminal", "Audit.Data", "Selinux.Object.Context", "file.path", "tags", "audit_key", "audit_record", "level"]) -> |_i, k| { assert!(get!(., [k]) == null, "there: " + k) }
+              assert!(!exists(._time_end))
+
+  - name: "an SELinux denial in permissive mode (the Longhorn backup share), two AVCs on one object"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=AVC msg=audit(1793148500.123:20001): avc:  denied  { write } for  pid=4242 comm=\"longhorn\" name=\"locks\" dev=\"cifs\" ino=1234 scontext=system_u:system_r:pod_t:s0:c12,c34 tcontext=system_u:object_r:network_fs_t:s0 tclass=dir permissive=1", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=AVC msg=audit(1793148500.123:20001): avc:  denied  { add_name } for  pid=4242 comm=\"longhorn\" name=\"locks\" dev=\"cifs\" ino=1234 scontext=system_u:system_r:pod_t:s0:c12,c34 tcontext=system_u:object_r:network_fs_t:s0 tclass=dir permissive=1", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=SYSCALL msg=audit(1793148500.123:20001): arch=c000003e syscall=257 success=yes exit=7 a0=ffffff9c a1=c000123456 a2=80241 a3=1a4 items=2 ppid=4100 pid=4242 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm=\"longhorn\" exe=\"/usr/local/bin/longhorn\" subj=system_u:system_r:pod_t:s0:c12,c34 key=(null)", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=CWD msg=audit(1793148500.123:20001): cwd=\"/\"", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=PATH msg=audit(1793148500.123:20001): item=0 name=\"/var/lib/longhorn-backupstore-mounts/192_168_111_6/longhorn-backups/backupstore/volumes/0a/1b/pvc-1/locks/\" inode=1234 dev=00:3a mode=040755 ouid=0 ogid=0 rdev=00:00 obj=system_u:object_r:network_fs_t:s0 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=PATH msg=audit(1793148500.123:20001): item=1 name=\"/var/lib/longhorn-backupstore-mounts/192_168_111_6/longhorn-backups/backupstore/volumes/0a/1b/pvc-1/locks/lock-1.lck\" inode=5678 dev=00:3a mode=0100644 ouid=0 ogid=0 rdev=00:00 obj=system_u:object_r:network_fs_t:s0 nametype=CREATE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=PROCTITLE msg=audit(1793148500.123:20001): proctitle=2F7573722F6C6F63616C2F62696E2F6C6F6E67686F726E006261636B757000637265617465", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=EOE msg=audit(1793148500.123:20001):", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.audit")
+              assert!(starts_with(string!(._msg), "avc:  denied  { write } for  pid=4242 comm=\"longhorn\""))
+              assert_eq!(get!(., ["event.code"]), "AVC")
+              assert_eq!(get!(., ["event.action"]), "violated-selinux-policy")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert!(!exists(."event.type"))
+              assert!(!exists(."event.category"))
+              assert_eq!(get!(., ["Selinux.Subject.Context"]), "system_u:system_r:pod_t:s0:c12,c34")
+              assert_eq!(get!(., ["Selinux.Object.Context"]), "system_u:object_r:network_fs_t:s0")
+              assert_eq!(get!(., ["Selinux.Object.Class"]), "dir")
+              assert_eq!(get!(., ["Selinux.Permissions"]), ["write", "add_name"])
+              assert_eq!(get!(., ["Selinux.Result"]), "denied")
+              assert_eq!(get!(., ["Selinux.Permissive"]), true)
+              assert_eq!(get!(., ["file.path"]), "/var/lib/longhorn-backupstore-mounts/192_168_111_6/longhorn-backups/backupstore/volumes/0a/1b/pvc-1/locks/lock-1.lck")
+              assert_eq!(get!(., ["file.inode"]), "5678")
+              assert_eq!(get!(., ["file.device"]), "00:3a")
+              assert_eq!(get!(., ["file.mode"]), "0644")
+              assert_eq!(get!(., ["file.uid"]), "0")
+              assert_eq!(get!(., ["file.gid"]), "0")
+              assert_eq!(get!(., ["process.working_directory"]), "/")
+              assert_eq!(get!(., ["process.title"]), "/usr/local/bin/longhorn backup create")
+              assert_eq!(get!(., ["process.executable"]), "/usr/local/bin/longhorn")
+              assert_eq!(get!(., ["Syscall.Name"]), "openat")
+              assert_eq!(get!(., ["Audit.Data"]), {"name": "locks", "dev": "cifs", "ino": "1234"})
+              assert_eq!(length(split(string!(get!(., ["event.original"])), "\n")), 8)
+
+  - name: "an SELinux denial that blocked, hex-encoded text, an audit user and rule key"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=AVC msg=audit(1793148600.5:20050): avc:  denied  { read } for  pid=77 comm=\"my app\" name=\"secret\" dev=\"vda4\" ino=99 scontext=system_u:system_r:pod_t:s0 tcontext=system_u:object_r:system_state_t:s0 tclass=file permissive=0", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=SYSCALL msg=audit(1793148600.5:20050): arch=c000003e syscall=257 success=no exit=-13 a0=ffffff9c a1=1 a2=0 a3=0 items=1 ppid=1 pid=77 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=3 comm=6D7920617070 exe=616263 subj=system_u:system_r:pod_t:s0 key=\"watch-secrets\"", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=EOE msg=audit(1793148600.5:20050):", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.type"]), ["denied"])
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(get!(., ["Selinux.Permissive"]), false)
+              assert_eq!(get!(., ["Syscall.Exit"]), -13)
+              assert_eq!(get!(., ["process.name"]), "my app")
+              # Hex that decodes to plain text wasn't hex (Elastic's rule).
+              assert_eq!(get!(., ["process.executable"]), "616263")
+              assert_eq!(get!(., ["user.id"]), "1000")
+              assert_eq!(get!(., ["user.audit.id"]), "1000")
+              assert_eq!(get!(., ["user.terminal"]), "pts0")
+              assert_eq!(get!(., ["Audit.Data"]), {"name": "secret", "dev": "vda4", "ino": "99", "ses": "3", "key": "watch-secrets"})
+              assert_eq!(get!(., ["related.user"]), ["1000"])
+
+  - name: "a BPF event (a program loaded)"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=BPF msg=audit(1793148700.25:20100): prog-id=123 op=LOAD", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=SYSCALL msg=audit(1793148700.25:20100): arch=c000003e syscall=321 success=yes exit=9 a0=5 a1=7ffd a2=90 a3=0 items=0 ppid=2000 pid=2100 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm=\"falco\" exe=\"/usr/bin/falco\" subj=system_u:system_r:pod_t:s0 key=(null)", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=PROCTITLE msg=audit(1793148700.25:20100): proctitle=\"falco\"", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=EOE msg=audit(1793148700.25:20100):", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.code"]), "BPF")
+              assert_eq!(get!(., ["event.action"]), "bpf")
+              assert_eq!(get!(., ["Bpf.ProgramId"]), 123)
+              assert_eq!(get!(., ["Bpf.Operation"]), "LOAD")
+              assert_eq!(get!(., ["Syscall.Name"]), "bpf")
+              assert_eq!(get!(., ["process.title"]), "falco")
+              assert!(!exists(."Audit.Data"))
+
+  - name: "an event without EOE (promiscuous mode, from the kernel) is sent when it expires"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "type=ANOM_PROMISCUOUS msg=audit(1793148800.75:20200): dev=veth1a2b3c4d prom=256 old_prom=0 auid=4294967295 uid=0 gid=0 ses=4294967295", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.code"]), "ANOM_PROMISCUOUS")
+              assert_eq!(get!(., ["event.action"]), "changed-promiscuous-mode-on-device")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["event.category"]), ["intrusion_detection"])
+              assert_eq!(get!(., ["event.type"]), ["info", "change"])
+              assert_eq!(get!(., ["Interface.Name"]), "veth1a2b3c4d")
+              assert_eq!(get!(., ["Interface.Promiscuous"]), true)
+              assert_eq!(get!(., ["Audit.Data"]), {"old_prom": "0"})
+              assert!(!exists(."event.outcome"))
+              assert!(!exists(."user.audit.id"))
+
+  - name: "auditd's line that isn't an audit record stays generic in talos.log (not a real line)"
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "auditd started", "talos-level": "info", "talos-time": "2026-10-28T00:47:20.553509570Z", "talos-service": "auditd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-28T00:47:21Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert_eq!(._msg, "auditd started")
+              assert_eq!(.tags, ["generic"])
+
+  - name: an event the audit remap failed on is kept, its records as they came
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "_time": t'2026-10-28T00:47:20.547Z', "audit_key": "1793148440.547:19443",
+            "audit_record": [{"type": "NETFILTER_CFG", "line": "type=NETFILTER_CFG msg=audit(1793148440.547:19443): table=x"}, {"type": "EOE", "line": "type=EOE msg=audit(1793148440.547:19443):"}],
+            "metadata": {"dropped": {"component_id": "talos_audit", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.audit")
+              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
+              assert_eq!(get!(., ["error.message"]), "boom")
+              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
+              assert_eq!(._msg, "type=NETFILTER_CFG msg=audit(1793148440.547:19443): table=x\ntype=EOE msg=audit(1793148440.547:19443):")
+              assert!(!exists(.audit_record))

@@ -44,6 +44,7 @@ configMapGenerator:
       - config/collector/mealie.yaml
       - config/collector/pods.yaml
       - config/collector/talos.yaml
+      - config/collector/talos-audit.yaml
       - config/collector/vaultwarden.yaml
   - name: vector-aggregator-config
     files:
