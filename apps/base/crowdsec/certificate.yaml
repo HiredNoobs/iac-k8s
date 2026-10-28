@@ -1,0 +1,20 @@
+# The agent's HTTPS listener (release.yaml's additionalAcquisition): vector-aggregator checks it
+# against the monitoring CA, and it checks the aggregator's client certificate (vector-tls)
+# against the same CA (ca.crt here).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: crowdsec-agent
+spec:
+  secretName: crowdsec-agent-tls
+  commonName: crowdsec-agent-service.crowdsec.svc
+  dnsNames:
+    - crowdsec-agent-service.crowdsec.svc
+    - crowdsec-agent-service.crowdsec.svc.cluster.local
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca
