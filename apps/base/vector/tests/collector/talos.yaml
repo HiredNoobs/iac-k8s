@@ -50,17 +50,56 @@ tests:
         source: |
           . = {"msg": "starting compact hash check", "talos-level": "info", "talos-time": "2026-10-15T15:51:50.041062Z", "talos-service": "etcd", "caller": "etcdserver/corrupt.go:278", "local-member-id": "48c452a36a97e90", "timeout": "7s", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:50.5Z'}
     outputs:
-      - extract_from: final
+      # Dropped after this (talos_kept).
+      - extract_from: talos
         conditions:
           - type: vrl
             source: |
               assert_eq!(get!(., ["service.name"]), "etcd")
               assert_eq!(._msg, "starting compact hash check")
-              assert_eq!(get!(., ["log.origin.file.name"]), "etcdserver/corrupt.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 278)
+              assert_eq!(.caller, "etcdserver/corrupt.go:278")
               assert_eq!(get!(., ["local-member-id"]), "48c452a36a97e90")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(."event.original"))
+
+  - name: etcd's warning reaches VictoriaLogs, its caller as log.origin.* (not a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "apply request took too long", "talos-level": "warn", "talos-time": "2026-10-15T15:51:50.041062Z", "talos-service": "etcd", "caller": "etcdserver/util.go:170", "took": "112.5ms", "expected-duration": "100ms", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:50.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "apply request took too long")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(get!(., ["log.origin.file.name"]), "etcdserver/util.go")
+              assert_eq!(get!(., ["log.origin.file.line"]), 170)
+              assert_eq!(.took, "112.5ms")
+              assert_eq!(.tags, ["generic"])
+
+  - name: etcd's scheduled hash check is dropped
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "starting compact hash check", "talos-level": "info", "talos-time": "2026-10-15T15:51:50.041062Z", "talos-service": "etcd", "caller": "etcdserver/corrupt.go:278", "local-member-id": "48c452a36a97e90", "timeout": "7s", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:50.5Z'}
+    no_outputs_from: [talos_kept]
+
+  - name: the same message at another level is kept (not a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "purged", "talos-level": "warn", "talos-time": "2026-10-15T15:51:50.041062Z", "talos-service": "etcd", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:51:50.5Z'}
+    outputs:
+      - extract_from: talos_kept
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "purged")
 
   - name: kernel line, the prefix as facility, severity, level and time
     inputs:
@@ -143,20 +182,44 @@ tests:
         source: |
           . = {"msg": "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests", "talos-level": "info", "talos-time": "2026-10-15T15:52:03.440944166Z", "talos-service": "controller-runtime", "component": "controller-runtime", "controller": "k8s.StaticPodServerController", "size": "14571", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:03.5Z'}
     outputs:
-      - extract_from: final
+      # Dropped after this (talos_kept).
+      - extract_from: talos
         conditions:
           - type: vrl
             source: |
               assert_eq!(._msg, "serving static pod manifests")
               assert_eq!(._time, t'2026-10-15T15:52:03.440944166Z')
-              assert_eq!(get!(., ["log.level"]), "debug")
+              assert_eq!(.level, "DEBUG")
               assert_eq!(get!(., ["Talos.Controller"]), "k8s.StaticPodServerController")
               assert_eq!(get!(., ["event.original"]), "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests")
               assert_eq!(.size, "14571")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(.component))
               assert!(!exists(.controller))
+
+  - name: a Talos controller's other debug lines reach VictoriaLogs (not a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026-10-15T15:52:03.440Z DEBUG removing image", "talos-level": "info", "talos-time": "2026-10-15T15:52:03.440944166Z", "talos-service": "controller-runtime", "component": "controller-runtime", "controller": "cri.ImageGCController", "image": "docker.io/library/busybox:1.37", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:03.5Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "removing image")
+              assert_eq!(get!(., ["log.level"]), "debug")
+              assert_eq!(get!(., ["Talos.Controller"]), "cri.ImageGCController")
               assert!(!exists(."Orchestrator.Controller"))
+
+  - name: the static pod manifests line is dropped
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests", "talos-level": "info", "talos-time": "2026-10-15T15:52:03.440944166Z", "talos-service": "controller-runtime", "component": "controller-runtime", "controller": "k8s.StaticPodServerController", "size": "14571", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-15T15:52:03.5Z'}
+    no_outputs_from: [talos_kept]
 
   - name: Go's log format with a file (trustd's CSR request)
     inputs:
@@ -304,6 +367,56 @@ tests:
               assert_eq!(get!(., ["event.outcome"]), "failure")
               assert!(!exists(."dns.answers"))
               assert!(!exists(."dns.resolved_ip"))
+
+  - name: syslogd's line, the content as _msg and the header as log.syslog.* (the QEMU guest agent)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "", "talos-level": "info", "talos-time": "2026-10-27T15:14:38.386865467Z", "talos-service": "syslogd", "content": ": info: guest-ping called\n", "facility": "1", "severity": "6", "priority": "14", "hostname": "localhost", "tag": "unknown", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-27T15:14:38.387Z'}
+    outputs:
+      # Dropped after this (talos_kept).
+      - extract_from: talos
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "info: guest-ping called")
+              assert_eq!(get!(., ["log.syslog.facility.code"]), 1)
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "user")
+              assert_eq!(get!(., ["log.syslog.severity.code"]), 6)
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "info")
+              assert_eq!(get!(., ["log.syslog.priority"]), 14)
+              assert_eq!(get!(., ["log.syslog.hostname"]), "localhost")
+              for_each(["content", "facility", "severity", "priority", "hostname", "tag"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
+              assert!(!exists(."log.syslog.appname"))
+              assert!(!exists(.tags))
+
+  - name: the guest agent's ping is dropped
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "", "talos-level": "info", "talos-time": "2026-10-27T15:14:38.386865467Z", "talos-service": "syslogd", "content": ": info: guest-ping called\n", "facility": "1", "severity": "6", "priority": "14", "hostname": "localhost", "tag": "unknown", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-27T15:14:38.387Z'}
+    no_outputs_from: [talos_kept]
+
+  - name: the guest agent's other commands reach VictoriaLogs, a program name as appname (not a real line)
+    inputs:
+      - insert_at: talos
+        type: vrl
+        source: |
+          . = {"msg": "", "talos-level": "info", "talos-time": "2026-10-27T15:14:38.386865467Z", "talos-service": "syslogd", "content": "info: guest-exec called\n", "facility": "1", "severity": "4", "priority": "12", "hostname": "localhost", "tag": "qemu-ga", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-27T15:14:38.387Z'}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert_eq!(._msg, "info: guest-exec called")
+              assert_eq!(get!(., ["log.syslog.appname"]), "qemu-ga")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "warning")
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert!(!exists(.level))
+              assert!(!exists(.tags))
 
   - name: "format mismatch: a line on the Talos port that isn't Talos' JSON"
     inputs:

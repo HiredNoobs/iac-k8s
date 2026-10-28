@@ -107,6 +107,19 @@ transforms:
         }
         %host = get_env_var("NODE_NAME") ?? ""
         %dataset = "talos.log"
+      } else if includes(["audit_records", "talos_audit"], component) {
+        # An audit record as talos made it, or an event's records together (one per line).
+        if is_array(.audit_record) {
+          . = {
+            "_msg": join(map_values(array!(.audit_record)) -> |r| { string(r.line) ?? "" }, "\n") ?? "",
+            "_time": ._time,
+            "event.created": now(),
+          }
+        } else {
+          . = {"_msg": ._msg, "_time": ._time, "event.created": now()}
+        }
+        %host = get_env_var("NODE_NAME") ?? ""
+        %dataset = "talos.audit"
       } else if component != "" && component != "generic" {
         # generic's lines keep <namespace>.<container> (ecs).
         %dataset = component + ".log"

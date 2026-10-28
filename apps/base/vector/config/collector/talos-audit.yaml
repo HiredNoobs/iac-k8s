@@ -1,0 +1,313 @@
+# The kernel's audit records, from Talos' auditd service (talos.yaml's talos_route), as one event
+# per audit event in talos.audit. The kernel writes an event as several records sharing
+# msg=audit(<time>:<serial>) (SYSCALL, AVC, PATH, CWD, PROCTITLE, ...), ended by EOE when the event
+# had a syscall; they're put together per serial (one node's records: each Vector gets its own
+# node's) and mapped as Auditbeat names them (go-libaudit's normalisations) where ECS has a field,
+# Elastic's auditd integration otherwise (its user.* ids), custom fields for the rest:
+#   _msg               the main record's text (the first one that isn't SYSCALL, PATH, CWD,
+#                      PROCTITLE, EOE, SOCKADDR or EXECVE, else SYSCALL), all the records as they
+#                      came in event.original; its type as event.code
+#   event.action       violated-selinux-policy, loaded-firewall-rule-to,
+#                      changed-promiscuous-mode-on-device, else the type lower case
+#   event.outcome      from the syscall's success (an AVC in permissive mode didn't block it); an
+#                      AVC that did block (permissive=0) has event.type denied
+#   event.sequence     the serial
+#   process.*          pid, parent.pid, name (comm), executable, working_directory (CWD), title
+#                      (PROCTITLE, NULs as spaces: the kernel cuts it at 128 bytes, so no args)
+#   user.*             id, group.id, effective.*, saved.*, filesystem.*, audit.id, terminal
+#   file.*             from the PATH record that isn't the parent directory: path, inode, device,
+#                      mode (permission bits), uid, gid
+#   Selinux.*          Subject.Context, Object.Context, Object.Class, Permissions, Result,
+#                      Permissive (the first AVC's; permissions from the AVCs on the same object)
+#   Syscall.*          Name (x86_64), Exit (the syscall's return value)
+#   Firewall.*         NETFILTER_CFG's Table, Generation, Entries, Operation; family as network.type
+#   Bpf.*              BPF's ProgramId, Operation
+#   Interface.*        ANOM_PROMISCUOUS' Name, Promiscuous
+#   Audit.Data         any other key of the main record or SYSCALL, as audit wrote it
+# Dropped: the syscall's arguments (a0-a3, items), unset ids (4294967295), values audit writes as
+# ?, (null) or (none), keys repeating a mapped one; event.original has them.
+
+transforms:
+  # One record: its type, the event's key (time and serial), and its key=value pairs. Values in
+  # quotes are as they were; an unquoted one of the keys that can hold any text is hex (audit
+  # encodes text with spaces, quotes or control characters), decoded as Elastic's integration
+  # does. An AVC's "avc: denied { write } for" as its result and permissions.
+  audit_records:
+    type: remap
+    inputs: [talos_route.audit]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      line = string!(._msg)
+      r = parse_regex!(line, r'^type=(?P<type>\S+) msg=audit\((?P<epoch>\d+(?:\.\d+)?):(?P<serial>\d+)\):\s*(?P<body>(?s:.*?))\s*$')
+      record = {"type": r.type, "line": line, "body": r.body}
+      body = r.body
+      avc, err = parse_regex(body, r'^avc:\s+(?P<result>\w+)\s+\{\s*(?P<perms>[^}]*?)\s*\}\s+for\s+(?P<rest>(?s:.*))$')
+      if err == null {
+        record.result = avc.result
+        record.perms = filter(split(string!(avc.perms), " ")) -> |_i, p| { p != "" }
+        body = string!(avc.rest)
+      }
+      hex_keys = ["exe", "cmd", "data", "path", "comm", "file", "name", "watch", "cwd", "acct", "dir", "vm", "old-chardev", "new-chardev", "old-disk", "new-disk", "old-fs", "new-fs", "old-net", "new-net", "device", "cgroup", "apparmor", "operation", "denied_mask", "info", "profile", "requested_mask", "old-rng", "new-rng", "ocomm", "grp", "new_group", "invalid_context", "sw", "root_dir", "proctitle"]
+      fields = {}
+      for_each(parse_regex_all!(body, r'(?P<key>[A-Za-z0-9_-]+)=(?P<value>"[^"]*"|\S*)')) -> |_i, kv| {
+        key = string!(kv.key)
+        value = string!(kv.value)
+        if starts_with(value, "\"") {
+          value = slice!(value, 1, -1)
+        } else if includes(hex_keys, key) && match(value, r'^(?:[0-9A-Fa-f]{2})+$') {
+          # Only when the text needed encoding, as Elastic: otherwise it wasn't hex.
+          decoded = decode_base16(value) ?? value
+          if match(decoded, r'[\x00-\x20"\x7f]') { value = decoded }
+        }
+        if !includes(["?", "(null)", "(none)", ""], value) { fields = set!(fields, [key], value) }
+      }
+      record.fields = fields
+      # When the kernel wrote it (Unix seconds with milliseconds), else when Talos sent it.
+      time = parse_timestamp(r.epoch, "%s%.f") ?? ._time
+      . = {
+        "_time": time,
+        "audit_key": r.epoch + ":" + r.serial,
+        "audit_record": record,
+      }
+
+  # An event's records together, in order: ended by EOE, or 2 s after the last record for an event
+  # without one (no syscall, or the kernel lost its EOE).
+  audit_events:
+    type: reduce
+    inputs: [audit_records]
+    group_by: [audit_key]
+    ends_when:
+      type: vrl
+      source: .audit_record.type == "EOE"
+    expire_after_ms: 2000
+    flush_period_ms: 500
+    merge_strategies:
+      _time: discard
+      audit_record: array
+
+  talos_audit:
+    type: remap
+    inputs: [audit_events]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      records = array!(.audit_record)
+      %dataset = "talos.audit"
+      %host = get_env_var("NODE_NAME") ?? ""
+      serial = split(string!(.audit_key), ":")[1]
+      . = {"_time": ._time, "event.created": now(), "service.name": "auditd", "level": "info"}
+      ."event.sequence" = to_int(serial) ?? null
+      ."event.original" = join!(map_values(records) -> |r| { string(r.line) ?? "" }, "\n")
+
+      # The records by type: the main one, SYSCALL, the first AVC, CWD, PROCTITLE, the PATHs.
+      primary = {}
+      syscall = {}
+      avc = {}
+      perms = []
+      cwd = null
+      title = null
+      target_path = {}
+      for_each(records) -> |_i, r| {
+        rtype = string(r.type) ?? ""
+        f = object(r.fields) ?? {}
+        if rtype == "SYSCALL" && syscall == {} {
+          syscall = r
+        } else if rtype == "AVC" && avc == {} {
+          avc = r
+        } else if rtype == "CWD" {
+          cwd = f.cwd
+        } else if rtype == "PROCTITLE" && is_string(f.proctitle) {
+          title = strip_whitespace(replace(string!(f.proctitle), r'\x00', " "))
+        } else if rtype == "PATH" && f.nametype != "PARENT" {
+          target_path = f
+        }
+        if primary == {} && !includes(["SYSCALL", "PATH", "CWD", "PROCTITLE", "EOE", "SOCKADDR", "EXECVE"], rtype) { primary = r }
+      }
+      if primary == {} { primary = if syscall != {} { syscall } else { records[0] } }
+      main_type = string(primary.type) ?? ""
+      ._msg = string(primary.body) ?? ""
+      ."event.code" = main_type
+
+      ."event.action" = if main_type == "AVC" && avc.result != null {
+        "violated-selinux-policy"
+      } else if main_type == "NETFILTER_CFG" {
+        "loaded-firewall-rule-to"
+      } else if main_type == "ANOM_PROMISCUOUS" {
+        "changed-promiscuous-mode-on-device"
+      } else {
+        downcase(main_type)
+      }
+      if main_type == "NETFILTER_CFG" {
+        ."event.category" = ["configuration"]
+        ."event.type" = ["change"]
+      } else if main_type == "ANOM_PROMISCUOUS" {
+        ."event.category" = ["intrusion_detection"]
+        ."event.type" = ["info", "change"]
+      } else if main_type == "SYSCALL" {
+        ."event.category" = ["process"]
+        ."event.type" = ["info"]
+      }
+
+      # The main record's keys with SYSCALL's over them (an AVC repeats its pid and comm).
+      src = object(primary.fields) ?? {}
+      if primary != syscall { src = merge(src, object(syscall.fields) ?? {}) }
+      used = []
+      take = {
+        "pid": "process.pid", "ppid": "process.parent.pid", "comm": "process.name", "exe": "process.executable",
+        "uid": "user.id", "gid": "user.group.id", "euid": "user.effective.id", "egid": "user.effective.group.id",
+        "suid": "user.saved.id", "sgid": "user.saved.group.id", "fsuid": "user.filesystem.id",
+        "fsgid": "user.filesystem.group.id", "auid": "user.audit.id", "tty": "user.terminal",
+      }
+      for_each(take) -> |key, field| {
+        value = get!(src, [key])
+        if is_string(value) {
+          used = push(used, key)
+          if value != "4294967295" {
+            if includes(["pid", "ppid"], key) { value = to_int(value) ?? value }
+            . = set!(., [field], value)
+          }
+        }
+      }
+      if cwd != null { ."process.working_directory" = cwd }
+      if title != null && title != "" { ."process.title" = title }
+
+      success = src.success
+      if success == "yes" { ."event.outcome" = "success" } else if success == "no" { ."event.outcome" = "failure" }
+      arch = src.arch
+      if arch == "c000003e" {
+        ."host.architecture" = "x86_64"
+        number = to_int(src.syscall) ?? -1
+        # arch/x86/entry/syscalls/syscall_64.tbl: 0-336, then 424 on.
+        name = if number >= 0 && number <= 336 {
+          get!([
+            "read", "write", "open", "close", "stat", "fstat", "lstat", "poll", "lseek", "mmap", "mprotect",
+            "munmap", "brk", "rt_sigaction", "rt_sigprocmask", "rt_sigreturn", "ioctl", "pread64",
+            "pwrite64", "readv", "writev", "access", "pipe", "select", "sched_yield", "mremap", "msync",
+            "mincore", "madvise", "shmget", "shmat", "shmctl", "dup", "dup2", "pause", "nanosleep",
+            "getitimer", "alarm", "setitimer", "getpid", "sendfile", "socket", "connect", "accept",
+            "sendto", "recvfrom", "sendmsg", "recvmsg", "shutdown", "bind", "listen", "getsockname",
+            "getpeername", "socketpair", "setsockopt", "getsockopt", "clone", "fork", "vfork", "execve",
+            "exit", "wait4", "kill", "uname", "semget", "semop", "semctl", "shmdt", "msgget", "msgsnd",
+            "msgrcv", "msgctl", "fcntl", "flock", "fsync", "fdatasync", "truncate", "ftruncate", "getdents",
+            "getcwd", "chdir", "fchdir", "rename", "mkdir", "rmdir", "creat", "link", "unlink", "symlink",
+            "readlink", "chmod", "fchmod", "chown", "fchown", "lchown", "umask", "gettimeofday",
+            "getrlimit", "getrusage", "sysinfo", "times", "ptrace", "getuid", "syslog", "getgid", "setuid",
+            "setgid", "geteuid", "getegid", "setpgid", "getppid", "getpgrp", "setsid", "setreuid",
+            "setregid", "getgroups", "setgroups", "setresuid", "getresuid", "setresgid", "getresgid",
+            "getpgid", "setfsuid", "setfsgid", "getsid", "capget", "capset", "rt_sigpending",
+            "rt_sigtimedwait", "rt_sigqueueinfo", "rt_sigsuspend", "sigaltstack", "utime", "mknod",
+            "uselib", "personality", "ustat", "statfs", "fstatfs", "sysfs", "getpriority", "setpriority",
+            "sched_setparam", "sched_getparam", "sched_setscheduler", "sched_getscheduler",
+            "sched_get_priority_max", "sched_get_priority_min", "sched_rr_get_interval", "mlock", "munlock",
+            "mlockall", "munlockall", "vhangup", "modify_ldt", "pivot_root", "_sysctl", "prctl",
+            "arch_prctl", "adjtimex", "setrlimit", "chroot", "sync", "acct", "settimeofday", "mount",
+            "umount2", "swapon", "swapoff", "reboot", "sethostname", "setdomainname", "iopl", "ioperm",
+            "create_module", "init_module", "delete_module", "get_kernel_syms", "query_module", "quotactl",
+            "nfsservctl", "getpmsg", "putpmsg", "afs_syscall", "tuxcall", "security", "gettid", "readahead",
+            "setxattr", "lsetxattr", "fsetxattr", "getxattr", "lgetxattr", "fgetxattr", "listxattr",
+            "llistxattr", "flistxattr", "removexattr", "lremovexattr", "fremovexattr", "tkill", "time",
+            "futex", "sched_setaffinity", "sched_getaffinity", "set_thread_area", "io_setup", "io_destroy",
+            "io_getevents", "io_submit", "io_cancel", "get_thread_area", "lookup_dcookie", "epoll_create",
+            "epoll_ctl_old", "epoll_wait_old", "remap_file_pages", "getdents64", "set_tid_address",
+            "restart_syscall", "semtimedop", "fadvise64", "timer_create", "timer_settime", "timer_gettime",
+            "timer_getoverrun", "timer_delete", "clock_settime", "clock_gettime", "clock_getres",
+            "clock_nanosleep", "exit_group", "epoll_wait", "epoll_ctl", "tgkill", "utimes", "vserver",
+            "mbind", "set_mempolicy", "get_mempolicy", "mq_open", "mq_unlink", "mq_timedsend",
+            "mq_timedreceive", "mq_notify", "mq_getsetattr", "kexec_load", "waitid", "add_key",
+            "request_key", "keyctl", "ioprio_set", "ioprio_get", "inotify_init", "inotify_add_watch",
+            "inotify_rm_watch", "migrate_pages", "openat", "mkdirat", "mknodat", "fchownat", "futimesat",
+            "newfstatat", "unlinkat", "renameat", "linkat", "symlinkat", "readlinkat", "fchmodat",
+            "faccessat", "pselect6", "ppoll", "unshare", "set_robust_list", "get_robust_list", "splice",
+            "tee", "sync_file_range", "vmsplice", "move_pages", "utimensat", "epoll_pwait", "signalfd",
+            "timerfd_create", "eventfd", "fallocate", "timerfd_settime", "timerfd_gettime", "accept4",
+            "signalfd4", "eventfd2", "epoll_create1", "dup3", "pipe2", "inotify_init1", "preadv", "pwritev",
+            "rt_tgsigqueueinfo", "perf_event_open", "recvmmsg", "fanotify_init", "fanotify_mark",
+            "prlimit64", "name_to_handle_at", "open_by_handle_at", "clock_adjtime", "syncfs", "sendmmsg",
+            "setns", "getcpu", "process_vm_readv", "process_vm_writev", "kcmp", "finit_module",
+            "sched_setattr", "sched_getattr", "renameat2", "seccomp", "getrandom", "memfd_create",
+            "kexec_file_load", "bpf", "execveat", "userfaultfd", "membarrier", "mlock2", "copy_file_range",
+            "preadv2", "pwritev2", "pkey_mprotect", "pkey_alloc", "pkey_free", "statx", "io_pgetevents",
+            "rseq", "uretprobe", "uprobe"
+          ], [number])
+        } else if number >= 424 {
+          get!([
+            "pidfd_send_signal", "io_uring_setup", "io_uring_enter", "io_uring_register", "open_tree",
+            "move_mount", "fsopen", "fsconfig", "fsmount", "fspick", "pidfd_open", "clone3", "close_range",
+            "openat2", "pidfd_getfd", "faccessat2", "process_madvise", "epoll_pwait2", "mount_setattr",
+            "quotactl_fd", "landlock_create_ruleset", "landlock_add_rule", "landlock_restrict_self",
+            "memfd_secret", "process_mrelease", "futex_waitv", "set_mempolicy_home_node", "cachestat",
+            "fchmodat2", "map_shadow_stack", "futex_wake", "futex_wait", "futex_requeue", "statmount",
+            "listmount", "lsm_get_self_attr", "lsm_set_self_attr", "lsm_list_modules", "mseal",
+            "setxattrat", "getxattrat", "listxattrat", "removexattrat", "open_tree_attr", "file_getattr",
+            "file_setattr", "listns", "rseq_slice_yield", "fchroot"
+          ], [number - 424])
+        } else { null }
+        if name != null { ."Syscall.Name" = name; used = push(used, "syscall") }
+        used = push(used, "arch")
+      } else if arch == "c00000b7" {
+        ."host.architecture" = "aarch64"
+        used = push(used, "arch")
+      }
+      exit = to_int(src.exit) ?? null
+      if exit != null { ."Syscall.Exit" = exit }
+      used = append(used, ["success", "exit", "a0", "a1", "a2", "a3", "items"])
+      if src.ses == "4294967295" { used = push(used, "ses") }
+
+      # SELinux: the first AVC, its permissions with any other AVC's on the same object; without
+      # one, the process' own context (subj) and the PATH's object.
+      a = object(avc.fields) ?? {}
+      for_each(records) -> |_i, r| {
+        f = object(r.fields) ?? {}
+        if r.type == "AVC" && f.tcontext == a.tcontext && f.tclass == a.tclass {
+          perms = append(perms, array(r.perms) ?? [])
+        }
+      }
+      subject = a.scontext || src.subj
+      if subject != null { ."Selinux.Subject.Context" = subject }
+      target = a.tcontext || target_path.obj
+      if target != null { ."Selinux.Object.Context" = target }
+      if a.tclass != null { ."Selinux.Object.Class" = a.tclass }
+      if perms != [] { ."Selinux.Permissions" = unique(perms) }
+      if avc.result != null { ."Selinux.Result" = avc.result }
+      if a.permissive != null {
+        ."Selinux.Permissive" = a.permissive == "1"
+        if a.permissive == "0" { ."event.type" = ["denied"] }
+      }
+      used = append(used, ["subj", "scontext", "tcontext", "tclass", "permissive"])
+
+      # The object, ECS' file.* (mode: the permission bits of audit's octal mode).
+      for_each({"name": "file.path", "inode": "file.inode", "dev": "file.device", "ouid": "file.uid", "ogid": "file.gid"}) -> |key, field| {
+        value = get!(target_path, [key])
+        if is_string(value) { . = set!(., [field], value) }
+      }
+      mode = string(target_path.mode) ?? ""
+      if length(mode) >= 4 { ."file.mode" = slice!(mode, -4) }
+
+      if main_type == "NETFILTER_CFG" {
+        table, err = parse_regex(string(src.table) ?? "", r'^(?P<name>.+?)(?::(?P<generation>\d+))?$')
+        if err == null {
+          ."Firewall.Table" = table.name
+          if table.generation != null { ."Firewall.Generation" = to_int(table.generation) ?? null }
+          used = push(used, "table")
+        }
+        family = get!({"2": "ipv4", "10": "ipv6"}, [string(src.family) ?? ""])
+        if family != null { ."network.type" = family; used = push(used, "family") }
+        entries = to_int(src.entries) ?? null
+        if entries != null { ."Firewall.Entries" = entries; used = push(used, "entries") }
+        if src.op != null { ."Firewall.Operation" = src.op; used = push(used, "op") }
+      } else if main_type == "BPF" {
+        id = to_int(get!(src, ["prog-id"])) ?? null
+        if id != null { ."Bpf.ProgramId" = id; used = push(used, "prog-id") }
+        if src.op != null { ."Bpf.Operation" = src.op; used = push(used, "op") }
+      } else if main_type == "ANOM_PROMISCUOUS" {
+        if src.dev != null { ."Interface.Name" = src.dev; used = push(used, "dev") }
+        prom = to_int(src.prom) ?? null
+        if prom != null { ."Interface.Promiscuous" = prom != 0; used = push(used, "prom") }
+      }
+
+      rest = {}
+      for_each(src) -> |key, value| {
+        if !includes(used, key) { rest = set!(rest, [key], value) }
+      }
+      if rest != {} { ."Audit.Data" = rest }
