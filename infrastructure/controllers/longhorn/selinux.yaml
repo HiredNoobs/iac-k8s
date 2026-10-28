@@ -6,7 +6,8 @@
 #
 # Longhorn mounts with util-linux's mount, which drops SELinux options (context=, ...) without
 # saying so when libselinux reports SELinux as off, and libselinux does that without
-# /etc/selinux/config, which its images don't have. So the containers that mount get one, added
+# /etc/selinux/config, which its images don't have, or without selinuxfs, which a container's /sys
+# doesn't include. So the containers that mount get both (the host's selinuxfs, read-only), added
 # when the pod is created (longhorn-manager makes the CSI plugin's DaemonSet and the instance
 # managers itself, so patching them would be undone): longhorn-csi-plugin (volumes),
 # longhorn-manager and instance-manager (the backup share: each mounts it in its own mount
@@ -49,7 +50,8 @@ spec:
     - name: mounts
       expression: object.spec.containers.exists(c, c.name in ["longhorn-csi-plugin", "longhorn-manager", "instance-manager"])
   # Merged by name and mount path: the rest of the pod stays as it was made. Only the file is
-  # mounted, so the image's other files in /etc/selinux stay.
+  # mounted, so the image's other files in /etc/selinux stay. No hostPath type (Talos' kubelet
+  # can't check paths outside its container).
   mutations:
     - patchType: ApplyConfiguration
       applyConfiguration:
@@ -60,6 +62,10 @@ spec:
                 Object.spec.volumes{
                   name: "selinux-config",
                   configMap: Object.spec.volumes.configMap{name: "longhorn-selinux", optional: true}
+                },
+                Object.spec.volumes{
+                  name: "selinuxfs",
+                  hostPath: Object.spec.volumes.hostPath{path: "/sys/fs/selinux"}
                 }
               ],
               containers: object.spec.containers.filter(c, c.name in ["longhorn-csi-plugin", "longhorn-manager", "instance-manager"]).map(c,
@@ -70,6 +76,11 @@ spec:
                       name: "selinux-config",
                       mountPath: "/etc/selinux/config",
                       subPath: "config",
+                      readOnly: true
+                    },
+                    Object.spec.containers.volumeMounts{
+                      name: "selinuxfs",
+                      mountPath: "/sys/fs/selinux",
                       readOnly: true
                     }
                   ]
