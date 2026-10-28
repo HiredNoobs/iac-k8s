@@ -64,9 +64,10 @@ spec:
       defaultClassReplicaCount: 2
       defaultDataLocality: best-effort
     # The NAS share (credentials: infrastructure/configs/longhorn), backed up nightly by the
-    # RecurringJob there.
+    # RecurringJob there. Mounted with an SELinux label pods can write (selinux.yaml): cifsOptions
+    # replaces the backupstore's default options, so soft (its default) is listed too.
     defaultBackupStore:
-      backupTarget: cifs://192.168.111.6/longhorn-backups
+      backupTarget: cifs://192.168.111.6/longhorn-backups?cifsOptions=soft,context=system_u:object_r:ephemeral_t:s0
       backupTargetCredentialSecret: longhorn-backup
     # No CSI snapshotter: it serves Kubernetes' VolumeSnapshot API, whose CRDs and
     # snapshot-controller aren't installed (nothing here uses it; snapshots and backups are
@@ -93,7 +94,7 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: vmagent
-  # The default StorageClass with an SELinux label for its volumes (csi-selinux.yaml), as
+  # The default StorageClass with an SELinux label for its volumes (selinux.yaml), as
   # longhorn-single has: the chart has no value for mountOptions. longhorn-manager makes the class
   # from this ConfigMap, so it's the chart's as rendered for these values (1.13.0) plus
   # mountOptions; check it against the chart's templates/storageclass.yaml after an upgrade.

@@ -1,0 +1,86 @@
+# Lets Longhorn mount with an SELinux label: volumes (the StorageClasses' and PVs' mountOptions,
+# context=...) and the backup share (the backup target's cifsOptions, release.yaml). Without one a
+# volume's files are unlabeled_t and the share is network_fs_t (Talos' label for CIFS/NFS, which
+# pods can't write), and every write to them is an SELinux denial in Talos' audit log
+# (permissive, so allowed, but logged; enforcing would refuse it).
+#
+# Longhorn mounts with util-linux's mount, which drops SELinux options (context=, ...) without
+# saying so when libselinux reports SELinux as off, and libselinux does that without
+# /etc/selinux/config, which its images don't have. So the containers that mount get one, added
+# when the pod is created (longhorn-manager makes the CSI plugin's DaemonSet and the instance
+# managers itself, so patching them would be undone): longhorn-csi-plugin (volumes),
+# longhorn-manager and instance-manager (the backup share: each mounts it in its own mount
+# namespace, for the backup target's listing and lock files, and for the backups). Ignore on
+# failure: the pods still start, mounting without the label (the denials show it).
+#
+# After a change, restart those pods: the CSI plugin and longhorn-manager with kubectl -n
+# longhorn-system rollout restart daemonset longhorn-csi-plugin (or longhorn-manager); the
+# instance managers run every attached volume's engine on their node, so a node at a time with a
+# drain (or at the next Talos or Longhorn upgrade). Mounts only get a label when they're next
+# made.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: longhorn-selinux
+  namespace: longhorn-system
+data:
+  # The mode in it doesn't change the node's, only what libselinux reports.
+  config: |
+    SELINUX=permissive
+    SELINUXTYPE=targeted
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: longhorn-selinux
+spec:
+  failurePolicy: Ignore
+  reinvocationPolicy: Never
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: longhorn-system
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchConditions:
+    - name: mounts
+      expression: object.spec.containers.exists(c, c.name in ["longhorn-csi-plugin", "longhorn-manager", "instance-manager"])
+  # Merged by name and mount path: the rest of the pod stays as it was made. Only the file is
+  # mounted, so the image's other files in /etc/selinux stay.
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >
+          Object{
+            spec: Object.spec{
+              volumes: [
+                Object.spec.volumes{
+                  name: "selinux-config",
+                  configMap: Object.spec.volumes.configMap{name: "longhorn-selinux", optional: true}
+                }
+              ],
+              containers: object.spec.containers.filter(c, c.name in ["longhorn-csi-plugin", "longhorn-manager", "instance-manager"]).map(c,
+                Object.spec.containers{
+                  name: c.name,
+                  volumeMounts: [
+                    Object.spec.containers.volumeMounts{
+                      name: "selinux-config",
+                      mountPath: "/etc/selinux/config",
+                      subPath: "config",
+                      readOnly: true
+                    }
+                  ]
+                }
+              )
+            }
+          }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: longhorn-selinux
+spec:
+  policyName: longhorn-selinux
