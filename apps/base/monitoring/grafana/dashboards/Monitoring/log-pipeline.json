@@ -345,9 +345,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Delay by dataset, 95th percentile",
-      "id": 18,
-      "description": "How long 95% of each dataset's lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too.",
+      "title": "Events/s by dataset",
+      "id": 21,
+      "description": "Each dataset's lines per second.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -366,14 +366,14 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) quantile(0.95, delay) as delay",
+          "expr": "event.dataset:* | stats by (event.dataset) rate() as eps",
           "queryType": "statsRange",
           "legendFormat": "{{event.dataset}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "short",
           "min": 0,
           "custom": {
             "drawStyle": "line",
@@ -451,16 +451,16 @@
       }
     },
     {
-      "type": "table",
-      "title": "Events/s by dataset",
-      "id": 21,
-      "description": "Each dataset's lines per second, averaged over the time range, the busiest first.",
+      "type": "timeseries",
+      "title": "Delay by dataset, average",
+      "id": 19,
+      "description": "How long each dataset's lines took on average to leave Vector (event.ingested minus _time). Above the 95th percentile: a few lines very late.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
         "y": 21
@@ -473,109 +473,47 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range event.dataset:* | stats by (event.dataset) count() as lines, rate() as eps | sort by (eps desc) | limit 100",
-          "queryType": "instant"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "extractFields",
-          "options": {
-            "source": "labels",
-            "format": "json",
-            "replace": false,
-            "keepTime": false
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "fields": {},
-            "conversions": [
-              {
-                "targetField": "eps",
-                "destinationType": "number"
-              },
-              {
-                "targetField": "lines",
-                "destinationType": "number"
-              }
-            ]
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Line": true,
-              "id": true,
-              "labels": true,
-              "streams": true,
-              "streamId": true,
-              "Time": true
-            },
-            "indexByName": {
-              "event.dataset": 0,
-              "eps": 1,
-              "lines": 2
-            },
-            "renameByName": {
-              "event.dataset": "Dataset",
-              "eps": "Events/s",
-              "lines": "Lines"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "Events/s",
-                "desc": true
-              }
-            ]
-          }
+          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) avg(delay) as delay",
+          "queryType": "statsRange",
+          "legendFormat": "{{event.dataset}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "None"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Events/s"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 2
-              }
-            ]
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
           }
-        ]
+        },
+        "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       }
     },
     {
-      "type": "table",
-      "title": "Delay by dataset",
-      "id": 19,
-      "description": "Each dataset's delay in the time range, the slowest first.",
+      "type": "timeseries",
+      "title": "Delay by dataset, 95th percentile",
+      "id": 18,
+      "description": "How long 95% of each dataset's lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
         "y": 21
@@ -588,165 +526,33 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) count() as lines, avg(delay) as avg, quantile(0.5, delay) as p50, quantile(0.95, delay) as p95, max(delay) as max | sort by (p95 desc) | limit 50",
-          "queryType": "instant"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "extractFields",
-          "options": {
-            "source": "labels",
-            "format": "json",
-            "replace": false,
-            "keepTime": false
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "fields": {},
-            "conversions": [
-              {
-                "targetField": "lines",
-                "destinationType": "number"
-              },
-              {
-                "targetField": "avg",
-                "destinationType": "number"
-              },
-              {
-                "targetField": "p50",
-                "destinationType": "number"
-              },
-              {
-                "targetField": "p95",
-                "destinationType": "number"
-              },
-              {
-                "targetField": "max",
-                "destinationType": "number"
-              }
-            ]
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Line": true,
-              "id": true,
-              "labels": true,
-              "streams": true,
-              "streamId": true,
-              "Time": true
-            },
-            "indexByName": {
-              "event.dataset": 0,
-              "lines": 1,
-              "avg": 2,
-              "p50": 3,
-              "p95": 4,
-              "max": 5
-            },
-            "renameByName": {
-              "event.dataset": "Dataset",
-              "lines": "Lines",
-              "avg": "Average",
-              "p50": "Median",
-              "p95": "95th percentile",
-              "max": "Slowest"
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "95th percentile",
-                "desc": true
-              }
-            ]
-          }
+          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) quantile(0.95, delay) as delay",
+          "queryType": "statsRange",
+          "legendFormat": "{{event.dataset}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "None"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Average"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Median"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "95th percentile"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Slowest"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "s"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
           }
-        ]
+        },
+        "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       }
     },
@@ -760,7 +566,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 29
       }
     },
     {
@@ -776,7 +582,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 31
+        "y": 30
       },
       "targets": [
         {
@@ -840,7 +646,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 31
+        "y": 30
       },
       "targets": [
         {
@@ -904,7 +710,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 31
+        "y": 30
       },
       "targets": [
         {
@@ -968,7 +774,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 31
+        "y": 30
       },
       "targets": [
         {
@@ -1032,7 +838,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 34
       },
       "targets": [
         {
@@ -1089,7 +895,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 34
       },
       "targets": [
         {
@@ -1191,7 +997,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 42
       },
       "targets": [
         {
@@ -1227,7 +1033,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 52
       }
     },
     {
@@ -1243,7 +1049,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 54
+        "y": 53
       },
       "targets": [
         {
@@ -1357,7 +1163,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 54
+        "y": 53
       },
       "targets": [
         {
