@@ -1,6 +1,8 @@
 # The router's syslog (event.dataset syslog.log from 192.168.111.1, through rsyslog and Vector's
 # config/aggregator/syslog.yaml): its firewall's dropped packets (event.action drop, source.*,
-# destination.*, network.transport) and its DNS queries (dnsmasq log-queries, dns.*).
+# destination.*, network.transport), the connections it lets through (accept, one line per
+# connection: nat-start's LOG_ACCEPT chain, with observer.egress.interface.name the way out) and
+# its DNS queries (dnsmasq log-queries, dns.*).
 #
 # Each group's interval is also the window its queries count over.
 groups:
@@ -38,3 +40,35 @@ groups:
             its DNS queries on the Network dashboard. Trigger: from a LAN client, scan ports the
             router drops for it (e.g. nmap -Pn -p 1-20 to an address across a blocked VLAN
             boundary); which traffic the router logs as dropped is to confirm first.
+
+      # A device on the LAN or the IoT VLAN asking a DNS server on the internet itself, not the
+      # router (which sends it to Pi-hole): a resolver set by hand or built in, a VPN app, or
+      # malware keeping its lookups out of Pi-hole's logs and blocklists. The lab VLAN
+      # (192.168.111.0/24) is where Pi-hole's own upstream (unbound to Mullvad) leaves from.
+      # DNS over HTTPS can't be told apart from other HTTPS.
+      - alert: DnsToOutsideServer
+        expr: >-
+          {event.dataset="syslog.log"} host.ip:="192.168.111.1" event.action:=accept
+          destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0)
+          source.ip:ipv4_range("192.168.0.0/16") -source.ip:ipv4_range("192.168.111.0/24")
+          | copy source.ip as client, destination.ip as server
+          | stats by (client, server) count() as connections
+        labels:
+          severity: warning
+          source: router
+          mitre_tactic: command-and-control
+          mitre_technique: T1071.004
+        annotations:
+          summary: "{{ $labels.client }} asked {{ $labels.server }} for DNS directly, not Pi-hole"
+          description: >-
+            A device outside the lab VLAN sent DNS (port 53, or 853 for DNS over TLS) to a
+            server on the internet, through the VPN or straight out, instead of the router.
+            Pi-hole doesn't see or block those lookups.
+          runbook: >-
+            What it sent: {event.dataset="syslog.log"} event.action:=accept
+            source.ip:="{{ $labels.client }}" destination.port:in(53, 853). Which device: its
+            DHCP lease (event.action:dhcp-ack, client.ip) and the Network dashboard. A device
+            with its resolver built in (a TV, a streaming stick) needs it changed, or the
+            router redirecting its port 53 to itself. Trigger: from a LAN client without its
+            own VPN, Test-NetConnection 1.1.1.1 -Port 853 (DNS Director turns port 53 to the
+            router).
