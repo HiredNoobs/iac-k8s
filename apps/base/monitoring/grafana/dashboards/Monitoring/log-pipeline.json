@@ -24,6 +24,604 @@
   "panels": [
     {
       "type": "row",
+      "title": "Throughput and delay",
+      "id": 12,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Events/s",
+      "id": 13,
+      "description": "Lines VictoriaLogs stored per second, over the last 5 minutes (vl_rows_ingested_total).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(vl_rows_ingested_total{job=\"victorialogs\"}[5m]))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Delay, median",
+      "id": 14,
+      "description": "How long a line took from its own time (_time) to leaving Vector for VictoriaLogs (event.ingested), half the lines in the time range faster.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats quantile(0.5, delay) as delay",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Delay, 95th percentile",
+      "id": 15,
+      "description": "As the median, for 95% of the lines.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats quantile(0.95, delay) as delay",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Over a minute late",
+      "id": 16,
+      "description": "Lines that took more than 60 seconds, as a share of all.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats count() if (delay:>60) as late, count() as lines | math late / lines * 100 as late | fields late",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Events/s by source",
+      "id": 17,
+      "description": "Lines each of Vector's sources read per second (all the collectors together), and what VictoriaLogs stored. The aggregator's collectors source is left out: it's Envoy's lines a second time.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (component_id) (rate(vector_component_received_events_total{job=\"vector\", component_kind=\"source\", component_id!~\"internal|collectors\"}[$__rate_interval]))",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{component_id}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(vl_rows_ingested_total{job=\"victorialogs\"}[$__rate_interval]))",
+          "instant": false,
+          "range": true,
+          "legendFormat": "Stored in VictoriaLogs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Delay by dataset, 95th percentile",
+      "id": 18,
+      "description": "How long 95% of each dataset's lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) quantile(0.95, delay) as delay",
+          "queryType": "statsRange",
+          "legendFormat": "{{event.dataset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Delay by dataset",
+      "id": 19,
+      "description": "Each dataset's delay in the time range, the slowest first.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) count() as lines, quantile(0.5, delay) as p50, quantile(0.95, delay) as p95, max(delay) as max | sort by (p95 desc) | limit 50",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "lines",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "p50",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "p95",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "max",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true,
+              "Time": true
+            },
+            "indexByName": {
+              "event.dataset": 0,
+              "lines": 1,
+              "p50": 2,
+              "p95": 3,
+              "max": 4
+            },
+            "renameByName": {
+              "event.dataset": "Dataset",
+              "lines": "Lines",
+              "p50": "Median",
+              "p95": "95th percentile",
+              "max": "Slowest"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "95th percentile",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Median"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "95th percentile"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Slowest"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Waiting in Vector's buffers",
+      "id": 20,
+      "description": "Lines each Vector holds for a sink that hasn't taken them yet (VictoriaLogs, the aggregator). Growing means that sink is down or slow (VectorSinkStalled).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod, component_id) (vector_buffer_size_events{job=\"vector\"})",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{pod}} {{component_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
       "title": "Pipeline errors",
       "id": 1,
       "collapsed": false,
@@ -32,7 +630,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 22
       }
     },
     {
@@ -48,7 +646,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 1
+        "y": 23
       },
       "targets": [
         {
@@ -112,7 +710,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 1
+        "y": 23
       },
       "targets": [
         {
@@ -176,7 +774,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 1
+        "y": 23
       },
       "targets": [
         {
@@ -240,7 +838,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 1
+        "y": 23
       },
       "targets": [
         {
@@ -304,7 +902,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 5
+        "y": 27
       },
       "targets": [
         {
@@ -361,7 +959,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 27
       },
       "targets": [
         {
@@ -463,7 +1061,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 35
       },
       "targets": [
         {
@@ -499,7 +1097,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 45
       }
     },
     {
@@ -515,7 +1113,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 24
+        "y": 46
       },
       "targets": [
         {
@@ -629,7 +1227,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 24
+        "y": 46
       },
       "targets": [
         {

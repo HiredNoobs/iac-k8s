@@ -23,6 +23,7 @@
 #                   (error.type remap_error or format_mismatch, error.message why), kept as it is
 #   tags            "generic" added for a line without a parser of its own
 #   related.ip, related.user  every address and user the event names
+#   event.ingested  when it left for VictoriaLogs (minus _time: how long the line took)
 # Stream fields: event.dataset, event.kind, host.name, kubernetes.namespace, kubernetes.pod.name,
 # kubernetes.container.name.
 #
@@ -317,7 +318,8 @@ transforms:
         }
       }
 
-  # The last fields every event gets: the ECS version the fields follow, and as Elastic's
+  # The last fields every event gets: the ECS version the fields follow, event.ingested (when it
+  # leaves for VictoriaLogs: minus _time, how long the line took to arrive), and as Elastic's
   # integrations every IP address and user an event names, in related.ip and related.user, to
   # find all of an address's or user's events in one field (an audit event's proxy chain is
   # already there).
@@ -326,6 +328,7 @@ transforms:
     inputs: [to_final]
     source: |
       ."ecs.version" = "9.5.0"
+      ."event.ingested" = now()
       ips = array(get!(., ["related.ip"])) ?? []
       for_each(["source.ip", "destination.ip", "client.ip", "server.ip"]) -> |_i, key| {
         ip = get!(., [key])

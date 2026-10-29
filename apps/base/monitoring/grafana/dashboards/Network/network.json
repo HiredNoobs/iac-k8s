@@ -1324,7 +1324,7 @@
       "type": "stat",
       "title": "Accepted (logged)",
       "id": 19,
-      "description": "Packets logged as accepted, if the router logs those too.",
+      "description": "Connections the router let through (nat-start's LOG_ACCEPT chain), one line each: the Accepted connections row below has them by way out.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2249,6 +2249,865 @@
     },
     {
       "type": "row",
+      "title": "Accepted connections (the router's LOG_ACCEPT chain)",
+      "id": 37,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Through the VPN",
+      "id": 38,
+      "description": "Connections out through the WireGuard tunnel (wgc1).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=wgc1 | count() as connections",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Straight out",
+      "id": 39,
+      "description": "Devices' connections straight out the WAN (ppp0), not through the VPN: VPN Director's exceptions. The router's own traffic, from its WAN address, isn't counted.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=ppp0 (source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) | count() as connections",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Between networks",
+      "id": 40,
+      "description": "Connections the router passed from one of its networks to another (out a br bridge).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:~\"^br\" | count() as connections",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Devices",
+      "id": 41,
+      "description": "Addresses that opened a connection through the router.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept | count_uniq(source.ip) as devices",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Destinations",
+      "id": 42,
+      "description": "Addresses connected to through the router.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept | count_uniq(destination.ip) as destinations",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "DNS around Pi-hole",
+      "id": 43,
+      "description": "DNS from the LAN or the IoT VLAN straight to a server on the internet (DnsToOutsideServer). The lab VLAN is left out: Pi-hole's own upstream leaves from there.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 75
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0) source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:ipv4_range(\"192.168.111.0/24\") | count() as connections",
+          "queryType": "stats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Connections by way out",
+      "id": 44,
+      "description": "Accepted connections by the interface they left on.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 79
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept | stats by (observer.egress.interface.name) count() as connections",
+          "queryType": "statsRange",
+          "legendFormat": "{{observer.egress.interface.name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wgc1"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "VPN (wgc1)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ppp0"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Internet (ppp0)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Straight out (not through the VPN)",
+      "id": 45,
+      "description": "Devices whose connections left without the VPN (ppp0), the busiest first.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 79
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=ppp0 | stats by (source.ip) count() as connections, count_uniq(destination.ip) as destinations, count_uniq(destination.port) as ports | sort by (connections desc) | limit 50",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "destinations",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "ports",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "connections",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true,
+              "Time": true
+            },
+            "indexByName": {
+              "source.ip": 0,
+              "destinations": 1,
+              "ports": 2,
+              "connections": 3
+            },
+            "renameByName": {
+              "source.ip": "Device",
+              "destinations": "Destinations",
+              "ports": "Ports",
+              "connections": "Connections"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Connections",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "DNS to servers on the internet",
+      "id": 46,
+      "description": "Every connection to port 53 or 853 out through the VPN or straight out. Expected: the lab VLAN's Pi-hole nodes (unbound to Mullvad, 10.64.0.1) and the router's own fallback (its tunnel address, 10.67.x).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 88
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0) | stats by (source.ip, destination.ip, destination.port, observer.egress.interface.name) count() as connections | sort by (connections desc) | limit 50",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "connections",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true,
+              "Time": true
+            },
+            "indexByName": {
+              "source.ip": 0,
+              "destination.ip": 1,
+              "destination.port": 2,
+              "observer.egress.interface.name": 3,
+              "connections": 4
+            },
+            "renameByName": {
+              "source.ip": "Device",
+              "destination.ip": "Server",
+              "destination.port": "Port",
+              "observer.egress.interface.name": "Way out",
+              "connections": "Connections"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Connections",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destination.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Between networks",
+      "id": 47,
+      "description": "Connections from one of the router's networks to another, by where they went.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 88
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:~\"^br\" | stats by (source.ip, destination.ip, network.transport, destination.port) count() as connections | sort by (connections desc) | limit 50",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "connections",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true,
+              "Time": true
+            },
+            "indexByName": {
+              "source.ip": 0,
+              "destination.ip": 1,
+              "network.transport": 2,
+              "destination.port": 3,
+              "connections": 4
+            },
+            "renameByName": {
+              "source.ip": "From",
+              "destination.ip": "To",
+              "network.transport": "Protocol",
+              "destination.port": "Port",
+              "connections": "Connections"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Connections",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destination.ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this address",
+                    "url": "/d/security-investigation/investigation?var-ip=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
       "title": "Known-bad (abuse.ch and Spamhaus threat intel)",
       "id": 31,
       "collapsed": false,
@@ -2256,7 +3115,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 97
       },
       "panels": []
     },
@@ -2273,7 +3132,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 75
+        "y": 98
       },
       "targets": [
         {
@@ -2333,7 +3192,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 75
+        "y": 98
       },
       "targets": [
         {
@@ -2393,7 +3252,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 75
+        "y": 98
       },
       "targets": [
         {
@@ -2453,7 +3312,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 75
+        "y": 98
       },
       "targets": [
         {
@@ -2513,7 +3372,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 102
       },
       "targets": [
         {

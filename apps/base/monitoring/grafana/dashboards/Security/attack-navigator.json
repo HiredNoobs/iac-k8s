@@ -41,7 +41,7 @@
     {
       "techniqueID": "T1071.004",
       "score": 2,
-      "comment": "DnsLookupOfKnownBadDomain (tested 2026-10-17)",
+      "comment": "DnsLookupOfKnownBadDomain (tested 2026-10-17)\nDnsToOutsideServer (untested)",
       "enabled": true
     },
     {
