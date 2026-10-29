@@ -345,9 +345,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Events/s by dataset",
+      "title": "Events/s by dataset prefix",
       "id": 21,
-      "description": "Each dataset's lines per second.",
+      "description": "Lines per second. By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -366,9 +366,9 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "event.dataset:* | stats by (event.dataset) rate() as eps",
+          "expr": "event.dataset:* | extract_regexp \"^(?P<prefix>[^.]+)\" from event.dataset | stats by (prefix) rate() as eps",
           "queryType": "statsRange",
-          "legendFormat": "{{event.dataset}}"
+          "legendFormat": "{{prefix}}"
         }
       ],
       "fieldConfig": {
@@ -452,9 +452,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Delay by dataset, average",
+      "title": "Delay by dataset prefix, average",
       "id": 19,
-      "description": "How long each dataset's lines took on average to leave Vector (event.ingested minus _time). Above the 95th percentile: a few lines very late.",
+      "description": "How long lines took on average to leave Vector (event.ingested minus _time). Above the 95th percentile: a few lines very late. By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -473,9 +473,9 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) avg(delay) as delay",
+          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | extract_regexp \"^(?P<prefix>[^.]+)\" from event.dataset | stats by (prefix) avg(delay) as delay",
           "queryType": "statsRange",
-          "legendFormat": "{{event.dataset}}"
+          "legendFormat": "{{prefix}}"
         }
       ],
       "fieldConfig": {
@@ -505,9 +505,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Delay by dataset, 95th percentile",
+      "title": "Delay by dataset prefix, 95th percentile",
       "id": 18,
-      "description": "How long 95% of each dataset's lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too.",
+      "description": "How long 95% of the lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too. By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -526,9 +526,9 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) quantile(0.95, delay) as delay",
+          "expr": "event.ingested:* | math (event.ingested - _time) / 1e9 as delay | extract_regexp \"^(?P<prefix>[^.]+)\" from event.dataset | stats by (prefix) quantile(0.95, delay) as delay",
           "queryType": "statsRange",
-          "legendFormat": "{{event.dataset}}"
+          "legendFormat": "{{prefix}}"
         }
       ],
       "fieldConfig": {
