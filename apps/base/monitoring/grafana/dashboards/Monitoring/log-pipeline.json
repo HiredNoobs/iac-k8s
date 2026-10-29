@@ -288,14 +288,14 @@
       "type": "timeseries",
       "title": "Events/s by source",
       "id": 17,
-      "description": "Lines each of Vector's sources read per second (all the collectors together), and what VictoriaLogs stored. The aggregator's collectors source is left out: it's Envoy's lines a second time.",
+      "description": "Lines each of Vector's sources read per second, all the collectors together. The aggregator's collectors source is left out: it's Envoy's lines a second time.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 5
       },
@@ -311,18 +311,6 @@
           "instant": false,
           "range": true,
           "legendFormat": "{{component_id}}"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(vl_rows_ingested_total{job=\"victorialogs\"}[$__rate_interval]))",
-          "instant": false,
-          "range": true,
-          "legendFormat": "Stored in VictoriaLogs"
         }
       ],
       "fieldConfig": {
@@ -340,9 +328,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -362,8 +355,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 5
+        "x": 0,
+        "y": 13
       },
       "targets": [
         {
@@ -404,6 +397,175 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Waiting in Vector's buffers",
+      "id": 20,
+      "description": "Lines each Vector holds for a sink that hasn't taken them yet (VictoriaLogs, the aggregator). Growing means that sink is down or slow (VectorSinkStalled).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod, component_id) (vector_buffer_size_events{job=\"vector\"})",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{pod}} {{component_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Events/s by dataset",
+      "id": 21,
+      "description": "Each dataset's lines per second, averaged over the time range, the busiest first.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
+          },
+          "editorMode": "code",
+          "expr": "_time:$__range event.dataset:* | stats by (event.dataset) count() as lines, rate() as eps | sort by (eps desc) | limit 100",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "eps",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "lines",
+                "destinationType": "number"
+              }
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "id": true,
+              "labels": true,
+              "streams": true,
+              "streamId": true,
+              "Time": true
+            },
+            "indexByName": {
+              "event.dataset": 0,
+              "eps": 1,
+              "lines": 2
+            },
+            "renameByName": {
+              "event.dataset": "Dataset",
+              "eps": "Events/s",
+              "lines": "Lines"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Events/s",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Events/s"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
       "type": "table",
       "title": "Delay by dataset",
       "id": 19,
@@ -415,8 +577,8 @@
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 0,
-        "y": 13
+        "x": 12,
+        "y": 21
       },
       "targets": [
         {
@@ -426,7 +588,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) count() as lines, quantile(0.5, delay) as p50, quantile(0.95, delay) as p95, max(delay) as max | sort by (p95 desc) | limit 50",
+          "expr": "_time:$__range event.ingested:* | math (event.ingested - _time) / 1e9 as delay | stats by (event.dataset) count() as lines, avg(delay) as avg, quantile(0.5, delay) as p50, quantile(0.95, delay) as p95, max(delay) as max | sort by (p95 desc) | limit 50",
           "queryType": "instant"
         }
       ],
@@ -447,6 +609,10 @@
             "conversions": [
               {
                 "targetField": "lines",
+                "destinationType": "number"
+              },
+              {
+                "targetField": "avg",
                 "destinationType": "number"
               },
               {
@@ -478,13 +644,15 @@
             "indexByName": {
               "event.dataset": 0,
               "lines": 1,
-              "p50": 2,
-              "p95": 3,
-              "max": 4
+              "avg": 2,
+              "p50": 3,
+              "p95": 4,
+              "max": 5
             },
             "renameByName": {
               "event.dataset": "Dataset",
               "lines": "Lines",
+              "avg": "Average",
               "p50": "Median",
               "p95": "95th percentile",
               "max": "Slowest"
@@ -508,6 +676,22 @@
           "noValue": "None"
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -567,60 +751,6 @@
       }
     },
     {
-      "type": "timeseries",
-      "title": "Waiting in Vector's buffers",
-      "id": 20,
-      "description": "Lines each Vector holds for a sink that hasn't taken them yet (VictoriaLogs, the aggregator). Growing means that sink is down or slow (VectorSinkStalled).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 13
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (pod, component_id) (vector_buffer_size_events{job=\"vector\"})",
-          "instant": false,
-          "range": true,
-          "legendFormat": "{{pod}} {{component_id}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
       "type": "row",
       "title": "Pipeline errors",
       "id": 1,
@@ -630,7 +760,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 30
       }
     },
     {
@@ -646,7 +776,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {
@@ -710,7 +840,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {
@@ -774,7 +904,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {
@@ -838,7 +968,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {
@@ -902,7 +1032,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 27
+        "y": 35
       },
       "targets": [
         {
@@ -959,7 +1089,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 27
+        "y": 35
       },
       "targets": [
         {
@@ -1061,7 +1191,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "targets": [
         {
@@ -1097,7 +1227,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 53
       }
     },
     {
@@ -1113,7 +1243,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 46
+        "y": 54
       },
       "targets": [
         {
@@ -1227,7 +1357,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 46
+        "y": 54
       },
       "targets": [
         {
