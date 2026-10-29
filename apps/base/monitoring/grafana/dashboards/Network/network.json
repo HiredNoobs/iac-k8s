@@ -2564,7 +2564,7 @@
       "type": "stat",
       "title": "DNS around Pi-hole",
       "id": 43,
-      "description": "DNS from the LAN or the IoT VLAN straight to a server on the internet (DnsToOutsideServer). The lab VLAN is left out: Pi-hole's own upstream leaves from there.",
+      "description": "DNS from a device straight to a server on the internet (DnsToOutsideServer), except Pi-hole's own upstream (the lab VLAN to Mullvad's 10.64.0.1).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2583,7 +2583,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0) source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:ipv4_range(\"192.168.111.0/24\") | count() as connections",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0) source.ip:ipv4_range(\"192.168.0.0/16\") -(source.ip:ipv4_range(\"192.168.111.0/24\") destination.ip:=\"10.64.0.1\") | count() as connections",
           "queryType": "stats"
         }
       ],
