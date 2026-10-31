@@ -42,4 +42,5 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 | --- | --- |
 | [Adding an app](docs/apps.md) | Its secrets (an ExternalSecret from Vault) and its route (an HTTPRoute, Authelia, HTTPS backends). |
 | [Flux](docs/flux.md) | The bootstrap, commit statuses on Forgejo, upgrading Flux. |
+| [Logging](docs/logging.md) | Vector's collectors and aggregator, where each log source comes from, its geo data and threat intel. |
 | [Rebuilding a cluster](docs/rebuild.md) | Flux on a new cluster, the Vault secrets it needs, restoring the volumes from Longhorn's backups. |
