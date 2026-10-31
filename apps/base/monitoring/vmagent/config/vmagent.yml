@@ -248,6 +248,7 @@ scrape_configs:
           - https://victorialogs.hirednoobs.com/
           - https://vmagent.hirednoobs.com/
           - https://vmalert.hirednoobs.com/
+          - https://vmalert-logs.hirednoobs.com/
       # Pi-hole on its LoadBalancer IP (.100), as the LAN uses it.
       - labels: { __param_module: dns_local }
         targets: ["192.168.111.100"]
