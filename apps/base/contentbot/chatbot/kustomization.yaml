@@ -1,0 +1,16 @@
+# The chatbot, in the CyTube channel (../deployment).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../deployment
+labels:
+  - pairs:
+      app.kubernetes.io/component: chatbot
+    includeSelectors: true
+patches:
+  - target:
+      kind: Deployment
+    patch: |
+      - { op: replace, path: /metadata/name, value: chatbot }
+      - { op: replace, path: /spec/template/spec/containers/0/name, value: chatbot }
+      - { op: add, path: /spec/template/spec/containers/0/args, value: ["chatbot"] }

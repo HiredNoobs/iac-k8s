@@ -10,7 +10,8 @@ resources:
   - namespace.yaml
   - external-secret.yaml
   - certificates.yaml
-  - deployments.yaml
+  - chatbot
+  - worker
 # The name gets a hash of the file, so a config change rolls the pods.
 configMapGenerator:
   - name: contentbot-config
