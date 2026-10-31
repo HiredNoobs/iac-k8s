@@ -118,19 +118,25 @@ jobs:
             "https://raw.githubusercontent.com/external-secrets/external-secrets/v${ESO_VERSION}/deploy/crds/bundle.yaml"
           echo "${ESO_CRDS_SHA256}  /tmp/eso-crds.yaml" | sha256sum -c -
 
-          curl -fsSLo /tmp/cert-manager-crds.yaml             "https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.crds.yaml"
+          curl -fsSLo /tmp/cert-manager-crds.yaml \
+            "https://github.com/cert-manager/cert-manager/releases/download/v${CERT_MANAGER_VERSION}/cert-manager.crds.yaml"
           echo "${CERT_MANAGER_CRDS_SHA256}  /tmp/cert-manager-crds.yaml" | sha256sum -c -
 
-          curl -fsSLo /tmp/envoy-gateway-crds.yaml             "https://github.com/envoyproxy/gateway/releases/download/v${ENVOY_GATEWAY_VERSION}/envoy-gateway-crds.yaml"
+          curl -fsSLo /tmp/envoy-gateway-crds.yaml \
+            "https://github.com/envoyproxy/gateway/releases/download/v${ENVOY_GATEWAY_VERSION}/envoy-gateway-crds.yaml"
           echo "${ENVOY_GATEWAY_CRDS_SHA256}  /tmp/envoy-gateway-crds.yaml" | sha256sum -c -
 
-          curl -fsSLo /tmp/gateway-api-crds.yaml             "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GATEWAY_API_VERSION}/experimental-install.yaml"
+          curl -fsSLo /tmp/gateway-api-crds.yaml \
+            "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GATEWAY_API_VERSION}/experimental-install.yaml"
           echo "${GATEWAY_API_CRDS_SHA256}  /tmp/gateway-api-crds.yaml" | sha256sum -c -
 
-          curl -fsSLo /tmp/longhorn.yaml             "https://raw.githubusercontent.com/longhorn/longhorn/v${LONGHORN_VERSION}/deploy/longhorn.yaml"
+          curl -fsSLo /tmp/longhorn.yaml \
+            "https://raw.githubusercontent.com/longhorn/longhorn/v${LONGHORN_VERSION}/deploy/longhorn.yaml"
           echo "${LONGHORN_MANIFEST_SHA256}  /tmp/longhorn.yaml" | sha256sum -c -
 
-          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml             /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
+          python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml \
+            /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml \
+            infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
 
       # Both Vectors' configs load (the common files and their side's), and their transforms do
       # what tests/<side>/ expects. Only when they changed (Changes).
