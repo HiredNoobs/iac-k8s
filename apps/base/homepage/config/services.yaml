@@ -23,7 +23,7 @@
   - NAS:
       href: https://nas.hirednoobs.com
       icon: ugreen
-  # One app password (PIHOLE_API_APP_PWHASH in stack-pihole) is shared by every replica.
+  # One app password (PIHOLE_API_APP_PWHASH, apps/base/pihole) is shared by every replica.
   - Pi-hole 1:
       href: https://pihole1.hirednoobs.com/admin
       icon: pi-hole
