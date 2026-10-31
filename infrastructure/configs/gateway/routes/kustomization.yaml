@@ -1,6 +1,6 @@
-# One file per site: a Backend (where it is), an HTTPRoute (its hostname on the Gateway) and,
-# behind Authelia, a SecurityPolicy. Clients always get HTTPS with the Gateway's wildcard
-# certificate, the http:// or https:// in each file's header is only how Envoy reaches the site.
+# One file per site: a Backend (where it is) and an HTTPRoute (its hostname on the Gateway).
+# Clients always get HTTPS with the Gateway's wildcard certificate, the http:// or https:// in
+# each file's header is only how Envoy reaches the site.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

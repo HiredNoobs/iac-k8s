@@ -1,8 +1,8 @@
-# RabbitMQ's server certificate, renewed by cert-manager (Reloader restarts RabbitMQ to load
-# it). Every node has the same one, also as its client certificate between nodes (and the CLI's,
-# inter_node_tls.config). The secret holds tls.crt, tls.key and ca.crt (rabbitmq-ca, which clients are checked
-# against). No commonName: the CA's is "rabbitmq", OpenSSL would take a certificate with the
-# same one for self-signed.
+# RabbitMQ's server certificate, renewed by cert-manager (Reloader restarts RabbitMQ to load it).
+# Every node has the same one, also as its client certificate between nodes (and the CLI's,
+# inter_node_tls.config). The secret holds tls.crt, tls.key and ca.crt (rabbitmq-ca, which clients
+# are checked against). No commonName: the CA's is "rabbitmq", OpenSSL would take a certificate with
+# the same one for self-signed.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

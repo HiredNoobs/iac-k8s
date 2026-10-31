@@ -1,6 +1,7 @@
 # RabbitMQ, TLS only (AMQPS, the web UI and between nodes). A three-node cluster (statefulset.yaml)
-# with quorum queues, each node's data on a Longhorn volume. Clients need a certificate from the rabbitmq-ca ClusterIssuer
-# (infrastructure/configs/cluster-issuer/rabbitmq-ca.yaml) and their user's password.
+# with quorum queues, each node's data on a Longhorn volume. Clients need a certificate from the
+# rabbitmq-ca ClusterIssuer (infrastructure/configs/cluster-issuer/rabbitmq-ca.yaml) and their
+# user's password.
 #
 # The LoadBalancer IP (clients outside the cluster, rabbitmq-broker.hirednoobs.com) is per
 # cluster (apps/<cluster>/), base has none. Plain manifests, upstream only ships an operator.

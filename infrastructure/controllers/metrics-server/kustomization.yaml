@@ -1,6 +1,5 @@
-# vmagent scrapes the kubelets directly. It verifies the kubelets' certificates,
-# which needs the kubelets' serving certificates signed by the cluster
-# CA: see kubelet-serving-cert-approver.
+# metrics-server verifies the kubelets' certificates (no --kubelet-insecure-tls), which needs
+# their serving certificates signed by the cluster CA: see kubelet-serving-cert-approver.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

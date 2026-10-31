@@ -1,7 +1,8 @@
 # Monitoring, from stack-grafana: Grafana, VictoriaMetrics, VictoriaLogs, vmagent, vmalert and
 # Alertmanager, each a single instance. Plain manifests, the stack's. Plus vmalert-logs (a second
-# vmalert, for the log rules), kube-state-metrics and blackbox_exporter (upstream's charts). node_exporter is its own app (apps/base/node-exporter, it needs a privileged
-# namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
+# vmalert, for the log rules), kube-state-metrics and blackbox_exporter (upstream's charts).
+# node_exporter is its own app (apps/base/node-exporter, it needs a privileged namespace), Vector
+# (apps/base/vector) ships the logs into VictoriaLogs.
 #
 # One directory per component, with its manifests, its config and its own kustomization (the
 # config's ConfigMaps). Shared here: the namespace, the Helm repository and the SecurityPolicy that

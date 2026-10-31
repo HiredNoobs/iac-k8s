@@ -1,5 +1,4 @@
-# Node drains (Talos upgrades) take one replica at a time. With a single replica it doesn't
-# block the drain, syslog is down until the pod is back (UDP senders' messages are lost).
+# Node drains (Talos upgrades) take one replica at a time, the other stays up.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

@@ -1,6 +1,6 @@
 # rsyslog, from stack-rsyslog: syslog from the LAN (rsyslog.hirednoobs.com) relayed to Vector
-# (apps/base/vector), which maps it to ECS fields for VictoriaLogs. The LoadBalancer IP is per cluster (apps/<cluster>/), base
-# has none.
+# (apps/base/vector), which maps it to ECS fields for VictoriaLogs. The LoadBalancer IP is per
+# cluster (apps/<cluster>/), base has none.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: rsyslog
