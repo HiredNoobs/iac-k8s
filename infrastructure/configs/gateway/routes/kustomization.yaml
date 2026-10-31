@@ -11,7 +11,6 @@ resources:
   - profilarr.yaml
   - prowlarr.yaml
   - proxmox-ca.yaml
-  - proxmox.yaml
   - proxmox-001.yaml
   - proxmox-002.yaml
   - proxmox-003.yaml

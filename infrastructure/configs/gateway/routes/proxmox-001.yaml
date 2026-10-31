@@ -1,4 +1,4 @@
-# proxmox-001.hirednoobs.com -> https://192.168.111.2:8006, Proxmox.
+# proxmox-001.hirednoobs.com and proxmox.hirednoobs.com -> https://192.168.111.2:8006, Proxmox.
 # Envoy reaches it over HTTPS and verifies the host's certificate against the cluster's CA
 # (proxmox-ca.yaml), as prx-001.hirednoobs.com (its name in the certificate).
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -29,6 +29,7 @@ spec:
       sectionName: https
   hostnames:
     - proxmox-001.hirednoobs.com
+    - proxmox.hirednoobs.com
   rules:
     - backendRefs:
         - group: gateway.envoyproxy.io
