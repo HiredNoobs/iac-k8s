@@ -3,14 +3,14 @@
 # Renovate's postUpgradeTask (renovate.json, allowed by the global config in the renovate repo's
 # workflow), run in each branch after its version bumps. Fills in what Renovate can't:
 #
-#   - lint.yml: the checksum of each download whose URL uses a version that changed.
+#   - lint.yml: the checksum of each download whose URL uses a version that changed, from the
+#     checksums upstream publishes with the release (SUMS_FILES), or else of the file downloaded.
 #   - Vendored release manifests: re-downloaded when the image in their kustomization's patch
 #     changed, with the URL and checksum in its comment.
 #
 # Only pins whose version changed in the branch are touched: an unchanged version keeps its
-# committed checksum, so a file replaced upstream still fails lint instead of being trusted. The
-# new checksums are of whatever was downloaded (trust on first use), compare them with upstream's
-# published ones when reviewing the PR.
+# committed checksum, so a file replaced upstream still fails lint instead of being trusted. A
+# checksum of a download is of whatever was downloaded (trust on first use), review those diffs.
 #
 # Usage (from anywhere in the repo, after editing versions, uncommitted):
 # bash .forgejo/scripts/update-pins.sh
@@ -20,6 +20,16 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 LINT=.forgejo/workflows/lint.yml
+
+# lint.yml's downloads whose release publishes their checksums: the checksum variable, and the
+# checksums file's name (with lint.yml's variables) next to the download, which it lists by name.
+# shellcheck disable=SC2016 # Expanded by expand.
+declare -A SUMS_FILES=(
+  [KUSTOMIZE_SHA256]='checksums.txt'
+  [KUBECONFORM_SHA256]='CHECKSUMS'
+  [FLUX_CRD_SCHEMAS_SHA256]='flux_${FLUX_VERSION}_checksums.txt'
+  [VECTOR_SHA256]='vector-${VECTOR_VERSION}-SHA256SUMS'
+)
 
 # Vendored manifests: directory, file, image (its tag is the release's, without the v).
 VENDORED=(
@@ -31,15 +41,6 @@ function log {
   echo "update-pins: $*" >&2
 }
 
-function sha256_of_url {
-  local tmp sum
-  tmp=$(mktemp)
-  curl -fsSL -o "$tmp" "$1"
-  sum=$(sha256sum "$tmp" | cut -d' ' -f1)
-  rm -f "$tmp"
-  echo "$sum"
-}
-
 # NAME=value for each variable in lint.yml's env block, read from stdin.
 function lint_env {
   awk '/^env:/ { f = 1; next }
@@ -47,9 +48,19 @@ function lint_env {
        f && /^  [A-Z0-9_]+: / { k = $1; sub(/:$/, "", k); v = $2; gsub(/"/, "", v); print k "=" v }'
 }
 
+# $1 with each ${NAME} replaced by its value in the associative array named $2.
+function expand {
+  local -n values=$2
+  local s=$1 k
+  for k in "${!values[@]}"; do
+    s=${s//"\${$k}"/${values[$k]}}
+  done
+  echo "$s"
+}
+
 function update_lint_checksums {
   local -A new old urls
-  local k v file url var expanded changed sum
+  local k v file url var expanded sums_url sum
 
   while IFS='=' read -r k v; do new[$k]=$v; done < <(lint_env < "$LINT")
   while IFS='=' read -r k v; do old[$k]=$v; done < <(git show "HEAD:$LINT" | lint_env)
@@ -70,16 +81,22 @@ function update_lint_checksums {
       continue
     fi
 
-    changed=false
-    expanded=$url
-    for k in $(grep -oE '[{][A-Z0-9_]+[}]' <<< "$url" | tr -d '{}' | sort -u); do
-      [[ ${new[$k]:-} != "${old[$k]:-}" ]] && changed=true
-      expanded=${expanded//"\${$k}"/${new[$k]:-}}
-    done
-    $changed || continue
+    # The URL changes with any version in it.
+    expanded=$(expand "$url" new)
+    [[ $expanded != "$(expand "$url" old)" ]] || continue
 
-    log "$var: downloading $expanded"
-    sum=$(sha256_of_url "$expanded")
+    if [[ -n ${SUMS_FILES[$var]:-} ]]; then
+      sums_url="${expanded%/*}/$(expand "${SUMS_FILES[$var]}" new)"
+      log "$var: reading $sums_url"
+      sum=$(curl -fsSL "$sums_url" | awk -v name="${expanded##*/}" '$2 == name || $2 == "*" name { print $1 }')
+    else
+      log "$var: downloading $expanded"
+      sum=$(curl -fsSL "$expanded" | sha256sum | cut -d' ' -f1)
+    fi
+    if [[ ! $sum =~ ^[0-9a-f]{64}$ ]]; then
+      log "$var: no checksum found"
+      return 1
+    fi
     sed -i -E "s/^(  $var: )\"[0-9a-f]*\"/\1\"$sum\"/" "$LINT"
     log "$var: $sum"
   done < <(sed -nE 's/.*echo "\$\{([A-Z0-9_]+)\}  ([^ ]+)" \| sha256sum.*/\1 \2/p' <<< "$joined")
