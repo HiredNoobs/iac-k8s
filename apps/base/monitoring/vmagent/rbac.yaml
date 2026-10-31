@@ -1,4 +1,4 @@
-# vmagent's Kubernetes service discovery, to find the node-exporter pods, read access to each
+# vmagent's Kubernetes service discovery (the pods and nodes it scrapes), read access to each
 # kubelet's metrics (nodes/metrics) for the volume stats, and kube-apiserver's own /metrics.
 apiVersion: v1
 kind: ServiceAccount
@@ -15,7 +15,7 @@ metadata:
     app.kubernetes.io/name: vmagent
 rules:
   - apiGroups: [""]
-    resources: ["pods", "nodes", "nodes/metrics", "services", "endpoints"]
+    resources: ["pods", "nodes", "nodes/metrics"]
     verbs: ["get", "list", "watch"]
   - nonResourceURLs: ["/metrics"]
     verbs: ["get"]
