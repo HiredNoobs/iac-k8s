@@ -12,7 +12,6 @@ The table is replaced whole (os.replace), as Vector reloads it when it changes (
 """
 
 import csv
-import io
 import ipaddress
 import json
 import os
