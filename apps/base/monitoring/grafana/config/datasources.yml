@@ -41,16 +41,3 @@ datasources:
       tlsAuthWithCACert: true
     secureJsonData:
       tlsCACert: $__file{/etc/grafana/tls/ca.crt}
-
-  - name: victoriametrics-metrics-datasource
-    uid: victoriametrics
-    type: victoriametrics-metrics-datasource
-    access: proxy
-    url: https://victoriametrics.monitoring.svc:8428
-    isDefault: false
-    jsonData:
-      httpMethod: GET
-      pdcInjected: false
-      tlsAuthWithCACert: true
-    secureJsonData:
-      tlsCACert: $__file{/etc/grafana/tls/ca.crt}

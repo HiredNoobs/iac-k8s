@@ -50,15 +50,6 @@
       "description": "Grafana's plugins (GF_PLUGINS_PREINSTALL)",
       "customType": "regex",
       "managerFilePatterns": ["/^apps/base/monitoring/grafana/statefulset\\.yaml$/"],
-      "matchStrings": ["(?<depName>victoriametrics-metrics-datasource)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "VictoriaMetrics/victoriametrics-datasource",
-      "extractVersionTemplate": "^v(?<version>.+)$"
-    },
-    {
-      "description": "Grafana's plugins (GF_PLUGINS_PREINSTALL)",
-      "customType": "regex",
-      "managerFilePatterns": ["/^apps/base/monitoring/grafana/statefulset\\.yaml$/"],
       "matchStrings": ["(?<depName>marcusolsson-dynamictext-panel)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "github-releases",
       "packageNameTemplate": "grafana/business-text",
