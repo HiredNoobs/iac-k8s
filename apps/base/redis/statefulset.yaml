@@ -109,54 +109,24 @@ spec:
             - name: redis-tls
               containerPort: 6379
               protocol: TCP
-          # All three over TLS with Redis' own certificate (a client certificate from redis-ca
-          # too): a TCP check would abort the handshake, which Redis logs as an error each time.
-          # As the ACL user probe (PING only, any password: external-secret.yaml), so they don't
-          # count as NOAUTH errors.
+          # All three PING over TLS as the ACL user probe (config/probe.sh).
           # Started and alive: Redis answers at all, LOADING (reading the AOF) included, NOAUTH
           # too (a missing probe user fails readiness, not restarts Redis).
           startupProbe:
             exec:
-              command:
-                - sh
-                - -c
-                - >-
-                  redis-cli --tls -h localhost -p 6379
-                  --cacert /etc/redis/secrets/ca.crt
-                  --cert /etc/redis/secrets/tls.crt
-                  --key /etc/redis/secrets/tls.key
-                  --user probe --pass probe --no-auth-warning
-                  ping | grep -qE 'PONG|NOAUTH|LOADING'
+              command: ["sh", "/usr/local/etc/redis/probe.sh", "6379", "-E", "PONG|NOAUTH|LOADING"]
             periodSeconds: 5
             failureThreshold: 60
           livenessProbe:
             exec:
-              command:
-                - sh
-                - -c
-                - >-
-                  redis-cli --tls -h localhost -p 6379
-                  --cacert /etc/redis/secrets/ca.crt
-                  --cert /etc/redis/secrets/tls.crt
-                  --key /etc/redis/secrets/tls.key
-                  --user probe --pass probe --no-auth-warning
-                  ping | grep -qE 'PONG|NOAUTH|LOADING'
+              command: ["sh", "/usr/local/etc/redis/probe.sh", "6379", "-E", "PONG|NOAUTH|LOADING"]
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
-          # Ready: serving (not LOADING), as probe.
+          # Ready: serving (not LOADING).
           readinessProbe:
             exec:
-              command:
-                - sh
-                - -c
-                - >-
-                  redis-cli --tls -h localhost -p 6379
-                  --cacert /etc/redis/secrets/ca.crt
-                  --cert /etc/redis/secrets/tls.crt
-                  --key /etc/redis/secrets/tls.key
-                  --user probe --pass probe --no-auth-warning
-                  ping | grep -qx PONG
+              command: ["sh", "/usr/local/etc/redis/probe.sh", "6379", "-x", "PONG"]
             periodSeconds: 10
             failureThreshold: 3
           resources:
@@ -166,6 +136,9 @@ spec:
             limits:
               memory: 512Mi
           volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
             - name: run
               mountPath: /etc/redis-run
             - name: certs
@@ -189,19 +162,10 @@ spec:
             - name: sentinel-tls
               containerPort: 26379
               protocol: TCP
-          # Over TLS and as probe, as Redis' probes; NOAUTH still alive (a missing probe user).
+          # As Redis' probes; NOAUTH still alive (a missing probe user).
           livenessProbe:
             exec:
-              command:
-                - sh
-                - -c
-                - >-
-                  redis-cli --tls -h localhost -p 26379
-                  --cacert /etc/redis/secrets/ca.crt
-                  --cert /etc/redis/secrets/tls.crt
-                  --key /etc/redis/secrets/tls.key
-                  --user probe --pass probe --no-auth-warning
-                  ping | grep -qE 'PONG|NOAUTH'
+              command: ["sh", "/usr/local/etc/redis/probe.sh", "26379", "-E", "PONG|NOAUTH"]
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
@@ -212,6 +176,9 @@ spec:
             limits:
               memory: 64Mi
           volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
             - name: run
               mountPath: /etc/redis-run
             - name: certs
@@ -259,7 +226,7 @@ spec:
               mountPath: /etc/redis/secrets
               readOnly: true
       volumes:
-        # redis.conf, sentinel.conf and init.sh.
+        # redis.conf, sentinel.conf, init.sh and probe.sh.
         - name: config
           configMap:
             name: redis-config
