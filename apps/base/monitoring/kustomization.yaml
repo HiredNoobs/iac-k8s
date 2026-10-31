@@ -4,7 +4,8 @@
 # namespace), rsyslog forwards syslog to VictoriaLogs (apps/base/rsyslog).
 #
 # One directory per component, with its manifests, its config and its own kustomization (the
-# config's ConfigMaps). Shared here: the namespace and the Helm repository.
+# config's ConfigMaps). Shared here: the namespace, the Helm repository and the SecurityPolicy that
+# puts the components' sites behind Authelia.
 #
 # The components talk to each other over TLS by their service names (<component>.monitoring.svc),
 # each with its own server certificate from the monitoring-ca ClusterIssuer
@@ -16,6 +17,7 @@ namespace: monitoring
 resources:
   - namespace.yaml
   - repository.yaml
+  - security-policy.yaml
   - grafana
   - victoriametrics
   - victorialogs

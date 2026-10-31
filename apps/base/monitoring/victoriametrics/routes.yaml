@@ -1,7 +1,7 @@
-# victoriametrics.hirednoobs.com, behind Authelia (SecurityPolicy: ext-authz against Authelia's Service,
-# allowed by apps/base/authelia/reference-grant.yaml). A Backend rather than the Service: victoriametrics
-# serves HTTPS, and Envoy verifies its certificate against the monitoring CA (ca.crt in
-# victoriametrics-tls) and the service name (sni, one of the certificate's dnsNames).
+# victoriametrics.hirednoobs.com, behind Authelia (../security-policy.yaml). A Backend rather
+# than the Service: victoriametrics serves HTTPS, and Envoy verifies its certificate against the
+# monitoring CA (ca.crt in victoriametrics-tls) and the service name (sni, one of the
+# certificate's dnsNames).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -34,35 +34,3 @@ spec:
         - group: gateway.envoyproxy.io
           kind: Backend
           name: victoriametrics
----
-apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: SecurityPolicy
-metadata:
-  name: victoriametrics
-spec:
-  targetRefs:
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      name: victoriametrics
-  extAuth:
-    failOpen: false
-    headersToExtAuth:
-      - X-Forwarded-Proto
-      - X-Forwarded-For
-      - Authorization
-      - Proxy-Authorization
-      - Accept
-      - Cookie
-    http:
-      path: /api/authz/ext-authz/
-      backendRefs:
-        - group: ""
-          kind: Service
-          name: authelia
-          namespace: authelia
-          port: 9091
-      headersToBackend:
-        - Remote-User
-        - Remote-Groups
-        - Remote-Name
-        - Remote-Email
