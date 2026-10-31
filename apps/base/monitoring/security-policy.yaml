@@ -1,0 +1,48 @@
+# The components' sites behind Authelia: ext-authz against its Service, allowed by
+# apps/base/authelia/reference-grant.yaml. Not Grafana: its login goes to Authelia (OIDC).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: authelia
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: alertmanager
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: victorialogs
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: victoriametrics
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vmagent
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vmalert
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: vmalert-logs
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: authelia
+          namespace: authelia
+          port: 9091
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
