@@ -168,8 +168,11 @@ jobs:
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).
       - name: Validate
         run: |
+          # Schemas are downloaded once for every run below.
+          mkdir -p /tmp/kubeconform-cache
           kubeconform_() {
             kubeconform -strict -summary -skip CustomResourceDefinition -kubernetes-version "$KUBERNETES_VERSION" \
+              -cache /tmp/kubeconform-cache \
               -schema-location "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/${KUBERNETES_SCHEMAS_COMMIT}/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json" \
               -schema-location "/tmp/flux-crd-schemas/{{.ResourceKind}}{{.KindSuffix}}.json" \
               -schema-location "/tmp/crd-schemas/{{.ResourceKind}}{{.KindSuffix}}.json" \
@@ -182,8 +185,10 @@ jobs:
           kubeconform_ -ignore-filename-pattern 'kustomization\.yaml$' clusters/
           echo "::endgroup::"
 
-          # Everything a Flux Kustomization points at is built the way Flux builds it.
-          find . -name kustomization.yaml -not -path './clusters/*' -printf '%h\n' | sort | while read -r dir; do
+          # Each Flux Kustomization's path is built the way Flux builds it (flux-paths.py fails if
+          # a kustomization isn't under one).
+          roots=$(python3 .forgejo/scripts/flux-paths.py)
+          for dir in $roots; do
             echo "::group::$dir"
             kustomize build "$dir" | kubeconform_ -
             echo "::endgroup::"
