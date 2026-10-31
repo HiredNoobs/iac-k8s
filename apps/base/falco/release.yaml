@@ -27,14 +27,14 @@ spec:
   chart:
     spec:
       chart: falco
-      version: "9.2.0"
+      version: "9.2.1"
       sourceRef:
         kind: HelmRepository
         name: falcosecurity
   values:
     image:
       # renovate: image=falcosecurity/falco
-      tag: 0.45.0@sha256:788f1129c542171813083d4afc61b16730a47dde8c23d9c39370acef996349b6
+      tag: 0.45.1@sha256:69e957f91b3a6beb5c82e2afae33ec3e4479dab2d4421475d288d0cd113cedf6
     driver:
       kind: modern_ebpf
       modernEbpf:
