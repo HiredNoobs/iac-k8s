@@ -153,10 +153,17 @@ jobs:
           failed=0
           for side in collector aggregator; do
             vector validate --no-environment ../config/common/*.yaml ../config/"$side"/*.yaml || failed=1
-            for tests in "$side"/*.yaml; do
-              vector test ../config/common/*.yaml ../config/"$side"/*.yaml "$tests" || failed=1
-            done
           done
+
+          # A run per test file (vector test keeps every test's memory until it exits, up to
+          # ~700 MB), four at a time (the runner's cores, within the jobs' 3G), the largest
+          # (slowest) first. Each file's output is printed whole when its run ends.
+          ls -S collector/*.yaml aggregator/*.yaml | xargs -n 1 -P 4 sh -c '
+            out=$(vector test ../config/common/*.yaml ../config/"${1%%/*}"/*.yaml "$1" 2>&1)
+            status=$?
+            printf "::group::%s\n%s\n::endgroup::\n" "$1" "$out"
+            [ "$status" -eq 0 ] || echo "$1 failed"
+            exit "$status"' _ || failed=1
           exit "$failed"
 
       # The Security folder's ATT&CK coverage dashboard and Navigator layer are generated from the
