@@ -8,7 +8,7 @@ The upstream is ``git@git.hirednoobs.com:hirednoobs/iac-k8s.git``, every push is
 
 Flux runs in each cluster (``flux-system`` namespace), pulls this repo over SSH with a read-only deploy key and applies it on an interval, pruning whatever was removed. Nothing outside the cluster applies anything: merge to ``master`` and Flux picks it up within ``interval``, or straight away with ``flux reconcile kustomization flux-system --with-source``. Changes made by hand are reverted on the next reconcile, change the repo instead.
 
-CI (``.forgejo/workflows/lint.yml``) only validates, and must pass before a pull request merges: every kustomization is built and checked against the Kubernetes and Flux schemas, Vector's config is validated and its unit tests run, and the ATT&CK coverage files match the alert rules. Renovate (the renovate repo) opens a pull request for each new chart, image or tool version, a merge is a deploy.
+CI (``.forgejo/workflows/lint.yml``) only validates, and must pass before a pull request merges: each Flux Kustomization's path is built (every kustomization must be under one) and checked against the Kubernetes and Flux schemas, Vector's config is validated and its unit tests run, and the ATT&CK coverage files match the alert rules. Renovate (the renovate repo) opens a pull request for each new chart, image or tool version, a merge is a deploy.
 
 The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup``) is for the bootstrap, upgrades and troubleshooting (``flux get kustomizations``, ``flux logs``, ``flux suspend``/``resume``).
 
