@@ -18,3 +18,4 @@ configMapGenerator:
       - config/redis.conf
       - config/sentinel.conf
       - config/init.sh
+      - config/probe.sh
