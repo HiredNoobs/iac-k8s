@@ -1,9 +1,9 @@
-"""vector-aggregator's threat intel (config/aggregator/threat-intel.yaml), run by its init
-container and every 6 hours by its refresh container (aggregator.yaml): abuse.ch's ThreatFox recent domains and IP:ports (the last 48
-hours, CC0), URLhaus's host file (hosts serving malware now) and Spamhaus's DROP, IPv4 and IPv6
-(networks run by criminals, free to use under https://www.spamhaus.org/drop/terms/), as one CSV
-table in $TI_DIR that Vector looks values up in (a name's parents and an address's networks
-too, threat-intel.yaml).
+"""vector-aggregator's threat intel (config/aggregator/threat-intel.yaml), run by its init container
+and every 6 hours by its refresh container (aggregator.yaml): abuse.ch's ThreatFox recent domains
+and IP:ports (the last 48 hours, CC0), URLhaus's host file (hosts serving malware now) and
+Spamhaus's DROP, IPv4 and IPv6 (networks run by criminals, free to use under
+https://www.spamhaus.org/drop/terms/), as one CSV table in $TI_DIR that Vector looks values up in (a
+name's parents and an address's networks too, threat-intel.yaml).
 
 Each feed's last good copy is kept (<feed>.csv): a feed that can't be fetched, or comes back
 empty, keeps its previous rows, so the aggregator always starts. With no copy at all, a feed

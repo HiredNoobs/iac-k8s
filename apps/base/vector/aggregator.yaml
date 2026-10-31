@@ -8,10 +8,10 @@
 #
 # Its own volume holds the disk buffer for VictoriaLogs, the geo data (config/aggregator/geo.yaml:
 # DB-IP's City and ASN Lite, scripts/geodata.sh) and the threat intel (config/aggregator/
-# threat-intel.yaml: abuse.ch's ThreatFox and URLhaus, Spamhaus's DROP, scripts/threatintel.py), both fetched by
-# init containers each start and by the refresh container every 6 hours after that; Vector
-# (--watch-config) reloads the tables when their files change, without restarting. Recreate: the
-# volume attaches to one node at a time. If its node goes down, Longhorn's
+# threat-intel.yaml: abuse.ch's ThreatFox and URLhaus, Spamhaus's DROP, scripts/threatintel.py),
+# both fetched by init containers each start and by the refresh container every 6 hours after that;
+# Vector (--watch-config) reloads the tables when their files change, without restarting. Recreate:
+# the volume attaches to one node at a time. If its node goes down, Longhorn's
 # nodeDownPodDeletionPolicy lets the new pod start elsewhere (infrastructure/controllers/longhorn).
 #
 # app.kubernetes.io/name vector like the collectors, so vmagent scrapes it as job vector and the
@@ -92,7 +92,8 @@ spec:
             - name: scripts
               mountPath: /scripts
               readOnly: true
-        # abuse.ch's and Spamhaus's indicators into the volume, or each feed's last copy if it can't be fetched.
+        # abuse.ch's and Spamhaus's indicators into the volume, or each feed's last copy if it can't
+        # be fetched.
         - name: threatintel
           image: docker.io/library/python:3.14.8-alpine3.24@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
           # -B: no .pyc next to the script (read-only).
