@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: vmagent
-          image: victoriametrics/vmagent:v1.154.0@sha256:2a939a9df9c8591aa5447efcd21af8c4f2ecc60ca6a8e742ffd46b9c76ef7f17
+          image: victoriametrics/vmagent:v1.154.1@sha256:970ba603235839655e03501311c683d2269b882f7bcf0ac98892ae422603cb61
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
