@@ -17,7 +17,7 @@ spec:
   chart:
     spec:
       chart: prometheus-blackbox-exporter
-      version: "11.20.0"
+      version: "11.20.1"
       sourceRef:
         kind: HelmRepository
         name: prometheus-community
@@ -27,8 +27,8 @@ spec:
       registry: docker.io
       repository: prom/blackbox-exporter
       # renovate: image=prom/blackbox-exporter
-      tag: v0.29.0
-      digest: sha256:9613f2884689b6fad9f1939f6a3b0388c93a022cfaededb19545b329b5c83dea
+      tag: v0.29.1
+      digest: sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
     extraArgs:
       - --log.format=json
       - --log.prober=warn
