@@ -71,7 +71,7 @@
     {
       "description": "Charts whose values set image.repository: the regex manager (the comment above the tag) updates the tag and digest, the flux manager would only change the tag",
       "matchManagers": ["flux"],
-      "matchPackageNames": ["plndr/kube-vip", "stakater/reloader"],
+      "matchPackageNames": ["plndr/kube-vip", "stakater/reloader", "docker.io/prom/blackbox-exporter"],
       "enabled": false
     },
     {
