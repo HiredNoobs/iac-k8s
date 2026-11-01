@@ -66,6 +66,7 @@ groups:
             A device sent DNS (port 53, or 853 for DNS over TLS) to a server on the internet,
             through the VPN or straight out, instead of the router. Pi-hole doesn't see or
             block those lookups.
+          tested: "2026-10-29"
           runbook: >-
             What it sent: {event.dataset="syslog.log"} event.action:=accept
             source.ip:="{{ $labels.client }}" destination.port:in(53, 853). Which device: its
