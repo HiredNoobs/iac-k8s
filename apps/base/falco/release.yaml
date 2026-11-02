@@ -1,15 +1,11 @@
 # Falco with the modern eBPF probe (CO-RE, built into the binary: no kernel module, no driver
-# download, so nothing to build for Talos' kernel). Upstream's chart; chart 9.2.0 is Falco 0.45.0,
-# the image pinned by its digest (the multi-arch index).
+# download, so nothing to build for Talos' kernel). Upstream's chart, the image pinned by its
+# digest (the multi-arch index).
 #
 # Pinned like everything else: falcoctl is off (it downloads rules and plugins from ghcr.io at
 # every start and follows falco-rules:5, a moving tag). The image ships the rules
 # (/etc/falco/falco_rules.yaml, Falco's stable set) and the container plugin, so both change
 # only with the image. Our own exceptions and rules would go in customRules.
-#
-# 0.45.0's probe doesn't load on kernels from 6.18.54 (Talos v1.14.2): the verifier rejects
-# signal_deliver and Falco crash-loops (falcosecurity/falco#4017). 0.45.1 has the fix; Talos is
-# held below v1.14.2 until it's here (iac-homelab terraform/clusters/variables.tf).
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
