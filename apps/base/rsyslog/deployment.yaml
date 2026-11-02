@@ -40,7 +40,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: rsyslog
-          image: rsyslog/rsyslog:2026-04@sha256:0c2960a55e1ee518d09385dbf06703a770e13cd064d46177256b7dad6374a2b2
+          image: rsyslog/rsyslog:2026-10@sha256:cac80b5513d78de76c301151e4d248547bcf2b5161d9c891a4b10c302f76dd56
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
