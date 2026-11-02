@@ -36,7 +36,7 @@ spec:
               topologyKey: topology.kubernetes.io/zone
       containers:
         - name: pihole
-          image: pihole/pihole:2026.09.0@sha256:5b9c8cf51de7d6d3f2240dbe72baf5f06e1fd39cb4d77a99fab4fa13e23bd1be
+          image: pihole/pihole:2026.10.0@sha256:d34134716fc32038b052a8674c7c6879e0ff21f0e6d8af345166fffa2c27c113
           envFrom:
             - configMapRef:
                 name: pihole-settings
@@ -130,7 +130,7 @@ spec:
         # Keeps Pi-hole's lists in line with config/lists/ through the local API, and pushes
         # Pi-hole's metrics to vmagent every minute.
         - name: sync-lists
-          image: pihole/pihole:2026.09.0@sha256:5b9c8cf51de7d6d3f2240dbe72baf5f06e1fd39cb4d77a99fab4fa13e23bd1be
+          image: pihole/pihole:2026.10.0@sha256:d34134716fc32038b052a8674c7c6879e0ff21f0e6d8af345166fffa2c27c113
           command: ["bash", "/scripts/sync-lists.sh"]
           env:
             - name: PIHOLE_PASSWORD
