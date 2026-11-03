@@ -27,6 +27,7 @@ spec:
       labels:
         app.kubernetes.io/name: vmalert-logs
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534

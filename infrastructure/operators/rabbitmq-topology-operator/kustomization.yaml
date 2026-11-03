@@ -29,6 +29,13 @@ configMapGenerator:
     files:
       - ca.crt=rabbitmq-ca.crt
 patches:
+  - patch: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: rabbitmq-system
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
   # Never pruned: deleting the CRDs deletes every User, Permission, ... and the operator deletes
   # those from RabbitMQ.
   - target:

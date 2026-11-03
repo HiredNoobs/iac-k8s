@@ -20,6 +20,7 @@ spec:
       labels:
         app.kubernetes.io/name: rsyslog
     spec:
+      automountServiceAccountToken: false
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:

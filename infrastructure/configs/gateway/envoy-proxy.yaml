@@ -13,6 +13,7 @@ spec:
     kubernetes:
       envoyService:
         type: LoadBalancer
+        allocateLoadBalancerNodePorts: false
         externalTrafficPolicy: Local
         annotations:
           kube-vip.io/loadbalancerIPs: "192.168.111.101"

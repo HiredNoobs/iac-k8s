@@ -1,0 +1,39 @@
+# Services reach the LAN only on an address chosen for them: a LoadBalancer IP kube-vip announces.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: service-exposure
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["services"]
+  validations:
+    # A node port listens on every node's address.
+    - expression: object.spec.type != "NodePort"
+      message: NodePort opens the port on every node's address
+    - expression: >-
+        object.spec.type != "LoadBalancer" ||
+        "kube-vip.io/loadbalancerIPs" in object.metadata.?annotations.orValue({})
+      message: LoadBalancer without a kube-vip.io/loadbalancerIPs address
+    # A LoadBalancer gets node ports too unless it turns them off, and turning them off on an
+    # existing Service keeps the ones it has.
+    - expression: >-
+        object.spec.type != "LoadBalancer" ||
+        (object.spec.?allocateLoadBalancerNodePorts.orValue(true) == false &&
+        object.spec.ports.all(p, p.?nodePort.orValue(0) == 0))
+      message: LoadBalancer with node ports (allocateLoadBalancerNodePorts not false, or a nodePort left)
+    # Any address, CVE-2020-8554.
+    - expression: object.spec.?externalIPs.orValue([]) == []
+      message: externalIPs are not allowed
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: service-exposure
+spec:
+  policyName: service-exposure
+  # Recorded in the audit log and returned as a warning, nothing is refused.
+  validationActions: [Audit, Warn]

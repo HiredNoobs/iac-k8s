@@ -1,7 +1,9 @@
-# Cluster-wide config using the controllers' CRDs (ClusterSecretStore, ClusterIssuer, ...).
+# Cluster-wide config: the admission policies, and config using the controllers' CRDs
+# (ClusterSecretStore, ClusterIssuer, ...).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - admission-policies
   - cluster-issuer
   - cluster-secret-store
   - flux-notifications

@@ -6,7 +6,7 @@
 # (responseStatus.message), url.original, url.path and url.query (requestURI) and event.id
 # (auditID); and the rest as custom fields: Orchestrator.Resource.Subresource and .ApiGroup,
 # Orchestrator.Audit.RequestObject.* (the request body, for RBAC changes and directly created
-# pods).
+# pods), Orchestrator.Audit.Annotations.* (the admission plugins' notes, keys as they are).
 #
 # The policy leaves out the control plane's own traffic, kubelets, and reads by the controllers
 # deployed from git (flux-system, kube-system, cert-manager, external-secrets, envoy-gateway,
@@ -171,6 +171,32 @@ groups:
           runbook: >-
             error.message has what was refused. Trigger: kubectl -n homepage run
             siem-test --image=busybox:1.37 --privileged (refused, nothing runs).
+
+      # The admission policies (infrastructure/configs/admission-policies) record each failure in
+      # the audit event's annotations, one entry per policy.
+      - alert: KubeAdmissionPolicyViolation
+        expr: >-
+          {event.dataset="kubernetes.audit"} "Orchestrator.Audit.Annotations.validation.policy.admission.k8s.io/validation_failure":*
+          -url.query:~"dryRun="
+          | copy "Orchestrator.Audit.Annotations.validation.policy.admission.k8s.io/validation_failure" as failure,
+          user.name as user, orchestrator.resource.type as resource, orchestrator.namespace as namespace,
+          orchestrator.resource.name as name
+          | unroll (failure)
+          | unpack_json from failure fields (policy, message)
+          | stats by (policy, message, user, resource, namespace, name) count() as requests
+        labels:
+          severity: info
+          source: kube-audit
+        annotations:
+          summary: "{{ $labels.resource }} {{ $labels.namespace }}/{{ $labels.name }} fails {{ $labels.policy }}"
+          description: >-
+            {{ $labels.message }}, applied by {{ $labels.user }}. Allowed: the policies only
+            record what they would refuse.
+          runbook: >-
+            Fix it where it's deployed from (the manifest, or the HelmRelease's values when it's
+            a chart's). Trigger: kubectl -n homepage create deployment policy-test
+            --image=busybox:1.37 --replicas=0 (fails both policies, also raises
+            KubeWorkloadChangeOutsideFlux), then delete it.
 
       - alert: KubeForbiddenBurst
         expr: >-

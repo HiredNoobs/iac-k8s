@@ -22,6 +22,7 @@ spec:
       labels:
         app.kubernetes.io/name: victorialogs
     spec:
+      automountServiceAccountToken: false
       # The image runs as root, it doesn't need to.
       securityContext:
         runAsNonRoot: true

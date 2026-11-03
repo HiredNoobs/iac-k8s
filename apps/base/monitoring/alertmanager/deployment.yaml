@@ -20,6 +20,7 @@ spec:
       labels:
         app.kubernetes.io/name: alertmanager
     spec:
+      automountServiceAccountToken: false
       # nobody, the image's user (by number, runAsNonRoot can't check a name).
       securityContext:
         runAsNonRoot: true

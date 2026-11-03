@@ -1,0 +1,35 @@
+# Every container's image pinned by its digest (name:tag@sha256:...), not only by a tag that can
+# be pushed again.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: images-pinned-by-digest
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs"]
+  variables:
+    - name: unpinned
+      expression: >-
+        (object.spec.template.spec.containers + object.spec.template.spec.?initContainers.orValue([]))
+        .filter(c, !c.image.contains("@sha256:"))
+  validations:
+    - expression: size(variables.unpinned) == 0
+      messageExpression: >-
+        "images not pinned by digest: " + variables.unpinned.map(c, c.image).join(", ")
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: images-pinned-by-digest
+spec:
+  policyName: images-pinned-by-digest
+  # Recorded in the audit log and returned as a warning, nothing is refused.
+  validationActions: [Audit, Warn]
