@@ -37,6 +37,9 @@ metadata:
   labels:
     app.kubernetes.io/name: vector
     app.kubernetes.io/component: aggregator
+  annotations:
+    # The threat intel's key is only read when the containers start.
+    secret.reloader.stakater.com/reload: vector
 spec:
   replicas: 1
   strategy:
@@ -101,6 +104,13 @@ spec:
           env:
             - name: TI_DIR
               value: /var/lib/vector/threat
+            # Optional: without it the abuse.ch feeds keep their last copies, the aggregator still starts.
+            - name: ABUSECH_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vector
+                  key: ABUSECH_AUTH_KEY
+                  optional: true
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -200,6 +210,12 @@ spec:
               value: /var/lib/vector/geo
             - name: TI_DIR
               value: /var/lib/vector/threat
+            - name: ABUSECH_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vector
+                  key: ABUSECH_AUTH_KEY
+                  optional: true
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false

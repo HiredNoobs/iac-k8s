@@ -42,8 +42,10 @@ groups:
             {event.dataset="syslog.log"} client.ip:="{{ $labels.client }}" event.action:=dns-query.
             Which device: its DHCP lease (event.action:dhcp-ack). A low-confidence ThreatFox
             entry can be a shared host (a workers.dev name). Trigger: from a LAN client, look
-            up a domain from https://threatfox.abuse.ch/export/csv/domains/recent/ (nslookup
-            <domain>); only the lookup happens, Pi-hole may block it.
+            up a ThreatFox domain from the aggregator's table (kubectl -n vector exec
+            deploy/vector-aggregator -c refresh -- grep -m3 ,domain-name,ThreatFox,
+            /var/lib/vector/threat/indicators.csv; nslookup <domain>); only the lookup
+            happens, Pi-hole may block it.
           tested: "2026-10-17"
 
       # A name that isn't on the lists resolving to an address that is: a fresh domain for a
@@ -74,9 +76,10 @@ groups:
             Which address or network matched: threat.enrichments.matched.atomic, and its
             reference on abuse.ch or Spamhaus. Whether the device then connected isn't logged (the router only logs
             drops); its other lookups: {event.dataset="syslog.log"} client.ip:="{{ $labels.client }}".
-            Trigger: from a LAN client, nslookup <a-b-c-d>.nip.io for an address a.b.c.d from
-            https://threatfox.abuse.ch/export/csv/ip-port/recent/ (nip.io answers with the
-            address in the name; nothing connects to it).
+            Trigger: from a LAN client, nslookup <a-b-c-d>.nip.io for a ThreatFox address
+            a.b.c.d from the aggregator's table (kubectl -n vector exec deploy/vector-aggregator
+            -c refresh -- grep -m3 ,ipv4-addr,ThreatFox, /var/lib/vector/threat/indicators.csv;
+            nip.io answers with the address in the name, nothing connects to it).
           tested: "2026-10-17"
 
       # A known-bad address in a firewall line, a journal (an SSH login attempt, ...) or the
@@ -112,7 +115,7 @@ groups:
             from it: the host's auth logs, fail2ban. A request to the Gateway (envoy.access):
             what it asked for (url.domain, url.path) and what it got (http.response.status_code).
             Trigger: on a prx-999 VM, logger -t sshd
-            "Failed password for invalid user ti-test from <a.b.c.d> port 22 ssh2" with an
-            address from https://threatfox.abuse.ch/export/csv/ip-port/recent/ (a test line,
-            nothing connects; SshLoginFailure may fire too).
+            "Failed password for invalid user ti-test from <a.b.c.d> port 22 ssh2" with a
+            ThreatFox address from the aggregator's table (as for DnsAnswerWithKnownBadIp; a
+            test line, nothing connects; SshLoginFailure may fire too).
           tested: "2026-10-17"

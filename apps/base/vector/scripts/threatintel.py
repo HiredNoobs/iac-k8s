@@ -1,9 +1,10 @@
 """vector-aggregator's threat intel (config/aggregator/threat-intel.yaml), run by its init container
-and every 6 hours by its refresh container (aggregator.yaml): abuse.ch's ThreatFox recent domains
-and IP:ports (the last 48 hours, CC0), URLhaus's host file (hosts serving malware now) and
-Spamhaus's DROP, IPv4 and IPv6 (networks run by criminals, free to use under
-https://www.spamhaus.org/drop/terms/), as one CSV table in $TI_DIR that Vector looks values up in (a
-name's parents and an address's networks too, threat-intel.yaml).
+and every 6 hours by its refresh container (aggregator.yaml): abuse.ch's ThreatFox domains and
+IP:ports (its API, the last 2 days, CC0) and URLhaus's host file (hosts serving malware now), both
+with the account's key ($ABUSECH_AUTH_KEY), and Spamhaus's DROP, IPv4 and IPv6 (networks run by
+criminals, free to use under https://www.spamhaus.org/drop/terms/), as one CSV table in $TI_DIR
+that Vector looks values up in (a name's parents and an address's networks too,
+threat-intel.yaml).
 
 Each feed's last good copy is kept (<feed>.csv): a feed that can't be fetched, or comes back
 empty, keeps its previous rows, so the aggregator always starts. With no copy at all, a feed
@@ -20,14 +21,31 @@ import urllib.request
 from datetime import datetime
 
 TI_DIR = os.environ.get("TI_DIR", "/var/lib/vector/threat")
+ABUSECH_AUTH_KEY = os.environ.get("ABUSECH_AUTH_KEY", "")
 TIMEOUT = 60
 COLUMNS = ["value", "type", "provider", "description", "confidence", "first_seen", "reference"]
 
 
-def fetch(url):
-    request = urllib.request.Request(url, headers={"User-Agent": "hirednoobs-homelab/vector-aggregator"})
+def fetch(url, data=None, headers=None):
+    """GET, or POST data as JSON."""
+    headers = {"User-Agent": "hirednoobs-homelab/vector-aggregator", **(headers or {})}
+    if data is not None:
+        data = json.dumps(data).encode()
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers)
     with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
         return response.read().decode("utf-8", "replace")
+
+
+def abusech_key():
+    if not ABUSECH_AUTH_KEY:
+        raise ValueError("no ABUSECH_AUTH_KEY")
+    return ABUSECH_AUTH_KEY
+
+
+def redact(text):
+    """The key never in a log line (an error with its URL in it)."""
+    return text.replace(ABUSECH_AUTH_KEY, "<ABUSECH_AUTH_KEY>") if ABUSECH_AUTH_KEY else text
 
 
 def address_type(value):
@@ -42,19 +60,23 @@ def confidence(level):
     """ThreatFox's 0-100 as ECS's threat.indicator.confidence."""
     try:
         level = int(level)
-    except ValueError:
+    except (TypeError, ValueError):
         return "Not Specified"
     return "High" if level >= 75 else "Medium" if level >= 50 else "Low"
 
 
 def threatfox(url):
-    """ThreatFox's CSV export: quoted fields after a "# ..." header."""
+    """ThreatFox's API: the last 2 days' IOCs, as {"query_status", "data": [...]}. Only domains and
+    IP:ports, its URLs and hashes aren't looked up."""
+    response = json.loads(fetch(url, {"query": "get_iocs", "days": 2}, {"Auth-Key": abusech_key()}))
+    status = response.get("query_status")
+    if status == "no_result":
+        return []
+    if status != "ok":
+        raise ValueError(f"query_status {status}")
     rows = []
-    lines = [line for line in fetch(url).splitlines() if line and not line.startswith("#")]
-    for record in csv.reader(lines, skipinitialspace=True):
-        if len(record) < 10:
-            continue
-        first_seen, ioc_id, value, ioc_type, threat_type, _malware, _alias, malware, _last, level = record[:10]
+    for ioc in response.get("data") or []:
+        value, ioc_type = str(ioc.get("ioc") or ""), ioc.get("ioc_type")
         if ioc_type == "ip:port":
             value = value.rsplit(":", 1)[0].strip("[]")
         value = value.strip().lower()
@@ -62,29 +84,31 @@ def threatfox(url):
         if not value or kind is None:
             continue
         try:
-            seen = datetime.strptime(first_seen, "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%dT%H:%M:%SZ")
+            seen = datetime.strptime(ioc.get("first_seen") or "", "%Y-%m-%d %H:%M:%S UTC")
+            seen = seen.strftime("%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
             seen = ""
         rows.append({
             "value": value,
             "type": kind,
             "provider": "ThreatFox",
-            "description": f"{malware} ({threat_type})",
-            "confidence": confidence(level),
+            "description": f"{ioc.get('malware_printable')} ({ioc.get('threat_type')})",
+            "confidence": confidence(ioc.get("confidence_level")),
             "first_seen": seen,
-            "reference": f"https://threatfox.abuse.ch/ioc/{ioc_id}/",
+            "reference": f"https://threatfox.abuse.ch/ioc/{ioc.get('id')}/",
         })
     return rows
 
 
 def urlhaus_hosts(url):
-    """URLhaus's host file: "127.0.0.1<tab><host>" per host serving malware now."""
+    """URLhaus's host file: a host serving malware now per line, as "127.0.0.1<tab><host>" or the
+    host alone."""
     rows = []
     for line in fetch(url).splitlines():
         parts = line.split()
-        if line.startswith("#") or len(parts) != 2:
+        if line.startswith("#") or len(parts) not in (1, 2):
             continue
-        host = parts[1].strip().lower()
+        host = parts[-1].strip().lower()
         rows.append({
             "value": host,
             "type": address_type(host) or "domain-name",
@@ -129,9 +153,9 @@ def spamhaus_drop(url):
 
 
 FEEDS = {
-    "threatfox-domains": lambda: threatfox("https://threatfox.abuse.ch/export/csv/domains/recent/"),
-    "threatfox-ip-port": lambda: threatfox("https://threatfox.abuse.ch/export/csv/ip-port/recent/"),
-    "urlhaus-hosts": lambda: urlhaus_hosts("https://urlhaus.abuse.ch/downloads/hostfile/"),
+    "threatfox": lambda: threatfox("https://threatfox-api.abuse.ch/api/v1/"),
+    # The key in the URL.
+    "urlhaus-hosts": lambda: urlhaus_hosts(f"https://urlhaus-api.abuse.ch/v2/files/exports/{abusech_key()}/hostfile.txt"),
     "spamhaus-drop-v4": lambda: spamhaus_drop("https://www.spamhaus.org/drop/drop_v4.json"),
     "spamhaus-drop-v6": lambda: spamhaus_drop("https://www.spamhaus.org/drop/drop_v6.json"),
 }
@@ -163,6 +187,7 @@ def main():
             write_csv(cached, rows)
             print(f"{name}: {len(rows)} indicators")
         except Exception as error:  # Any failure: keep the last good copy.
+            error = redact(str(error))
             if os.path.exists(cached):
                 rows = read_csv(cached)
                 age = datetime.fromtimestamp(os.path.getmtime(cached)).strftime("%Y-%m-%d %H:%M")

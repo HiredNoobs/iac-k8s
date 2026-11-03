@@ -27,7 +27,7 @@ Both load ``config/common/`` with their own side's files and end in the same pip
 The aggregator adds two things to the lines it handles, before the common pipeline:
 
 - **Where public addresses are** (``config/aggregator/geo.yaml``): DB-IP's City and ASN Lite, fetched by ``scripts/geodata.sh``.
-- **What's known-bad** (``config/aggregator/threat-intel.yaml``): abuse.ch's ThreatFox and URLhaus, and Spamhaus's DROP, fetched by ``scripts/threatintel.py``.
+- **What's known-bad** (``config/aggregator/threat-intel.yaml``): abuse.ch's ThreatFox and URLhaus (with the account's key, ``ABUSECH_AUTH_KEY`` in Vault's ``production/vector``), and Spamhaus's DROP, fetched by ``scripts/threatintel.py``.
 
 Both are fetched when the aggregator starts and every 6 hours after that, and Vector reloads them in place. The security detections on these logs are vmalert-logs' rules (``apps/base/monitoring/vmalert-logs/rules/``).
 
