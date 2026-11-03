@@ -20,18 +20,18 @@ groups:
         expr: >-
           {event.dataset="syslog.log"} host.ip:="192.168.111.1" event.action:=dns-query
           threat.enrichments.matched.field:"dns.question.name"
-          | copy client.ip as client, dns.question.name as domain,
+          | copy client.ip as remote_ip, dns.question.name as domain,
             threat.enrichments.indicator.provider as feed, threat.enrichments.indicator.description as threat
           | replace_regexp (`^\["|"\]$`, "") at feed | replace (`","`, ", ") at feed
           | replace_regexp (`^\["|"\]$`, "") at threat | replace (`","`, ", ") at threat
-          | stats by (client, domain, feed, threat) count() as lookups
+          | stats by (remote_ip, domain, feed, threat) count() as lookups
         labels:
           severity: critical
           source: router
           mitre_tactic: command-and-control
           mitre_technique: T1071.004
         annotations:
-          summary: "{{ $labels.client }} looked up {{ $labels.domain }}, known-bad ({{ $labels.feed }}: {{ $labels.threat }})"
+          summary: "{{ $labels.remote_ip }} looked up {{ $labels.domain }}, known-bad ({{ $labels.feed }}: {{ $labels.threat }})"
           description: >-
             A device asked the router for a domain abuse.ch lists as used by malware, in the
             last 48 hours (ThreatFox) or serving malware now (URLhaus), or for a subdomain of
@@ -39,7 +39,7 @@ groups:
           runbook: >-
             The indicator: its reference (threat.enrichments.indicator.reference) on abuse.ch.
             What else the device did: the Network dashboard's DNS tables for the client, and
-            {event.dataset="syslog.log"} client.ip:="{{ $labels.client }}" event.action:=dns-query.
+            {event.dataset="syslog.log"} client.ip:="{{ $labels.remote_ip }}" event.action:=dns-query.
             Which device: its DHCP lease (event.action:dhcp-ack). A low-confidence ThreatFox
             entry can be a shared host (a workers.dev name). Trigger: from a LAN client, look
             up a ThreatFox domain from the aggregator's table (kubectl -n vector exec
@@ -55,19 +55,19 @@ groups:
           {event.dataset="syslog.log"} host.ip:="192.168.111.1" event.action:=dns-reply
           threat.enrichments.matched.field:"dns.resolved_ip"
           -threat.enrichments.matched.field:"dns.question.name"
-          | copy client.ip as client, dns.question.name as domain, dns.resolved_ip as addresses,
+          | copy client.ip as remote_ip, dns.question.name as domain, dns.resolved_ip as addresses,
             threat.enrichments.indicator.provider as feed, threat.enrichments.indicator.description as threat
           | replace_regexp (`^\["|"\]$`, "") at addresses | replace (`","`, ", ") at addresses
           | replace_regexp (`^\["|"\]$`, "") at feed | replace (`","`, ", ") at feed
           | replace_regexp (`^\["|"\]$`, "") at threat | replace (`","`, ", ") at threat
-          | stats by (client, domain, addresses, feed, threat) count() as answers
+          | stats by (remote_ip, domain, addresses, feed, threat) count() as answers
         labels:
           severity: warning
           source: router
           mitre_tactic: command-and-control
           mitre_technique: T1071
         annotations:
-          summary: "{{ $labels.domain }} resolved to a known-bad address for {{ $labels.client }} ({{ $labels.feed }}: {{ $labels.threat }})"
+          summary: "{{ $labels.domain }} resolved to a known-bad address for {{ $labels.remote_ip }} ({{ $labels.feed }}: {{ $labels.threat }})"
           description: >-
             The router answered a device's lookup with an address abuse.ch lists as a malware
             server, or one in a network Spamhaus's DROP lists as run by criminals, for a name
@@ -75,7 +75,7 @@ groups:
           runbook: >-
             Which address or network matched: threat.enrichments.matched.atomic, and its
             reference on abuse.ch or Spamhaus. Whether the device then connected isn't logged (the router only logs
-            drops); its other lookups: {event.dataset="syslog.log"} client.ip:="{{ $labels.client }}".
+            drops); its other lookups: {event.dataset="syslog.log"} client.ip:="{{ $labels.remote_ip }}".
             Trigger: from a LAN client, nslookup <a-b-c-d>.nip.io for a ThreatFox address
             a.b.c.d from the aggregator's table (kubectl -n vector exec deploy/vector-aggregator
             -c refresh -- grep -m3 ,ipv4-addr,ThreatFox, /var/lib/vector/threat/indicators.csv;
