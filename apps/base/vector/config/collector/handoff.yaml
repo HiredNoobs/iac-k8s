@@ -1,5 +1,5 @@
 # What this side hands to the common end (../common/pipeline.yaml). Pass-throughs, so the common
-# file names the same four inputs in both Vectors. Add a new parser here.
+# file names the same three inputs in both Vectors. Add a new parser here.
 
 transforms:
   # The lines a parser failed on, for unparsed.
@@ -14,14 +14,9 @@ transforms:
     inputs: [generic, authelia_kept, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, talos_kept, talos_audit]
     condition: "true"
 
-  # The audit events are ECS already (kubernetes-audit.yaml).
+  # The audit events are ECS already, and those that didn't parse are kept as they came
+  # (kubernetes-audit.yaml).
   to_final:
     type: filter
-    inputs: [ecs, events]
-    condition: "true"
-
-  # The audit events that didn't parse, as they came (kubernetes-audit.yaml).
-  to_victorialogs:
-    type: filter
-    inputs: [final, audit_unparsed]
+    inputs: [ecs, events, audit_unparsed]
     condition: "true"

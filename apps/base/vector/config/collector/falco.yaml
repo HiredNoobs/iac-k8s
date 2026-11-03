@@ -27,15 +27,9 @@ transforms:
         # Falco's event source: syscall (its own drivers) or a source plugin's (k8saudit, ...).
         if is_string(.source) { %provider = del(.source) }
         if is_string(.uuid) { ."event.id" = del(.uuid) }
-        p = downcase(string(.priority) ?? "")
-        if is_string(.priority) { del(.priority) }
-        ."log.level" = if includes(["emergency", "alert", "critical"], p) {
-          "critical"
-        } else if p == "informational" {
-          "info"
-        } else {
-          p
-        }
+        p = downcase(string(del(.priority)) ?? "")
+        # Normalised with the others (../common/pipeline.yaml's ecs).
+        .level = p
         # Elastic's numbers for Falco's priorities.
         severity = get!({"emergency": 99, "alert": 99, "critical": 99, "error": 73, "warning": 47, "notice": 47, "informational": 21, "debug": 21}, [p])
         if severity != null { ."event.severity" = severity }
@@ -94,10 +88,7 @@ transforms:
         # Sensor.Fields.<Falco's name>.
         f = object(.output_fields) ?? {}
         del(.output_fields)
-        value = {}
-        for_each(f) -> |key, x| {
-          if x != null && x != "<NA>" { value = set!(value, [key], x) }
-        }
+        value = filter(f) -> |_key, x| { x != null && x != "<NA>" }
         moved = []
         for_each({
           "proc.name": "process.name",
@@ -192,6 +183,6 @@ transforms:
             moved = push(moved, "k8s.pod.name")
           }
         }
-        for_each(moved) -> |_i, key| { f = remove!(f, [string!(key)]) }
-        for_each(f) -> |key, x| { . = set!(., ["Sensor.Fields." + key], x) }
+        f = filter(f) -> |key, _x| { !includes(moved, key) }
+        . = merge(., map_keys(f) -> |key| { "Sensor.Fields." + key })
       }

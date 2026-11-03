@@ -96,44 +96,24 @@ transforms:
       # Orchestrator.Audit (the event's), the event's names capitalised. The objects that are
       # Kubernetes' own data (the request and response bodies, annotations, user extras) keep
       # their keys.
-      for_each(ref) -> |key, value| {
-        if !includes(["resource", "namespace", "name", "uid", "apiVersion"], key) {
-          . = set!(., ["Orchestrator.Resource." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
-        }
-      }
+      ref = filter(ref) -> |key, _value| { !includes(["resource", "namespace", "name", "uid", "apiVersion"], key) }
+      . = merge(., map_keys(ref) -> |key| { "Orchestrator.Resource." + pascalcase(key) })
       user = object(.user) ?? {}
-      for_each(user) -> |key, value| {
-        if key == "extra" {
-          ."Orchestrator.Audit.UserExtra" = value
-        } else if !includes(["username", "uid", "groups"], key) {
-          . = set!(., ["Orchestrator.Audit.User." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
-        }
-      }
-      response = object(.responseStatus) ?? {}
-      for_each(response) -> |key, value| {
-        if !includes(["code", "message"], key) && value != {} {
-          . = set!(., ["Orchestrator.Audit.ResponseStatus." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
-        }
-      }
+      if user.extra != null { ."Orchestrator.Audit.UserExtra" = user.extra }
+      user = filter(user) -> |key, _value| { !includes(["username", "uid", "groups", "extra"], key) }
+      . = merge(., map_keys(user) -> |key| { "Orchestrator.Audit.User." + pascalcase(key) })
+      response = filter(object(.responseStatus) ?? {}) -> |key, value| { !includes(["code", "message"], key) && value != {} }
+      . = merge(., map_keys(response) -> |key| { "Orchestrator.Audit.ResponseStatus." + pascalcase(key) })
       impersonated = object(.impersonatedUser) ?? {}
-      for_each(impersonated) -> |key, value| {
-        name = if key == "extra" { "Extra" } else { upcase(slice!(key, 0, 1)) + slice!(key, 1) }
-        . = set!(., ["Orchestrator.Audit.ImpersonatedUser." + name], value)
-      }
+      . = merge(., map_keys(impersonated) -> |key| { "Orchestrator.Audit.ImpersonatedUser." + pascalcase(key) })
       # sourceIPs when it has more than the client (a proxy's chain).
       if length(ips) > 1 { ."Orchestrator.Audit.SourceIPs" = ips }
-      # The audit event's own type (Event, audit.k8s.io/v1) says nothing.
-      del(.kind)
-      del(.apiVersion)
-      for_each(["verb", "userAgent", "user", "sourceIPs", "objectRef", "responseStatus", "impersonatedUser"]) -> |_i, key| {
-        . = remove!(., [key])
-      }
-      for_each(.) -> |key, value| {
-        if !starts_with(key, "_") && !contains(key, ".") {
-          . = remove!(., [key])
-          . = set!(., ["Orchestrator.Audit." + upcase(slice!(key, 0, 1)) + slice!(key, 1)], value)
-        }
-      }
+      # The event's other keys as Orchestrator.Audit.* (its own type, Event, audit.k8s.io/v1, says
+      # nothing).
+      mapped = filter(.) -> |key, _value| { starts_with(key, "_") || contains(key, ".") }
+      done = append(keys(mapped), ["kind", "apiVersion", "verb", "userAgent", "user", "sourceIPs", "objectRef", "responseStatus", "impersonatedUser"])
+      rest = filter(.) -> |key, _value| { !includes(done, key) }
+      . = merge(mapped, map_keys(rest) -> |key| { "Orchestrator.Audit." + pascalcase(key) })
 
   # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
   # the audit log that can't be read is worth seeing.
@@ -148,7 +128,6 @@ transforms:
         "_msg": .message,
         "_time": .timestamp,
         "event.created": now(),
-        "ecs.version": "9.5.0",
         "event.dataset": "kubernetes.audit",
         "event.provider": "kube-apiserver",
         "host.hostname": node,

@@ -13,7 +13,7 @@ transforms:
     source: |
       if ._msg == "Request Completed" {
         # to_int would make a missing field 0, so each is checked first.
-        code, err = if .status != null { to_int(.status) } else { to_int("") }
+        code, err = to_int(.status || "")
         if err != null {
           %mismatch = "Request Completed without a numeric status"
         } else {

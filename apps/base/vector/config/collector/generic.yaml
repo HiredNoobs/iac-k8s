@@ -72,7 +72,7 @@ transforms:
           klog, err = parse_regex(line, r'^(?P<sev>[IWEF])\d{4} \d\d:\d\d:\d\d\.\d+\s+\d+ (?P<file>[^:\]\s]+):(?P<line>\d+)\] (?P<rest>.*)$')
           if err == null {
             found = true
-            fields.level = if klog.sev == "I" { "info" } else if klog.sev == "W" { "warning" } else if klog.sev == "E" { "error" } else { "critical" }
+            fields.level = get!({"I": "info", "W": "warning", "E": "error", "F": "critical"}, [klog.sev])
             origin."file.name" = klog.file
             origin."file.line" = to_int!(klog.line)
             rest = string!(klog.rest)

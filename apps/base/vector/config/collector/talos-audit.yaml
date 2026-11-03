@@ -306,8 +306,5 @@ transforms:
         if prom != null { ."Interface.Promiscuous" = prom != 0; used = push(used, "prom") }
       }
 
-      rest = {}
-      for_each(src) -> |key, value| {
-        if !includes(used, key) { rest = set!(rest, [key], value) }
-      }
+      rest = filter(src) -> |key, _value| { !includes(used, key) }
       if rest != {} { ."Audit.Data" = rest }

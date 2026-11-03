@@ -118,7 +118,7 @@ tests:
               assert_eq!(._time, t'2026-10-15T15:52:48.436605742Z')
               assert_eq!(get!(., ["log.level"]), "warning")
               assert_eq!(get!(., ["log.syslog.facility.name"]), "kern")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "warning")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Warning")
               assert_eq!(get!(., ["event.original"]), "kern: warning: [2026-10-15T15:52:48.436605742Z]: audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192")
               assert!(!exists(.tags))
 
@@ -135,7 +135,7 @@ tests:
             source: |
               assert_eq!(._msg, "audit: rate limit exceeded")
               assert_eq!(get!(., ["log.level"]), "error")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "err")
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Error")
 
   - name: kernel line, Talos' own warning with its fields
     inputs:
@@ -368,7 +368,7 @@ tests:
               assert!(!exists(."dns.answers"))
               assert!(!exists(."dns.resolved_ip"))
 
-  - name: syslogd's line, the content as _msg and the header as log.syslog.* (the QEMU guest agent)
+  - name: syslogd's line, the content as _msg, the header's keys gone (the QEMU guest agent)
     inputs:
       - insert_at: talos
         type: vrl
@@ -381,11 +381,6 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "info: guest-ping called")
-              assert_eq!(get!(., ["log.syslog.facility.code"]), 1)
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "user")
-              assert_eq!(get!(., ["log.syslog.severity.code"]), 6)
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "info")
-              assert_eq!(get!(., ["log.syslog.priority"]), 14)
               assert_eq!(get!(., ["log.syslog.hostname"]), "localhost")
               for_each(["content", "facility", "severity", "priority", "hostname", "tag"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
               assert!(!exists(."log.syslog.appname"))
@@ -399,7 +394,7 @@ tests:
           . = {"msg": "", "talos-level": "info", "talos-time": "2026-10-27T15:14:38.386865467Z", "talos-service": "syslogd", "content": ": info: guest-ping called\n", "facility": "1", "severity": "6", "priority": "14", "hostname": "localhost", "tag": "unknown", "host": "10.244.3.1", "port": 40312, "source_type": "socket", "timestamp": t'2026-10-27T15:14:38.387Z'}
     no_outputs_from: [talos_kept]
 
-  - name: the guest agent's other commands reach VictoriaLogs, a program name as appname (not a real line)
+  - name: the guest agent's other commands reach VictoriaLogs, the header as log.syslog.*, a program name as appname (not a real line)
     inputs:
       - insert_at: talos
         type: vrl
@@ -413,7 +408,11 @@ tests:
               assert_eq!(get!(., ["event.dataset"]), "talos.log")
               assert_eq!(._msg, "info: guest-exec called")
               assert_eq!(get!(., ["log.syslog.appname"]), "qemu-ga")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "warning")
+              assert_eq!(get!(., ["log.syslog.facility.code"]), 1)
+              assert_eq!(get!(., ["log.syslog.facility.name"]), "user")
+              assert_eq!(get!(., ["log.syslog.severity.code"]), 4)
+              assert_eq!(get!(., ["log.syslog.severity.name"]), "Warning")
+              assert_eq!(get!(., ["log.syslog.priority"]), 12)
               assert_eq!(get!(., ["log.level"]), "warning")
               assert!(!exists(.level))
               assert!(!exists(.tags))

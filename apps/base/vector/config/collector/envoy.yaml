@@ -21,7 +21,7 @@ transforms:
         }
         # The client, downstream_remote_address without its port ([...] for IPv6). An address
         # that doesn't parse stays as it is.
-        addr, err = parse_regex(string(.downstream_remote_address) ?? "", r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+        addr, err = parse_regex(string(.downstream_remote_address) ?? "", r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
         if err == null {
           ."source.ip" = addr.ip
           ."source.port" = to_int(addr.port) ?? null
@@ -96,7 +96,7 @@ transforms:
         upstream = string(.upstream_host) ?? "-"
         if upstream != "-" && upstream != "" {
           ."destination.address" = upstream
-          addr, err = parse_regex(upstream, r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+          addr, err = parse_regex(upstream, r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
           if err == null {
             ."destination.address" = addr.ip
             ."destination.ip" = addr.ip

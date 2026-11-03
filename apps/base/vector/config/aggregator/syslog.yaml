@@ -79,24 +79,9 @@ transforms:
           ."log.syslog.version" = to_string(s.version)
           ._time = s.timestamp
         }
-        severities = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"]
-        names = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational", "Debug"]
-        levels = ["critical", "critical", "critical", "error", "warning", "notice", "info", "debug"]
-        facilities = ["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"]
-        sev = -1
-        for_each(severities) -> |i, n| { if n == s.severity { sev = i } }
-        fac = -1
-        for_each(facilities) -> |i, n| { if n == s.facility { fac = i } }
-        if sev >= 0 {
-          ."log.syslog.severity.code" = sev
-          ."log.syslog.severity.name" = get!(names, [sev])
-          ."log.level" = get!(levels, [sev])
-        }
-        if fac >= 0 {
-          ."log.syslog.facility.code" = fac
-          ."log.syslog.facility.name" = s.facility
-        }
-        if sev >= 0 && fac >= 0 { ."log.syslog.priority" = fac * 8 + sev }
+        # As log.syslog.* and the level (../common/pipeline.yaml's ecs).
+        %severity = s.severity
+        %facility = s.facility
         if is_string(s.hostname) && s.hostname != "-" {
           ."log.syslog.hostname" = s.hostname
           ."host.hostname" = s.hostname
@@ -114,11 +99,8 @@ transforms:
         }
         if is_string(s.msgid) { ."log.syslog.msgid" = s.msgid }
         # Anything else is RFC 5424 structured data: {<SD-ID>: {<name>: <value>}}.
-        sd = {}
-        for_each(s) -> |key, value| {
-          if !includes(["message", "hostname", "appname", "procid", "msgid", "facility", "severity", "timestamp", "version"], key) {
-            sd = set!(sd, [key], value)
-          }
+        sd = filter(s) -> |key, _value| {
+          !includes(["message", "hostname", "appname", "procid", "msgid", "facility", "severity", "timestamp", "version"], key)
         }
         if sd != {} { ."log.syslog.structured_data" = sd }
 

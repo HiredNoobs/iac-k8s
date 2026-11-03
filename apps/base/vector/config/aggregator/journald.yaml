@@ -45,7 +45,8 @@ transforms:
       %dataset = "journald.log"
       # When it was logged (@timestamp: the listener stamps timestamp with when it arrived).
       t = parse_timestamp(string(get!(j, ["@timestamp"])) ?? "", "%+") ?? (parse_timestamp(string(j.timestamp) ?? "", "%+") ?? now())
-      . = {"_msg": string(j.message) ?? "", "_time": t}
+      msg = string(j.message) ?? ""
+      . = {"_msg": msg, "_time": t}
       created = parse_timestamp(string(get!(j, ["event.created"])) ?? "", "%+") ?? null
       ."event.created" = if created != null { created } else { now() }
       # The address Envoy saw: the last in X-Forwarded-For.
@@ -55,46 +56,29 @@ transforms:
       hostname = string(get!(j, ["_HOSTNAME"])) ?? (string(j.host) ?? "")
       if hostname != "" { %host = hostname }
 
-      for_each({
+      fields = {
         "_PID": "process.pid", "_COMM": "process.name", "_EXE": "process.executable",
         "_CMDLINE": "process.command_line", "_UID": "process.user.id", "_GID": "process.group.id",
         "_MACHINE_ID": "host.id", "_BOOT_ID": "host.boot.id",
         "CODE_FILE": "log.origin.file.name", "CODE_LINE": "log.origin.file.line", "CODE_FUNC": "log.origin.function",
         "SYSLOG_IDENTIFIER": "log.syslog.appname", "SYSLOG_PID": "log.syslog.procid",
         "_SYSTEMD_UNIT": "Systemd.Unit", "_TRANSPORT": "Systemd.Transport",
-      }) -> |from, to| {
+      }
+      for_each(fields) -> |from, to| {
         x = get!(j, [from])
         if x != null {
           if includes(["process.pid", "log.origin.file.line"], to) { x = to_int(x) ?? x }
           . = set!(., [to], x)
         }
       }
-      severities = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational", "Debug"]
-      levels = ["critical", "critical", "critical", "error", "warning", "notice", "info", "debug"]
-      facilities = ["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"]
-      sev = to_int(get!(j, ["PRIORITY"])) ?? -1
-      if get!(j, ["PRIORITY"]) == null { sev = -1 }
-      if sev >= 0 && sev <= 7 {
-        ."log.syslog.severity.code" = sev
-        ."log.syslog.severity.name" = get!(severities, [sev])
-        ."log.level" = get!(levels, [sev])
-      }
-      fac = to_int(get!(j, ["SYSLOG_FACILITY"])) ?? -1
-      if get!(j, ["SYSLOG_FACILITY"]) == null { fac = -1 }
-      if fac >= 0 && fac <= 23 {
-        ."log.syslog.facility.code" = fac
-        ."log.syslog.facility.name" = get!(facilities, [fac])
-        if sev >= 0 && sev <= 7 { ."log.syslog.priority" = fac * 8 + sev }
-      }
+      # PRIORITY and SYSLOG_FACILITY as log.syslog.* and the level (../common/pipeline.yaml's ecs).
+      %severity = to_int(get!(j, ["PRIORITY"]) || "") ?? null
+      %facility = to_int(get!(j, ["SYSLOG_FACILITY"]) || "") ?? null
       # The rest of the journal's fields, as Systemd.Journal.<Name> (_SYSTEMD_INVOCATION_ID is
       # Systemd.Journal.SystemdInvocationId).
-      for_each(j) -> |key, value| {
-        if !includes(["message", "timestamp", "@timestamp", "host", "source_type", "path", "X-Forwarded-For", "event.created", "MESSAGE", "PRIORITY", "SYSLOG_FACILITY", "_HOSTNAME", "_PID", "_COMM", "_EXE", "_CMDLINE", "_UID", "_GID", "_MACHINE_ID", "_BOOT_ID", "CODE_FILE", "CODE_LINE", "CODE_FUNC", "SYSLOG_IDENTIFIER", "SYSLOG_PID", "_SYSTEMD_UNIT", "_TRANSPORT", "__CURSOR", "__MONOTONIC_TIMESTAMP", "__REALTIME_TIMESTAMP", "__SEQNUM", "__SEQNUM_ID", "_SOURCE_REALTIME_TIMESTAMP", "_SOURCE_MONOTONIC_TIMESTAMP", "_STREAM_ID"], key) {
-          parts = filter(split(downcase(key), "_")) -> |_i, p| { p != "" }
-          name = join!(map_values(parts) -> |p| { s = string!(p); upcase(slice!(s, 0, 1)) + slice!(s, 1) })
-          if name != "" { . = set!(., ["Systemd.Journal." + name], value) }
-        }
-      }
+      done = append(keys(fields), ["message", "timestamp", "@timestamp", "host", "source_type", "path", "X-Forwarded-For", "event.created", "MESSAGE", "PRIORITY", "SYSLOG_FACILITY", "_HOSTNAME", "__CURSOR", "__MONOTONIC_TIMESTAMP", "__REALTIME_TIMESTAMP", "__SEQNUM", "__SEQNUM_ID", "_SOURCE_REALTIME_TIMESTAMP", "_SOURCE_MONOTONIC_TIMESTAMP", "_STREAM_ID"])
+      rest = filter(j) -> |key, _value| { !includes(done, key) }
+      . = merge(., map_keys(rest) -> |key| { "Systemd.Journal." + pascalcase(downcase(key)) })
 
       unit = string(get!(j, ["_SYSTEMD_UNIT"])) ?? ""
       ident = string(get!(j, ["SYSLOG_IDENTIFIER"])) ?? ""
@@ -102,7 +86,6 @@ transforms:
       if provider == "" { provider = string(get!(j, ["_COMM"])) ?? "" }
       if provider == "" { provider = replace(unit, r'\.service$', "") }
       if provider != "" { %provider = provider }
-      msg = ._msg
 
       if unit == "vault.service" {
         %provider = "vault"
@@ -143,23 +126,20 @@ transforms:
             v = get!(a, p)
             if v != null {
               if p[1] == "data" { v = encode_json(v) }
-              keep = set!(keep, [join(map_values(p) -> |s| { x = string!(s); upcase(slice!(x, 0, 1)) + slice!(x, 1) }, ".")], v)
+              keep = set!(keep, [join(map_values(p) -> |s| { pascalcase(string!(s)) }, ".")], v)
               a = remove!(a, p)
             }
           }
           a = remove!(a, ["time"])
-          renamed = map_keys(a, recursive: true) -> |k| {
-            join(map_values(split(k, "_")) -> |p| { if p == "" { "" } else { upcase(slice!(p, 0, 1)) + slice!(p, 1) } })
-          }
-          for_each(renamed) -> |k, v| { . = set!(., ["Secrets.Audit." + k], v) }
-          for_each(keep) -> |k, v| { . = set!(., ["Secrets.Audit." + k], v) }
+          renamed = merge(map_keys(a, recursive: true) -> |k| { pascalcase(k) }, keep)
+          . = merge(., map_keys(renamed) -> |k| { "Secrets.Audit." + k })
         } else {
           # Vault's own lines: "<time> [LEVEL]  <logger>: <message>".
           %dataset = "vault.log"
           line, err = parse_regex(msg, r'^\S+ \[(?P<level>[A-Z]+)\]\s+(?:(?P<logger>[^:\s]+): )?')
           if err == null {
-            l = downcase(string!(line.level))
-            ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+            # Normalised with the others (../common/pipeline.yaml's ecs), over the PRIORITY's.
+            .level = line.level
             if line.logger != null { ."log.logger" = line.logger }
           }
         }
@@ -265,7 +245,7 @@ transforms:
           ."event.outcome" = "failure"
           ."event.reason" = fail.reason
           if fail.user != "" { ."user.name" = fail.user }
-          addr, err = parse_regex(string!(fail.addr), r'^\[?(?P<ip>[^\[\]]+?)\]?:(?P<port>\d+)$')
+          addr, err = parse_regex(string!(fail.addr), r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
           if err == null {
             ."source.ip" = addr.ip
             port = to_int(addr.port) ?? 0

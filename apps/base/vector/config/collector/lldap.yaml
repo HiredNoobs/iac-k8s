@@ -13,8 +13,8 @@ transforms:
         %dataset = "lldap.log"
         prefix, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\s+(?P<level>[A-Z]+)\s')
         if err == null {
-          l = downcase(string!(prefix.level))
-          ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+          # Normalised with the others (../common/pipeline.yaml's ecs).
+          .level = prefix.level
         } else if match(msg, r'^\d{4}-\d\d-\d\dT') {
           %mismatch = "a timestamped line without lldap's level"
         }

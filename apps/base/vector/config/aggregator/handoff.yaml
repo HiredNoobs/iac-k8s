@@ -1,5 +1,5 @@
 # What this side hands to the common end (../common/pipeline.yaml). Pass-throughs, so the common
-# file names the same four inputs in both Vectors. Add a new parser here.
+# file names the same three inputs in both Vectors. Add a new parser here.
 
 transforms:
   # The lines a parser failed on, for unparsed.
@@ -18,9 +18,4 @@ transforms:
   to_final:
     type: filter
     inputs: [ecs]
-    condition: "true"
-
-  to_victorialogs:
-    type: filter
-    inputs: [final]
     condition: "true"
