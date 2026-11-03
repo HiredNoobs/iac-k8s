@@ -53,15 +53,15 @@ groups:
           destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0)
           source.ip:ipv4_range("192.168.0.0/16")
           -(source.ip:ipv4_range("192.168.111.0/24") destination.ip:="10.64.0.1")
-          | copy source.ip as client, destination.ip as server
-          | stats by (client, server) count() as connections
+          | copy source.ip as remote_ip, destination.ip as server
+          | stats by (remote_ip, server) count() as connections
         labels:
           severity: warning
           source: router
           mitre_tactic: command-and-control
           mitre_technique: T1071.004
         annotations:
-          summary: "{{ $labels.client }} asked {{ $labels.server }} for DNS directly, not Pi-hole"
+          summary: "{{ $labels.remote_ip }} asked {{ $labels.server }} for DNS directly, not Pi-hole"
           description: >-
             A device sent DNS (port 53, or 853 for DNS over TLS) to a server on the internet,
             through the VPN or straight out, instead of the router. Pi-hole doesn't see or
@@ -69,7 +69,7 @@ groups:
           tested: "2026-10-29"
           runbook: >-
             What it sent: {event.dataset="syslog.log"} event.action:=accept
-            source.ip:="{{ $labels.client }}" destination.port:in(53, 853). Which device: its
+            source.ip:="{{ $labels.remote_ip }}" destination.port:in(53, 853). Which device: its
             DHCP lease (event.action:dhcp-ack, client.ip) and the Network dashboard. Outside
             the lab VLAN: check DNS Director is on and the device isn't set to No Redirection.
             A device with its resolver built in (a TV, a streaming stick) needs it changed.

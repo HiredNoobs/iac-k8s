@@ -1,7 +1,7 @@
 {
   "uid": "security-investigation",
   "title": "Investigation",
-  "description": "Everything about one client (IP) and/or user in the time range. Set the variables, or click a client in Security overview.",
+  "description": "Everything about one client (IP) and/or user in the time range. Set the variables, click a detection, or click a client in Security overview.",
   "tags": [
     "security"
   ],
@@ -39,6 +39,18 @@
         },
         "hide": 0,
         "description": "An Authelia/lldap username or a Vaultwarden email. .* is everyone."
+      },
+      {
+        "type": "textbox",
+        "name": "filter",
+        "label": "Events filter (LogsQL)",
+        "query": "source.ip:* or client.ip:* or user.name:*",
+        "current": {
+          "text": "source.ip:* or client.ip:* or user.name:*",
+          "value": "source.ip:* or client.ip:* or user.name:*"
+        },
+        "hide": 0,
+        "description": "Which lines the Events panel shows, before the client and user. A detection's link sets it to its rule's filter. The default: every line with a client or user."
       }
     ]
   },
@@ -73,7 +85,7 @@
       "type": "table",
       "title": "Detections",
       "id": 34,
-      "description": "Alert instances in the time range whose rule extracted this client or user.",
+      "description": "Alert instances in the time range whose rule extracted this client or user. Click a detection to investigate it: its client and user, from 10 minutes before it first fired (the rules count over 5 minutes) to a minute after it last fired, and the Events panel filtered to the lines its rule counts (before any threshold; its other labels, such as the namespace, aren't applied).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -91,35 +103,92 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (alertname, mitre_tactic, mitre_technique, severity, remote_ip, user) (max_over_time(ALERTS{alertstate=\"firing\", mitre_tactic!=\"\", remote_ip=~\"${ip}\", user=~\"${user}\"}[$__range]))",
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_map(label_copy(min by (alertname, mitre_tactic, mitre_technique, severity, remote_ip, user, host) (tfirst_over_time(ALERTS{alertstate=\"firing\", mitre_tactic!=\"\", remote_ip=~\"${ip}\", user=~\"${user}\"}[$__range])) * 1000, \"alertname\", \"filter\"), \"filter\", \"AlertSilenced\", `{event.dataset=\"envoy.access\"} url.domain:=\"alertmanager.hirednoobs.com\" http.request.method:=POST url.path:=\"/api/v2/silences\" http.response.status_code:=200`, \"AutheliaLoginFailures\", `{event.dataset=\"authelia.log\"} event.action:=password-login event.outcome:=failure user.name:* -event.reason:=\"unknown user\"`, \"AutheliaSecondFactorFailures\", `{event.dataset=\"authelia.log\"} event.action:=totp-login event.outcome:=failure`, \"AutheliaUnknownUsers\", `{event.dataset=\"authelia.log\"} event.reason:=\"unknown user\"`, \"DnsAnswerWithKnownBadIp\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=dns-reply threat.enrichments.matched.field:\"dns.resolved_ip\" -threat.enrichments.matched.field:\"dns.question.name\"`, \"DnsLookupOfKnownBadDomain\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=dns-query threat.enrichments.matched.field:\"dns.question.name\"`, \"DnsToOutsideServer\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0) source.ip:ipv4_range(\"192.168.0.0/16\") -(source.ip:ipv4_range(\"192.168.111.0/24\") destination.ip:=\"10.64.0.1\")`, \"FalcoRuntimeAlert\", `{event.dataset=\"falco.alert\"} log.level:in(\"critical\", \"error\", \"warning\")`, \"FluxResourceSuspended\", `source.ip:* or client.ip:* or user.name:*`, \"ForgejoLoginFailures\", `{event.dataset=\"forgejo.log\"} event.action:=password-login event.outcome:=failure`, \"GrafanaUserChange\", `{event.dataset=\"envoy.access\"} url.domain:=\"grafana.hirednoobs.com\" http.request.method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") url.path:~\"^/api/(admin/users|org/users)\" http.response.status_code:range[200, 300)`, \"HostConsoleLogin\", `{event.dataset=\"journald.log\"} log.syslog.appname:=login _msg:\"session opened for user\"`, \"HttpErrorBurst\", `{event.dataset=\"envoy.access\"} http.response.status_code:in(401, 403, 404) -user_agent.original:\"Blackbox-Exporter\"*`, \"KubeAPIUnexpectedSource\", `{event.dataset=\"kubernetes.audit\"} -source.ip:ipv4_range(\"192.168.111.0/24\") -source.ip:ipv4_range(\"10.244.0.0/16\") -source.ip:ipv4_range(\"127.0.0.0/8\") -source.ip:=\"::1\"`, \"KubeExecIntoPod\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:=pods Orchestrator.Resource.Subresource:in(\"exec\", \"attach\", \"portforward\")`, \"KubeForbiddenBurst\", `{event.dataset=\"kubernetes.audit\"} http.response.status_code:=403`, \"KubePodSecurityViolation\", `{event.dataset=\"kubernetes.audit\"} http.response.status_code:=403 error.message:~\"violates PodSecurity\"`, \"KubePrivilegedPodCreated\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:=pods event.action:=create Orchestrator.Resource.Subresource:=\"\" http.response.status_code:<300 (Orchestrator.Audit.RequestObject.spec.hostNetwork:=true or Orchestrator.Audit.RequestObject.spec.hostPID:=true or Orchestrator.Audit.RequestObject.spec.hostIPC:=true or Orchestrator.Audit.RequestObject.spec.volumes:~\"hostPath\" or Orchestrator.Audit.RequestObject.spec.containers:~\"\\\"privileged\\\":true\") -orchestrator.namespace:in(\"kube-system\", \"longhorn-system\", \"kube-vip\", \"node-exporter\", \"vector\", \"falco\")`, \"KubeRBACChange\", `{event.dataset=\"kubernetes.audit\"} Orchestrator.Resource.ApiGroup:=\"rbac.authorization.k8s.io\" event.action:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.name:~\"^system:serviceaccount:(flux-system|kube-system):\" -url.query:~\"dryRun=\"`, \"KubeSecretRead\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:=secrets event.action:in(\"get\", \"list\", \"watch\") http.response.status_code:=200`, \"KubeWorkloadChangeOutsideFlux\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:in(\"pods\", \"deployments\", \"daemonsets\", \"statefulsets\", \"replicasets\", \"jobs\", \"cronjobs\") event.action:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") Orchestrator.Resource.Subresource:=\"\" -user.name:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$\" -url.query:~\"dryRun=\"`, \"LldapAdminGroupGranted\", `{event.dataset=\"lldap.bootstrap\"} event.action:=removed-from-group group.name:in(\"lldap_admin\", \"lldap_password_manager\", \"admins\")`, \"LldapDirectoryDrift\", `{event.dataset=\"lldap.bootstrap\"} (event.category:iam or log.level:=warning) -(event.action:=removed-from-group group.name:in(\"lldap_admin\", \"lldap_password_manager\", \"admins\"))`, \"LoginFromUntrustedNetwork\", `{event.dataset=\"envoy.access\"} http.request.method:=POST http.response.status_code:=200 ((url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\") or (url.domain:=\"vaultwarden.hirednoobs.com\" url.path:=\"/identity/connect/token\")) -source.ip:ipv4_range(\"192.168.50.0/24\") -source.ip:ipv4_range(\"192.168.111.0/24\")`, \"LoginOutsideHours\", `{event.dataset=\"envoy.access\"} _time:day_range[01:00, 06:00) http.request.method:=POST http.response.status_code:=200 url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\"`, \"MonitoringDataDeletion\", `{event.dataset=\"envoy.access\"} ((url.domain:=\"victoriametrics.hirednoobs.com\" url.path:~\"^/api/v1/admin/tsdb/delete_series\") or (url.domain:=\"victorialogs.hirednoobs.com\" url.path:~\"^/delete/\")) -http.response.status_code:=302`, \"NetworkScanFromLan\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop (source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\"))`, \"ProxmoxLoginFailures\", `{event.dataset=\"pvedaemon.log\"} event.action:=login event.outcome:=failure`, \"ProxmoxLoginUnexpectedUser\", `{event.dataset=\"pvedaemon.log\"} event.action:=login event.outcome:=success -(user.name:=root user.domain:=pam)`, \"ScannerPathRequest\", `{event.dataset=\"envoy.access\"} url.original:~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\"`, \"SshAuthFailures\", `{event.dataset=\"sshd.log\"} event.action:=ssh_login event.outcome:=failure`, \"SshLoginUnexpected\", `{event.dataset=\"sshd.log\"} event.action:=ssh_login event.outcome:=success -source.ip:=192.168.111.254 -(user.name:=git host.hostname:=\"prx-999-srv-git-001\") -(host.hostname:=\"prx-999-srv-mgmt-001\" source.ip:ipv4_range(\"192.168.50.0/24\"))`, \"SudoFailures\", `{event.dataset=\"sudo.log\"} event.outcome:=failure`, \"SudoUnexpectedUser\", `{event.dataset=\"sudo.log\"} event.category:process event.outcome:=success -user.name:=hirednoobs`, \"TrafficWithKnownBadIp\", `(threat.enrichments.matched.field:\"source.ip\" or threat.enrichments.matched.field:\"destination.ip\") -(event.action:=drop -source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:ipv4_range(\"10.0.0.0/8\") -source.ip:ipv4_range(\"172.16.0.0/12\"))`, \"VaultAuditDeviceChange\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response Secrets.Audit.Request.Path:~\"^sys/audit(/|$)\" event.action:in(\"create\", \"update\", \"delete\")`, \"VaultConfigChange\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response event.action:in(\"create\", \"update\", \"delete\") Secrets.Audit.Request.Path:~\"^(sys/(policies/acl|policy|auth|mounts)/|auth/[^/]+/(role|users|config)(/|$))\"`, \"VaultLoginFailures\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response event.outcome:=failure Secrets.Audit.Request.Path:~\"^auth/[^/]+/login\"`, \"VaultPermissionDenied\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response error.message:~\"permission denied\"`, \"VaultRootTokenUsed\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response user.roles:~\"\\\"root\\\"\"`, \"VaultwardenAdminRequest\", `{event.dataset=\"envoy.access\"} url.domain:=\"vaultwarden.hirednoobs.com\" url.path:~\"^/admin\"`, \"VaultwardenLoginFailures\", `{event.dataset=\"vaultwarden.log\"} event.action:=password-login event.outcome:=failure`, \"VaultwardenManyUsernames\", `{event.dataset=\"vaultwarden.log\"} event.action:=password-login event.outcome:=failure`), \"link_ip\", \"$1\", \"remote_ip\", \"(.+)\"), \"link_ip\", \".*\", \"link_ip\", \"\"), \"link_user\", \"$1\", \"user\", \"(.+)\"), \"link_user\", \".*\", \"link_user\", \"\")",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(label_replace(label_replace(label_replace(label_map(label_copy(max by (alertname, mitre_tactic, mitre_technique, severity, remote_ip, user, host) (tlast_over_time(ALERTS{alertstate=\"firing\", mitre_tactic!=\"\", remote_ip=~\"${ip}\", user=~\"${user}\"}[$__range])) * 1000, \"alertname\", \"filter\"), \"filter\", \"AlertSilenced\", `{event.dataset=\"envoy.access\"} url.domain:=\"alertmanager.hirednoobs.com\" http.request.method:=POST url.path:=\"/api/v2/silences\" http.response.status_code:=200`, \"AutheliaLoginFailures\", `{event.dataset=\"authelia.log\"} event.action:=password-login event.outcome:=failure user.name:* -event.reason:=\"unknown user\"`, \"AutheliaSecondFactorFailures\", `{event.dataset=\"authelia.log\"} event.action:=totp-login event.outcome:=failure`, \"AutheliaUnknownUsers\", `{event.dataset=\"authelia.log\"} event.reason:=\"unknown user\"`, \"DnsAnswerWithKnownBadIp\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=dns-reply threat.enrichments.matched.field:\"dns.resolved_ip\" -threat.enrichments.matched.field:\"dns.question.name\"`, \"DnsLookupOfKnownBadDomain\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=dns-query threat.enrichments.matched.field:\"dns.question.name\"`, \"DnsToOutsideServer\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept destination.port:in(53, 853) observer.egress.interface.name:in(wgc1, ppp0) source.ip:ipv4_range(\"192.168.0.0/16\") -(source.ip:ipv4_range(\"192.168.111.0/24\") destination.ip:=\"10.64.0.1\")`, \"FalcoRuntimeAlert\", `{event.dataset=\"falco.alert\"} log.level:in(\"critical\", \"error\", \"warning\")`, \"FluxResourceSuspended\", `source.ip:* or client.ip:* or user.name:*`, \"ForgejoLoginFailures\", `{event.dataset=\"forgejo.log\"} event.action:=password-login event.outcome:=failure`, \"GrafanaUserChange\", `{event.dataset=\"envoy.access\"} url.domain:=\"grafana.hirednoobs.com\" http.request.method:in(\"POST\", \"PUT\", \"PATCH\", \"DELETE\") url.path:~\"^/api/(admin/users|org/users)\" http.response.status_code:range[200, 300)`, \"HostConsoleLogin\", `{event.dataset=\"journald.log\"} log.syslog.appname:=login _msg:\"session opened for user\"`, \"HttpErrorBurst\", `{event.dataset=\"envoy.access\"} http.response.status_code:in(401, 403, 404) -user_agent.original:\"Blackbox-Exporter\"*`, \"KubeAPIUnexpectedSource\", `{event.dataset=\"kubernetes.audit\"} -source.ip:ipv4_range(\"192.168.111.0/24\") -source.ip:ipv4_range(\"10.244.0.0/16\") -source.ip:ipv4_range(\"127.0.0.0/8\") -source.ip:=\"::1\"`, \"KubeExecIntoPod\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:=pods Orchestrator.Resource.Subresource:in(\"exec\", \"attach\", \"portforward\")`, \"KubeForbiddenBurst\", `{event.dataset=\"kubernetes.audit\"} http.response.status_code:=403`, \"KubePodSecurityViolation\", `{event.dataset=\"kubernetes.audit\"} http.response.status_code:=403 error.message:~\"violates PodSecurity\"`, \"KubePrivilegedPodCreated\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:=pods event.action:=create Orchestrator.Resource.Subresource:=\"\" http.response.status_code:<300 (Orchestrator.Audit.RequestObject.spec.hostNetwork:=true or Orchestrator.Audit.RequestObject.spec.hostPID:=true or Orchestrator.Audit.RequestObject.spec.hostIPC:=true or Orchestrator.Audit.RequestObject.spec.volumes:~\"hostPath\" or Orchestrator.Audit.RequestObject.spec.containers:~\"\\\"privileged\\\":true\") -orchestrator.namespace:in(\"kube-system\", \"longhorn-system\", \"kube-vip\", \"node-exporter\", \"vector\", \"falco\")`, \"KubeRBACChange\", `{event.dataset=\"kubernetes.audit\"} Orchestrator.Resource.ApiGroup:=\"rbac.authorization.k8s.io\" event.action:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") -user.name:~\"^system:serviceaccount:(flux-system|kube-system):\" -url.query:~\"dryRun=\"`, \"KubeSecretRead\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:=secrets event.action:in(\"get\", \"list\", \"watch\") http.response.status_code:=200`, \"KubeWorkloadChangeOutsideFlux\", `{event.dataset=\"kubernetes.audit\"} orchestrator.resource.type:in(\"pods\", \"deployments\", \"daemonsets\", \"statefulsets\", \"replicasets\", \"jobs\", \"cronjobs\") event.action:in(\"create\", \"update\", \"patch\", \"delete\", \"deletecollection\") Orchestrator.Resource.Subresource:=\"\" -user.name:~\"^system:(node:.*|kube-.*|apiserver|serviceaccount:(flux-system|kube-system|longhorn-system|reloader|envoy-gateway|rabbitmq-system|cert-manager):.*)$\" -url.query:~\"dryRun=\"`, \"LldapAdminGroupGranted\", `{event.dataset=\"lldap.bootstrap\"} event.action:=removed-from-group group.name:in(\"lldap_admin\", \"lldap_password_manager\", \"admins\")`, \"LldapDirectoryDrift\", `{event.dataset=\"lldap.bootstrap\"} (event.category:iam or log.level:=warning) -(event.action:=removed-from-group group.name:in(\"lldap_admin\", \"lldap_password_manager\", \"admins\"))`, \"LoginFromUntrustedNetwork\", `{event.dataset=\"envoy.access\"} http.request.method:=POST http.response.status_code:=200 ((url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\") or (url.domain:=\"vaultwarden.hirednoobs.com\" url.path:=\"/identity/connect/token\")) -source.ip:ipv4_range(\"192.168.50.0/24\") -source.ip:ipv4_range(\"192.168.111.0/24\")`, \"LoginOutsideHours\", `{event.dataset=\"envoy.access\"} _time:day_range[01:00, 06:00) http.request.method:=POST http.response.status_code:=200 url.domain:=\"auth.hirednoobs.com\" url.path:=\"/api/secondfactor/totp\"`, \"MonitoringDataDeletion\", `{event.dataset=\"envoy.access\"} ((url.domain:=\"victoriametrics.hirednoobs.com\" url.path:~\"^/api/v1/admin/tsdb/delete_series\") or (url.domain:=\"victorialogs.hirednoobs.com\" url.path:~\"^/delete/\")) -http.response.status_code:=302`, \"NetworkScanFromLan\", `{event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop (source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\"))`, \"ProxmoxLoginFailures\", `{event.dataset=\"pvedaemon.log\"} event.action:=login event.outcome:=failure`, \"ProxmoxLoginUnexpectedUser\", `{event.dataset=\"pvedaemon.log\"} event.action:=login event.outcome:=success -(user.name:=root user.domain:=pam)`, \"ScannerPathRequest\", `{event.dataset=\"envoy.access\"} url.original:~\"(?i)(/\\\\.env|/\\\\.git/|/\\\\.aws/|wp-login\\\\.php|/wp-admin|phpmyadmin|/cgi-bin/|\\\\.\\\\./|%2e%2e)\"`, \"SshAuthFailures\", `{event.dataset=\"sshd.log\"} event.action:=ssh_login event.outcome:=failure`, \"SshLoginUnexpected\", `{event.dataset=\"sshd.log\"} event.action:=ssh_login event.outcome:=success -source.ip:=192.168.111.254 -(user.name:=git host.hostname:=\"prx-999-srv-git-001\") -(host.hostname:=\"prx-999-srv-mgmt-001\" source.ip:ipv4_range(\"192.168.50.0/24\"))`, \"SudoFailures\", `{event.dataset=\"sudo.log\"} event.outcome:=failure`, \"SudoUnexpectedUser\", `{event.dataset=\"sudo.log\"} event.category:process event.outcome:=success -user.name:=hirednoobs`, \"TrafficWithKnownBadIp\", `(threat.enrichments.matched.field:\"source.ip\" or threat.enrichments.matched.field:\"destination.ip\") -(event.action:=drop -source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:ipv4_range(\"10.0.0.0/8\") -source.ip:ipv4_range(\"172.16.0.0/12\"))`, \"VaultAuditDeviceChange\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response Secrets.Audit.Request.Path:~\"^sys/audit(/|$)\" event.action:in(\"create\", \"update\", \"delete\")`, \"VaultConfigChange\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response event.action:in(\"create\", \"update\", \"delete\") Secrets.Audit.Request.Path:~\"^(sys/(policies/acl|policy|auth|mounts)/|auth/[^/]+/(role|users|config)(/|$))\"`, \"VaultLoginFailures\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response event.outcome:=failure Secrets.Audit.Request.Path:~\"^auth/[^/]+/login\"`, \"VaultPermissionDenied\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response error.message:~\"permission denied\"`, \"VaultRootTokenUsed\", `{event.dataset=\"vault.audit\"} Secrets.Audit.Type:=response user.roles:~\"\\\"root\\\"\"`, \"VaultwardenAdminRequest\", `{event.dataset=\"envoy.access\"} url.domain:=\"vaultwarden.hirednoobs.com\" url.path:~\"^/admin\"`, \"VaultwardenLoginFailures\", `{event.dataset=\"vaultwarden.log\"} event.action:=password-login event.outcome:=failure`, \"VaultwardenManyUsernames\", `{event.dataset=\"vaultwarden.log\"} event.action:=password-login event.outcome:=failure`), \"link_ip\", \"$1\", \"remote_ip\", \"(.+)\"), \"link_ip\", \".*\", \"link_ip\", \"\"), \"link_user\", \"$1\", \"user\", \"(.+)\"), \"link_user\", \".*\", \"link_user\", \"\")",
           "instant": true,
           "format": "table"
         }
       ],
       "transformations": [
         {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "alias": "from",
+            "binary": {
+              "left": "Value #A",
+              "operator": "-",
+              "right": "600000"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "alias": "to",
+            "binary": {
+              "left": "Value #B",
+              "operator": "+",
+              "right": "60000"
+            },
+            "replaceFields": false
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
               "Time": true,
-              "__name__": true,
-              "alertstate": true,
-              "alertgroup": true,
-              "cluster": true,
-              "job": true,
-              "instance": true,
-              "Value": true,
-              "stats_result": true
+              "__name__": true
+            },
+            "indexByName": {
+              "alertname": 0,
+              "severity": 1,
+              "mitre_tactic": 2,
+              "mitre_technique": 3,
+              "remote_ip": 4,
+              "user": 5,
+              "host": 6,
+              "Value #A": 7,
+              "Value #B": 8
             },
             "renameByName": {
               "alertname": "Detection",
               "mitre_tactic": "Tactic",
               "mitre_technique": "Technique",
               "severity": "Severity",
-              "source": "Source",
               "remote_ip": "Client",
-              "user": "User"
+              "user": "User",
+              "host": "Host",
+              "Value #A": "First fired",
+              "Value #B": "Last fired"
             }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Last fired",
+                "desc": true
+              }
+            ]
           }
         }
       ],
@@ -127,7 +196,97 @@
         "defaults": {
           "noValue": "None"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Detection"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate this detection",
+                    "url": "/d/security-investigation/investigation?var-ip=${__data.fields.link_ip:percentencode}&var-user=${__data.fields.link_user:percentencode}&var-filter=${__data.fields.filter:percentencode}&from=${__data.fields.from}&to=${__data.fields.to}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(First|Last) fired$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsIso"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "filter"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "link_ip"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "link_user"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "from"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "to"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -154,7 +313,7 @@
       "type": "logs",
       "title": "Events",
       "id": 50,
-      "description": "Every pod log line and audit event with this client (source.ip, or client.ip for a connection Falco saw) or user (user.name), whatever its source: the Gateway, Authelia, Vaultwarden, lldap, the Kubernetes API, Falco, ... The source is in brackets (event.dataset). The prx-999 hosts' journals aren't normalised yet: they're further down.",
+      "description": "Every pod log line and audit event the Events filter keeps (by default: with a client, source.ip or client.ip, or a user, user.name) for this client and user, whatever its source: the Gateway, Authelia, Vaultwarden, lldap, the Kubernetes API, Falco, the prx-999 hosts' journals, ... The source is in brackets (event.dataset).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -174,7 +333,7 @@
           },
           "editorMode": "code",
           "queryType": "instant",
-          "expr": "(source.ip:* or client.ip:* or user.name:*) (source.ip:~\"^${ip}$\" or client.ip:~\"^${ip}$\") user.name:~\"^${user}$\" -url.path:~\"^/static/\" | format \"[<event.dataset>] <_msg>\" as _msg",
+          "expr": "(${filter:raw}) (source.ip:~\"^${ip}$\" or client.ip:~\"^${ip}$\") user.name:~\"^${user}$\" -url.path:~\"^/static/\" | format \"[<event.dataset>] <_msg>\" as _msg",
           "maxLines": 500
         }
       ],

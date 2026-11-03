@@ -177,6 +177,10 @@ jobs:
       - name: ATT&CK coverage
         run: python3 .forgejo/scripts/attack-coverage.py --check
 
+      # The Investigation dashboard's Detections queries carry each rule's LogsQL filter.
+      - name: Detection filters
+        run: python3 .forgejo/scripts/detection-filters.py --check
+
       # A missing schema fails the run, add the CRD schemas of new controllers to the step above. CRDs
       # themselves are skipped, they come from the upstream releases (and there's no schema for them).
       - name: Validate
