@@ -1,0 +1,10 @@
+# Conventions the API server checks when an object is created or changed, whether from Flux, Helm
+# or a controller: the workloads (Deployments, StatefulSets, DaemonSets and Jobs, CronJobs through
+# their Jobs) and Services. A failure is a KubeAdmissionPolicyViolation alert (vmalert-logs'
+# kube-audit rules).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - images-pinned-by-digest.yaml
+  - resource-requests.yaml
+  - service-exposure.yaml

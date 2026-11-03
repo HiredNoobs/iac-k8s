@@ -1,0 +1,39 @@
+# Every container with cpu and memory requests, so the scheduler places it by what it needs.
+# Init containers run before the others and don't need them, sidecars (restartPolicy: Always)
+# keep running and do.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: resource-requests
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs"]
+  variables:
+    - name: sidecars
+      expression: >-
+        object.spec.template.spec.?initContainers.orValue([]).filter(c, c.?restartPolicy.orValue("") == "Always")
+    - name: withoutRequests
+      expression: >-
+        (object.spec.template.spec.containers + variables.sidecars)
+        .filter(c, !["cpu", "memory"].all(r, r in c.?resources.?requests.orValue({})))
+  validations:
+    - expression: size(variables.withoutRequests) == 0
+      messageExpression: >-
+        "containers without cpu and memory requests: " + variables.withoutRequests.map(c, c.name).join(", ")
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: resource-requests
+spec:
+  policyName: resource-requests
+  # Recorded in the audit log and returned as a warning, nothing is refused.
+  validationActions: [Audit, Warn]

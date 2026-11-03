@@ -21,7 +21,7 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. Then ``rabbitmq-topology`` (``apps/<cluster>/rabbitmq-topology``), RabbitMQ's users and permissions: the Topology Operator's webhook rejects them until ``apps``' ExternalSecrets have created their Secrets. |
 | ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn, metrics-server, kubelet-serving-cert-approver. |
 | ``infrastructure/operators/`` | Controllers whose manifests need the other controllers' CRDs (cert-manager Certificates for their webhooks): RabbitMQ's Topology Operator. |
-| ``infrastructure/configs/`` | Config using the controllers' CRDs: ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway. |
+| ``infrastructure/configs/`` | Cluster-wide config: the admission policies, and config using the controllers' CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway). |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
 | ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. Subdirectories are separate Flux Kustomizations (``rabbitmq-topology``). |
 
@@ -36,6 +36,7 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 - Upstream release manifests (no chart) are vendored unmodified, with their URL and checksum in the kustomization, and changed with patches.
 - Namespaces enforce the ``restricted`` pod security standard (``pod-security.kubernetes.io/enforce``), or ``baseline``/``privileged`` with a comment saying what needs it.
 - Pods that don't use the Kubernetes API set ``automountServiceAccountToken: false``.
+- Admission policies (``infrastructure/configs/admission-policies``) check that workloads have digests and resource requests, and that Services reach the LAN only on a kube-vip LoadBalancer IP. A failure is allowed, and alerted on (KubeAdmissionPolicyViolation).
 - A new controller's CRDs need their schemas added to ``lint.yml`` (download the release's CRDs, pinned by checksum, or pass a vendored manifest, and convert them with ``.forgejo/scripts/crd-schemas.py``), a missing schema fails CI.
 
 ## More
