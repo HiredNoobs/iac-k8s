@@ -1,8 +1,7 @@
-# The collector reads the nodes' log files (hostPath), which Talos' default pod security standard
-# (baseline) refuses.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: vector
   labels:
+    # The collector reads the nodes' log files (hostPath), which baseline refuses.
     pod-security.kubernetes.io/enforce: privileged
