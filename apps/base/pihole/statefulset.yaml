@@ -27,6 +27,7 @@ spec:
       labels:
         app.kubernetes.io/name: pihole
     spec:
+      automountServiceAccountToken: false
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

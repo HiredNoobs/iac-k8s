@@ -34,6 +34,7 @@ spec:
             app.kubernetes.io/name: lldap
             app.kubernetes.io/component: bootstrap
         spec:
+          automountServiceAccountToken: false
           restartPolicy: Never
           securityContext:
             runAsNonRoot: true

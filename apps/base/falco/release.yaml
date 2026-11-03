@@ -120,8 +120,7 @@ spec:
              and proc.exepath = /usr/bin/pihole-FTL)
           override:
             condition: replace
-  # The chart mounts the host's /boot and /lib/modules (read-write) for kernel modules, which
-  # the modern probe doesn't use; /boot may not even exist on Talos' read-only root.
+  # What the chart has no values for.
   postRenderers:
     - kustomize:
         patches:
@@ -136,6 +135,11 @@ spec:
               spec:
                 template:
                   spec:
+                    # Falco doesn't use the Kubernetes API (pod names come from the CRI socket).
+                    automountServiceAccountToken: false
+                    # The chart mounts the host's /boot and /lib/modules (read-write) for kernel
+                    # modules, which the modern probe doesn't use; /boot may not even exist on
+                    # Talos' read-only root.
                     containers:
                       - name: falco
                         volumeMounts:

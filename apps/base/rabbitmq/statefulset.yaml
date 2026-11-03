@@ -36,6 +36,7 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "15692"
     spec:
+      automountServiceAccountToken: false
       # The rabbitmq user from the image, fsGroup lets it read the certs and write its data.
       securityContext:
         runAsNonRoot: true

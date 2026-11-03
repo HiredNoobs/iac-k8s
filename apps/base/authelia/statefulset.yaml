@@ -30,6 +30,7 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9959"
     spec:
+      automountServiceAccountToken: false
       # Authelia reads every AUTHELIA_* env var as config and won't start with ones it doesn't
       # know, e.g. the AUTHELIA_SERVICE_HOST Kubernetes adds for the authelia Service.
       enableServiceLinks: false

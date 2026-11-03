@@ -35,6 +35,7 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 - Placement with replicas, ``topologySpreadConstraints`` on ``topology.kubernetes.io/zone``, PDBs and resource requests. ``nodeSelector`` only for hardware (the Longhorn disk), no stack labels.
 - Upstream release manifests (no chart) are vendored unmodified, with their URL and checksum in the kustomization, and changed with patches.
 - Namespaces enforce the ``restricted`` pod security standard (``pod-security.kubernetes.io/enforce``), or ``baseline``/``privileged`` with a comment saying what needs it.
+- Pods that don't use the Kubernetes API set ``automountServiceAccountToken: false``.
 - A new controller's CRDs need their schemas added to ``lint.yml`` (download the release's CRDs, pinned by checksum, or pass a vendored manifest, and convert them with ``.forgejo/scripts/crd-schemas.py``), a missing schema fails CI.
 
 ## More

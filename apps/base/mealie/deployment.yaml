@@ -21,6 +21,7 @@ spec:
       labels:
         app.kubernetes.io/name: mealie
     spec:
+      automountServiceAccountToken: false
       # 911 is the image's own user (abc, the default PUID/PGID): started as it, the entry script
       # skips its root-only user switch (gosu), so nothing runs as root. fsGroup lets it write
       # /app/data.

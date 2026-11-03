@@ -27,6 +27,7 @@ spec:
       labels:
         app.kubernetes.io/name: grafana
     spec:
+      automountServiceAccountToken: false
       # The grafana user from the image, fsGroup lets it write its data.
       securityContext:
         runAsNonRoot: true

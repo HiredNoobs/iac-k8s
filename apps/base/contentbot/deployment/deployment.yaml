@@ -28,6 +28,7 @@ spec:
       labels:
         app.kubernetes.io/name: contentbot
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

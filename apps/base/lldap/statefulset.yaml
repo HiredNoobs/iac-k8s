@@ -28,6 +28,7 @@ spec:
       labels:
         app.kubernetes.io/name: lldap
     spec:
+      automountServiceAccountToken: false
       # The rootless image runs as lldap (1000:1000), fsGroup lets it write /data.
       securityContext:
         runAsNonRoot: true

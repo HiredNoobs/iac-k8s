@@ -22,6 +22,7 @@ spec:
       labels:
         app.kubernetes.io/name: vaultwarden
     spec:
+      automountServiceAccountToken: false
       # The image runs as root, any non-root user works. fsGroup lets it write /data.
       securityContext:
         runAsNonRoot: true

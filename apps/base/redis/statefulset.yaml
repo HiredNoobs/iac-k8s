@@ -36,6 +36,7 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9121"
     spec:
+      automountServiceAccountToken: false
       # The redis user from the image, fsGroup lets it read the certs and write /data.
       securityContext:
         runAsNonRoot: true
