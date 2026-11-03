@@ -171,13 +171,37 @@ tests:
               assert_eq!(get!(., ["user.name"]), "alice")
               assert_eq!(get!(., ["http.response.status_code"]), 302)
 
-  - name: "format mismatch: Authelia line that isn't its JSON"
+  - name: Authelia start-up line, before its JSON format applies
     inputs:
       - insert_at: pods
         type: vrl
         source: |
           . = {
-            "message": "time=2026-10-13T08:00:00Z level=info msg=hello",
+            "message": "time=\"2026-11-03T01:38:43Z\" level=info msg=\"Authelia v4.39.28 is starting\"",
+            "timestamp": t'2026-11-03T01:38:43.220Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
+              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(._msg, "Authelia v4.39.28 is starting")
+              assert_eq!(._time, t'2026-11-03T01:38:43Z')
+              assert!(!exists(.msg))
+              assert!(!exists(.time))
+              assert!(!exists(."error.type"))
+
+  - name: "format mismatch: Authelia line that isn't its JSON or text"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "panic: runtime error: invalid memory address or nil pointer dereference",
             "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stdout",
             "kubernetes": {"pod_namespace": "authelia", "pod_name": "authelia-0", "container_name": "authelia"}
           }

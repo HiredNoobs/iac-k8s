@@ -8,7 +8,16 @@ transforms:
     reroute_dropped: true
     source: |
       %dataset = "authelia.log"
-      if !exists(.level) { %mismatch = "not Authelia's JSON (no level)" }
+      # Its first lines, before it applies log.format, are logrus' text: time=... level=... msg=...
+      if %text == true {
+        text, err = parse_logfmt(string(._msg) ?? "")
+        if err == null && is_string(text.level) && is_string(text.msg) {
+          ._time = parse_timestamp(string(text.time) ?? "", "%+") ?? ._time
+          . = merge(., remove!(text, ["time"]))
+          ._msg = del(.msg)
+        }
+      }
+      if !exists(.level) { %mismatch = "not Authelia's JSON or text (no level)" }
       if is_string(.remote_ip) { ."source.ip" = del(.remote_ip) }
       # The response's status (a request that timed out: 408).
       status = to_int(.status_code) ?? -1
