@@ -47,7 +47,7 @@
     {
       "techniqueID": "T1078",
       "score": 2,
-      "comment": "HostConsoleLogin (tested 2026-10-16)\nKubeAPIUnexpectedSource (tested 2026-10-10)\nLoginFromUntrustedNetwork (untested)\nLoginOutsideHours (untested)\nProxmoxLoginUnexpectedUser (tested 2026-10-16)",
+      "comment": "HostConsoleLogin (tested 2026-10-16)\nKubeAPIUnexpectedSource (tested 2026-10-10)\nLoginFromUntrustedNetwork (untested)\nLoginOutsideHours (tested 2026-11-03)\nProxmoxLoginUnexpectedUser (tested 2026-10-16)",
       "enabled": true
     },
     {

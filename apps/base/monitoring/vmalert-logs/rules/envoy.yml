@@ -64,6 +64,7 @@ groups:
           description: >-
             A completed Authelia login (password and TOTP) between 01:00 and 06:00 UK time,
             when nobody normally logs in.
+          tested: "2026-11-03"
           runbook: >-
             Check the user in Authelia's logs at the same time and the client's other requests.
             If it wasn't you, change the password in Vault. Trigger: log in to Authelia in the
