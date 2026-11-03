@@ -24,7 +24,7 @@ transforms:
   events:
     type: remap
     inputs: [audit]
-    # A line that isn't JSON isn't sent half-parsed: it goes to audit_unparsed.
+    # A line that isn't JSON isn't sent half-parsed: it goes to unparsed (../common/pipeline.yaml).
     drop_on_error: true
     reroute_dropped: true
     source: |
@@ -114,25 +114,3 @@ transforms:
       done = append(keys(mapped), ["kind", "apiVersion", "verb", "userAgent", "user", "sourceIPs", "objectRef", "responseStatus", "impersonatedUser"])
       rest = filter(.) -> |key, _value| { !includes(done, key) }
       . = merge(mapped, map_keys(rest) -> |key| { "Orchestrator.Audit." + pascalcase(key) })
-
-  # An audit log line that isn't an event (e.g. a partial line), kept as it is: something in
-  # the audit log that can't be read is worth seeing.
-  audit_unparsed:
-    type: remap
-    inputs: [events.dropped]
-    source: |
-      node = get_env_var("NODE_NAME") ?? ""
-      domain = get_env_var("NODE_DOMAIN") ?? ""
-      fqdn = if domain == "" { node } else { node + "." + domain }
-      . = {
-        "_msg": .message,
-        "_time": .timestamp,
-        "event.created": now(),
-        "event.dataset": "kubernetes.audit",
-        "event.provider": "kube-apiserver",
-        "host.hostname": node,
-        "host.name": fqdn,
-        "event.kind": "pipeline_error",
-        "error.type": "remap_error",
-        "error.message": .metadata.dropped.message,
-      }

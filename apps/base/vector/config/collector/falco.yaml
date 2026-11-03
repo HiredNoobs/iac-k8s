@@ -33,8 +33,9 @@ transforms:
         # Elastic's numbers for Falco's priorities.
         severity = get!({"emergency": 99, "alert": 99, "critical": 99, "error": 73, "warning": 47, "notice": 47, "informational": 21, "debug": 21}, [p])
         if severity != null { ."event.severity" = severity }
-        # ATT&CK: mitre_<tactic> tags as the tactic's name and id, T<id> as the technique and
-        # T<id>.<sub> as the sub-technique (and its technique).
+        # From the rule's tags. ATT&CK: mitre_<tactic> tags as the tactic's name and id, T<id> as
+        # the technique and T<id>.<sub> as the sub-technique (and its technique). What kind of
+        # event: ECS categories, as many as it has (container and host say where, not what).
         tactics = {
           "reconnaissance": ["Reconnaissance", "TA0043"],
           "resource_development": ["Resource Development", "TA0042"],
@@ -54,6 +55,7 @@ transforms:
         tactic = null
         technique = null
         subtechnique = null
+        categories = []
         for_each(array(.tags) ?? []) -> |_i, t| {
           s = string(t) ?? ""
           if tactic == null && starts_with(s, "mitre_") {
@@ -64,6 +66,8 @@ transforms:
             if technique == null { technique = id.technique }
             if subtechnique == null && id.sub != null && id.technique == technique { subtechnique = s }
           }
+          c = get!({"process": "process", "shell": "process", "filesystem": "file", "network": "network", "users": "iam", "k8s": "api"}, [s])
+          if c != null && !includes(categories, c) { categories = push(categories, c) }
         }
         if tactic != null {
           ."threat.framework" = "MITRE ATT&CK"
@@ -75,13 +79,6 @@ transforms:
           ."threat.technique.id" = technique
         }
         if subtechnique != null { ."threat.technique.subtechnique.id" = subtechnique }
-        # What kind of event, from the rule's tags: ECS categories, as many as it has (container
-        # and host say where, not what).
-        categories = []
-        for_each(array(.tags) ?? []) -> |_i, t| {
-          c = get!({"process": "process", "shell": "process", "filesystem": "file", "network": "network", "users": "iam", "k8s": "api"}, [string(t) ?? ""])
-          if c != null && !includes(categories, c) { categories = push(categories, c) }
-        }
         if categories != [] { ."event.category" = categories }
         # The event's own fields (output_fields keys have dots in them). Each one with an ECS
         # field moves there, as Elastic's; the rest (and <NA>s, Falco's "no value") go to

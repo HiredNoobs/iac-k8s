@@ -43,19 +43,15 @@ transforms:
             ."group.name" = change.name
           }
           # ECS's iam types: what changed, and how (a membership is a change to the group).
-          ."event.type" = if change.what == "created" {
-            [downcase(string!(change.kind)), "creation"]
-          } else if change.what == "deleted" {
-            [downcase(string!(change.kind)), "deletion"]
+          kind = downcase(string!(change.kind))
+          what = string!(change.what)
+          membership = get!({"added to the group": "added-to-group", "removed from the group": "removed-from-group"}, [what])
+          if membership != null {
+            ."event.type" = ["group", "change"]
+            ."event.action" = membership
           } else {
-            ["group", "change"]
-          }
-          ."event.action" = if change.what == "added to the group" {
-            "added-to-group"
-          } else if change.what == "removed from the group" {
-            "removed-from-group"
-          } else {
-            downcase(string!(change.kind)) + "-" + string!(change.what)
+            ."event.type" = [kind, get!({"created": "creation", "deleted": "deletion"}, [what])]
+            ."event.action" = kind + "-" + what
           }
         }
       }

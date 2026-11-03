@@ -11,13 +11,32 @@ transforms:
         %dataset = "envoy.log"
       } else {
         %dataset = "envoy.access"
-        # The string values it has, without the "-"s. Each becomes its ECS field below, and the
-        # original goes ("-" included: it only says there's no value).
-        v = {}
-        for_each(["method", ":authority", "x-envoy-origin-path", "user-agent", "x-request-id"]) -> |_i, key| {
+        # The values that move as they are, each to its field, and the original goes. "-" (or
+        # null) only says there's no value: dropped. No ECS field for the Proxy.* ones (capitalised
+        # as ECS recommends for custom fields, so they can't clash with a future ECS field).
+        for_each({
+          "method": "http.request.method",
+          ":authority": "url.domain",
+          "x-envoy-origin-path": "url.original",
+          "user-agent": "user_agent.original",
+          "x-request-id": "http.request.id",
+          # The SNI the client asked for (the TLS connection's, not the request's site).
+          "requested_server_name": "tls.client.server_name",
+          # The backend Envoy sent the request to, as Elastic's Envoy integration.
+          "upstream_host": "destination.address",
+          # Why Envoy answered as it did (via_upstream, ext_authz_denied, route_not_found, ...).
+          "response_code_details": "event.reason",
+          "response_flags": "Proxy.ResponseFlags",
+          "route_name": "Proxy.RouteName",
+          "downstream_local_address": "Proxy.ListenerAddress",
+          "x-forwarded-for": "Proxy.ForwardedFor",
+          "connection_termination_details": "Proxy.ConnectionTerminationDetails",
+          "upstream_transport_failure_reason": "Proxy.UpstreamTransportFailureReason",
+          "x-envoy-upstream-service-time": "Proxy.UpstreamServiceTime",
+        }) -> |key, field| {
           s = get!(., [key])
-          if is_string(s) && s != "-" && s != "" { v = set!(v, [key], s) }
-          if is_string(s) { . = remove!(., [key]) }
+          . = remove!(., [key])
+          if is_string(s) && s != "-" && s != "" { . = set!(., [field], s) }
         }
         # The client, downstream_remote_address without its port ([...] for IPv6). An address
         # that doesn't parse stays as it is.
@@ -29,8 +48,6 @@ transforms:
         } else {
           %mismatch = "downstream_remote_address isn't <ip>:<port>"
         }
-        method = get!(v, ["method"])
-        if method != null { ."http.request.method" = method }
         # 0 when no response was sent (the client went away first). One that isn't a number stays.
         code = to_int(.response_code) ?? -1
         if code > 0 {
@@ -41,18 +58,14 @@ transforms:
           if code < 0 { %mismatch = "response_code isn't a number" }
         }
         if code >= 0 { del(.response_code) }
-        domain = get!(v, [":authority"])
-        if domain != null { ."url.domain" = domain }
-        path = get!(v, ["x-envoy-origin-path"])
+        path = get!(., ["url.original"])
         if path != null {
-          ."url.original" = path
           parts = split(string!(path), "?", limit: 2)
           ."url.path" = parts[0]
           if length(parts) > 1 { ."url.query" = parts[1] }
         }
-        ua = get!(v, ["user-agent"])
+        ua = get!(., ["user_agent.original"])
         if ua != null {
-          ."user_agent.original" = ua
           # uap-core's parse, as Elastic's user_agent processor. Versions from their parts (its
           # own version can be the name), no device when it's only a "Generic ..." guess.
           agent = parse_user_agent(string!(ua), mode: "enriched")
@@ -73,8 +86,6 @@ transforms:
             ."user_agent.device.name" = agent.device.family
           }
         }
-        id = get!(v, ["x-request-id"])
-        if id != null { ."http.request.id" = id }
         # Body bytes (Envoy's BYTES_RECEIVED and BYTES_SENT for HTTP).
         received = to_int(.bytes_received) ?? null
         if received != null { ."http.request.body.bytes" = received; del(.bytes_received) }
@@ -87,52 +98,22 @@ transforms:
         # "HTTP/1.1", "HTTP/2": the version alone.
         proto, err = parse_regex(string(.protocol) ?? "", r'^HTTP/(?P<version>[0-9.]+)$')
         if err == null { ."http.version" = proto.version; del(.protocol) }
-        # The SNI the client asked for (the TLS connection's, not the request's site).
-        sni = string(.requested_server_name) ?? "-"
-        if sni != "-" && sni != "" { ."tls.client.server_name" = sni }
-        if exists(.requested_server_name) { del(.requested_server_name) }
-        # The backend Envoy sent the request to, as Elastic's Envoy integration. One that isn't
-        # <ip>:<port> is the address alone.
-        upstream = string(.upstream_host) ?? "-"
-        if upstream != "-" && upstream != "" {
-          ."destination.address" = upstream
-          addr, err = parse_regex(upstream, r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
-          if err == null {
-            ."destination.address" = addr.ip
-            ."destination.ip" = addr.ip
-            ."destination.port" = to_int(addr.port) ?? null
-          }
+        # The backend's <ip>:<port> as the address and its parts; anything else stays whole.
+        addr, err = parse_regex(string(get!(., ["destination.address"])) ?? "", r'^\[?(?P<ip>[0-9A-Fa-f.:]+?)\]?:(?P<port>\d+)$')
+        if err == null {
+          ."destination.address" = addr.ip
+          ."destination.ip" = addr.ip
+          ."destination.port" = to_int(addr.port) ?? null
         }
-        if exists(.upstream_host) { del(.upstream_host) }
-        # Why Envoy answered as it did (via_upstream, ext_authz_denied, route_not_found, ...).
-        details = string(.response_code_details) ?? "-"
-        if details != "-" && details != "" { ."event.reason" = details }
-        if exists(.response_code_details) { del(.response_code_details) }
         # As Elastic's Envoy integration.
         ."event.category" = ["network"]
         ."event.type" = ["connection", "protocol"]
         ."network.protocol" = "http"
-        # No ECS field for these: Proxy.*, capitalised as ECS recommends for custom fields, so
-        # they can't clash with a future ECS field. Dropped when "-" (no value).
-        for_each({
-          "response_flags": "ResponseFlags",
-          "route_name": "RouteName",
-          "downstream_local_address": "ListenerAddress",
-          "x-forwarded-for": "ForwardedFor",
-          "connection_termination_details": "ConnectionTerminationDetails",
-          "upstream_transport_failure_reason": "UpstreamTransportFailureReason",
-          "x-envoy-upstream-service-time": "UpstreamServiceTime",
-        }) -> |key, name| {
-          s = get!(., [key])
-          . = remove!(., [key])
-          if s != null && s != "-" && s != "" { . = set!(., ["Proxy." + name], s) }
-        }
         # Flags as a list (UF,URX: two), as Elastic's; the upstream's time in nanoseconds, as
         # event.duration.
         flags = string(get!(., ["Proxy.ResponseFlags"])) ?? null
         if flags != null { ."Proxy.ResponseFlags" = split!(flags, ",") }
-        upstream = get!(., ["Proxy.UpstreamServiceTime"])
-        upstream_ms = if upstream != null { to_int(upstream) ?? -1 } else { -1 }
+        upstream_ms = to_int(get!(., ["Proxy.UpstreamServiceTime"]) || "") ?? -1
         if upstream_ms >= 0 { ."Proxy.UpstreamServiceTime" = upstream_ms * 1000000 }
         # Envoy's own names for the upstream connection: Proxy.RouteName and destination.* say
         # where the request went, and the local side is this pod.
