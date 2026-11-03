@@ -139,6 +139,12 @@ spec:
                 secretKeyRef:
                   name: pihole
                   key: PIHOLE_WEB_ADMIN_PASS
+            - name: ABUSECH_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pihole
+                  key: ABUSECH_AUTH_KEY
+                  optional: true
             # vmagent's Prometheus import, the pod's name is added as the pod label.
             - name: METRICS_URL
               value: https://vmagent.monitoring.svc:8429/api/v1/import/prometheus

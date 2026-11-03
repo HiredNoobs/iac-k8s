@@ -14,11 +14,16 @@
 #
 # A block list that fails to download is retried after 1, 2, 5 and 15 minutes, then hourly.
 #
+# A block list with ${ABUSECH_AUTH_KEY} in its URL (abuse.ch's exports, the key in the path) is
+# downloaded here with the key, into DOWNLOADS_DIR, and Pi-hole gets that file: the
+# key is never in a list's address, so not in Pi-hole's web UI, the logs or the metrics. Each is
+# downloaded again every DOWNLOAD_INTERVAL; a download that fails keeps the last copy.
+#
 # Every CHECK_INTERVAL it also pushes a few metrics to vmagent (METRICS_URL, its Prometheus
 # import endpoint, checked with METRICS_CA): each block list's domains and download status,
-# the domains on the block lists, whether blocking is on, the last 24h's query counts (no
-# domains or clients) and when a sync last succeeded. The alerts on them are in
-# apps/base/monitoring/vmalert/rules/pihole.yml.
+# when each downloaded list was last downloaded, the domains on the block lists, whether
+# blocking is on, the last 24h's query counts (no domains or clients) and when a sync last
+# succeeded. The alerts on them are in apps/base/monitoring/vmalert/rules/pihole.yml.
 
 set -uo pipefail
 
@@ -30,6 +35,13 @@ CHECK_INTERVAL="${CHECK_INTERVAL:-60}"
 RESYNC_INTERVAL="${RESYNC_INTERVAL:-3600}"
 # Seconds before each retry of a block list that failed to download, then RESYNC_INTERVAL.
 RETRY_DELAYS=(60 120 300 900)
+# Shared with the pihole container, which reads the downloaded lists from it.
+DOWNLOADS_DIR="${DOWNLOADS_DIR:-/run/pihole-sync/lists}"
+DOWNLOAD_INTERVAL="${DOWNLOAD_INTERVAL:-21600}"
+# There while a downloaded list changed and no gravity update has read it.
+CHANGED_FILE="$DOWNLOADS_DIR/.changed"
+KEY_PLACEHOLDER='${ABUSECH_AUTH_KEY}'
+ABUSECH_AUTH_KEY="${ABUSECH_AUTH_KEY:-}"
 COMMENT="Managed by iac-k8s"
 # Unset: no metrics.
 METRICS_URL="${METRICS_URL:-}"
@@ -76,6 +88,29 @@ function desired {
   sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$file" | grep -v -e '^#' -e '^$' | sort -u
 }
 
+# The block list URLs with the key in them.
+function downloaded {
+  desired adlists.txt | grep -F "$KEY_PLACEHOLDER"
+}
+
+# Where a block list URL with the key in it is downloaded to, <host>-<file>
+# (/run/pihole-sync/lists/urlhaus-api.abuse.ch-hostfile.txt). The copy's time is when it was
+# last downloaded.
+function copy_path {
+  local rest="${1#*://}"
+
+  echo "$DOWNLOADS_DIR/${rest%%/*}-${rest##*/}"
+}
+
+# The address Pi-hole gets for a block list: the downloaded copy for a URL with the key in it.
+function list_address {
+  if [[ "$1" == *"$KEY_PLACEHOLDER"* ]]; then
+    echo "file://$(copy_path "$1")"
+  else
+    echo "$1"
+  fi
+}
+
 # Lines in $1 that aren't in $2.
 function only_in {
   local -A exclude=()
@@ -116,7 +151,7 @@ function sync_adlists {
   local current wanted address
 
   current=$(api GET "/lists?type=block" | jq -r '.lists[] | select(.type == "block") | .address') || return 1
-  wanted=$(desired adlists.txt)
+  wanted=$(desired adlists.txt | while IFS= read -r address; do list_address "$address"; done | sort -u)
 
   while IFS= read -r address; do
     [[ -n "$address" ]] || continue
@@ -158,6 +193,34 @@ function sync_domains {
     log "Removing $type ($kind) $domain"
     api DELETE "/domains/$type/$kind/$(uri "$domain")" > /dev/null || return 1
   done <<< "$(only_in "$current" "$wanted")"
+}
+
+# Downloads the block lists with the key in their URL that weren't downloaded in the last
+# DOWNLOAD_INTERVAL. A copy that changed leaves CHANGED_FILE for the gravity update.
+function download_lists {
+  local url file error kept
+
+  mkdir -p "$DOWNLOADS_DIR"
+  while IFS= read -r url; do
+    [[ -n "$url" ]] || continue
+    file=$(copy_path "$url")
+
+    if [[ -f "$file" ]] && (( $(date +%s) - $(stat -c %Y "$file") < DOWNLOAD_INTERVAL )); then
+      continue
+    elif [[ -z "$ABUSECH_AUTH_KEY" ]]; then
+      log "WARNING: no ABUSECH_AUTH_KEY, can't download $url."
+    elif error=$(curl -fsS --max-time 300 -o "$file.tmp" "${url//"$KEY_PLACEHOLDER"/"$ABUSECH_AUTH_KEY"}" 2>&1) &&
+         [[ -s "$file.tmp" ]]; then
+      cmp -s "$file.tmp" "$file" || { touch "$CHANGED_FILE"; log "Downloaded $url, it changed."; }
+      mv "$file.tmp" "$file"
+    else
+      rm -f "$file.tmp"
+      # Without the key, should curl's error name the URL.
+      error="${error//"$ABUSECH_AUTH_KEY"/<ABUSECH_AUTH_KEY>}"
+      [[ -f "$file" ]] && kept="keeping the last copy" || kept="Pi-hole has nothing for it"
+      log "WARNING: downloading $url failed (${error:-empty}), $kept."
+    fi
+  done <<< "$(downloaded)"
 }
 
 function blocked_domains {
@@ -234,6 +297,7 @@ function sync {
   local blocked failed
 
   LISTS_CHANGED=0
+  download_lists
 
   if ! login; then
     log "Failed to log in to the Pi-hole API."
@@ -249,11 +313,11 @@ function sync {
     return 1
   fi
 
-  # Block lists are only downloaded by a gravity update: when they change, on a fresh pod (nothing
-  # blocked yet), and to retry a list whose download failed.
+  # Block lists are only downloaded by a gravity update: when they change (a downloaded list's
+  # copy too), on a fresh pod (nothing blocked yet), and to retry a list whose download failed.
   blocked=$(blocked_domains) || blocked=0
   failed=$(failed_lists) || failed=""
-  if (( LISTS_CHANGED )) || [[ -n "$failed" ]] ||
+  if (( LISTS_CHANGED )) || [[ -n "$failed" ]] || [[ -f "$CHANGED_FILE" ]] ||
      { [[ -n "$(desired adlists.txt)" ]] && (( blocked <= 0 )); }; then
     if (( ! LISTS_CHANGED )) && [[ -n "$failed" ]] && (( blocked > 0 )); then
       log "Retrying the block lists that block nothing: $(paste -sd' ' <<< "$failed")"
@@ -262,6 +326,7 @@ function sync {
       logout
       return 1
     fi
+    rm -f "$CHANGED_FILE"
     report_lists
   fi
 
@@ -276,11 +341,18 @@ function sync {
 
 # The metrics, in Prometheus' text format. job, namespace and pod are added by the push.
 function metrics {
-  local lists summary blocking
+  local lists summary blocking url file
 
   lists=$(api GET "/lists?type=block") &&
     summary=$(api GET /stats/summary) &&
     blocking=$(api GET /dns/blocking) || return 1
+
+  # When each downloaded list was last downloaded, none before its first download.
+  while IFS= read -r url; do
+    file=$(copy_path "$url")
+    [[ -f "$file" ]] &&
+      echo "pihole_blocklist_downloaded_timestamp_seconds{list=\"file://$file\"} $(stat -c %Y "$file")"
+  done <<< "$(downloaded)"
 
   # The last sync's timestamp only once there's been one, so a fresh pod doesn't look like a pod
   # that stopped syncing.

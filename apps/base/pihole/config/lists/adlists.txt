@@ -3,6 +3,7 @@ https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt
 https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.txt
 # abuse.ch: domains used by malware (ThreatFox) and hosts serving it now (URLhaus), which
 # HaGeZi's lists don't include. Blocked lookups still raise DnsLookupOfKnownBadDomain: the
-# router logs the query before Pi-hole answers it.
-https://threatfox.abuse.ch/downloads/hostfile/
-https://urlhaus.abuse.ch/downloads/hostfile/
+# router logs the query before Pi-hole answers it. Their exports need the account's key, which
+# sync-lists puts in for ${ABUSECH_AUTH_KEY}: Pi-hole reads its download.
+https://threatfox-api.abuse.ch/v2/files/exports/${ABUSECH_AUTH_KEY}/hostfile.txt
+https://urlhaus-api.abuse.ch/v2/files/exports/${ABUSECH_AUTH_KEY}/hostfile.txt
