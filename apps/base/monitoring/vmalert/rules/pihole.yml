@@ -38,6 +38,17 @@ groups:
           summary: Pi-hole block list not loaded ({{ $labels.pod }})
           description: "{{ $labels.list }} blocks nothing on {{ $labels.pod }}: its download failed and the retries haven't fixed it."
 
+      # The lists sync-lists downloads itself every 6 hours, keeping the
+      # last copy when a download fails: that copy is more than a day old.
+      - alert: PiholeBlocklistStale
+        expr: 'time() - pihole_blocklist_downloaded_timestamp_seconds > 24 * 3600'
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pi-hole block list not downloaded for a day ({{ $labels.pod }})
+          description: "sync-lists on {{ $labels.pod }} last downloaded {{ $labels.list }} {{ $value | humanizeDuration }} ago, Pi-hole is using that copy. Its log says why the downloads fail."
+
       # The lists come to about 2.1M domains. A fresh pod has none until its first gravity
       # update, which takes a few minutes.
       - alert: PiholeGravityLow
