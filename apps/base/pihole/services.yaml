@@ -43,6 +43,7 @@ metadata:
     app.kubernetes.io/name: pihole
 spec:
   type: LoadBalancer
+  allocateLoadBalancerNodePorts: false
   externalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: pihole
