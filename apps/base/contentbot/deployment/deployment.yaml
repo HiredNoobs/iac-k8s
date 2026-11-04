@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: contentbot
-          image: hirednoobs/contentbot:4.0.0-rc2@sha256:568627891b990720e4f539211566bc0b6fa9d6dd9a910cc17dbc031df434e72b
+          image: hirednoobs/contentbot:4.0.0-rc3@sha256:c01e89387a64e5d79a1a42ddbe70d3a0d13da7b9e969f58018f406dcd4371291
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
