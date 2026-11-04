@@ -29,8 +29,8 @@ env:
   ESO_VERSION: "2.13.0"
   ESO_CRDS_SHA256: "d4da9492a6906a3834bb1f5b7367575a29b5c43411017babc7a30728f465d1ba"
   # renovate: datasource=helm depName=cert-manager registryUrl=https://charts.jetstack.io extractVersion=^v(?<version>.+)$
-  CERT_MANAGER_VERSION: "1.21.2"
-  CERT_MANAGER_CRDS_SHA256: "262fef78478492cd35b73a1b227106b7802f9c056361d1f561d04b32d751337f"
+  CERT_MANAGER_VERSION: "1.21.3"
+  CERT_MANAGER_CRDS_SHA256: "29810b2a84c8ee0731a79679ee1dfd7e93cd750eb0244542eec47fa8700f2749"
   # renovate: datasource=docker depName=docker.io/envoyproxy/gateway-helm extractVersion=^v(?<version>.+)$
   ENVOY_GATEWAY_VERSION: "1.9.2"
   ENVOY_GATEWAY_CRDS_SHA256: "b339119f8f3a4046688fc96837b4129553f42c9998976913ef9dff25694d85cc"
