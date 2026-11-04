@@ -13,8 +13,8 @@ transforms:
         %dataset = "lldap.log"
         prefix, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\s+(?P<level>[A-Z]+)\s')
         if err == null {
-          l = downcase(string!(prefix.level))
-          ."log.level" = if l == "warn" { "warning" } else if l == "trace" { "debug" } else { l }
+          # Normalised with the others (../common/pipeline.yaml's ecs).
+          .level = prefix.level
         } else if match(msg, r'^\d{4}-\d\d-\d\dT') {
           %mismatch = "a timestamped line without lldap's level"
         }
@@ -43,19 +43,15 @@ transforms:
             ."group.name" = change.name
           }
           # ECS's iam types: what changed, and how (a membership is a change to the group).
-          ."event.type" = if change.what == "created" {
-            [downcase(string!(change.kind)), "creation"]
-          } else if change.what == "deleted" {
-            [downcase(string!(change.kind)), "deletion"]
+          kind = downcase(string!(change.kind))
+          what = string!(change.what)
+          membership = get!({"added to the group": "added-to-group", "removed from the group": "removed-from-group"}, [what])
+          if membership != null {
+            ."event.type" = ["group", "change"]
+            ."event.action" = membership
           } else {
-            ["group", "change"]
-          }
-          ."event.action" = if change.what == "added to the group" {
-            "added-to-group"
-          } else if change.what == "removed from the group" {
-            "removed-from-group"
-          } else {
-            downcase(string!(change.kind)) + "-" + string!(change.what)
+            ."event.type" = [kind, get!({"created": "creation", "deleted": "deletion"}, [what])]
+            ."event.action" = kind + "-" + what
           }
         }
       }

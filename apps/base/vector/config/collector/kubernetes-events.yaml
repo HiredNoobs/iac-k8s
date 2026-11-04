@@ -35,23 +35,17 @@ transforms:
         if is_string(.reason) { ."event.reason" = .reason }
         if is_string(.action) && .action != "" { ."event.action" = .action }
         if is_string(.metadata.uid) { ."event.id" = .metadata.uid }
-        # The object it's about, as orchestrator.* (the kind, lower case: pod, kustomization).
-        ref = object!(.involvedObject)
-        ."orchestrator.type" = "kubernetes"
-        if is_string(ref.kind) { ."orchestrator.resource.type" = downcase(string!(ref.kind)) }
-        if is_string(ref.name) { ."orchestrator.resource.name" = ref.name }
-        if is_string(ref.namespace) { ."orchestrator.namespace" = ref.namespace }
-        if is_string(ref.uid) { ."orchestrator.resource.id" = ref.uid }
-        if is_string(ref.apiVersion) { ."orchestrator.api_version" = ref.apiVersion }
+        # The object it's about, as orchestrator.* (../common/pipeline.yaml's ecs; the kind lower
+        # case: pod, kustomization).
+        %object = .involvedObject
         # A container in a pod: spec.containers{<name>}.
-        field = string(ref.fieldPath) ?? ""
+        field = string(.involvedObject.fieldPath) ?? ""
         c, err = parse_regex(field, r'^spec\.(?:initC|ephemeralC|c)ontainers\{(?P<name>[^}]+)\}$')
         if err == null {
           ."container.name" = c.name
         } else if field != "" {
           ."Orchestrator.Resource.FieldPath" = field
         }
-        if is_string(ref.resourceVersion) { ."Orchestrator.Resource.ResourceVersion" = ref.resourceVersion }
         # No ECS field: how many times, who reported it, the event's own name and annotations
         # (Flux's revision), a second object it's about.
         count = .series.count || .count

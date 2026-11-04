@@ -45,11 +45,6 @@ transforms:
     reroute_dropped: true
     source: |
       line = .
-      # The socket's own fields.
-      line = remove!(line, ["host"])
-      line = remove!(line, ["port"])
-      line = remove!(line, ["source_type"])
-      line = remove!(line, ["timestamp"])
       received = .timestamp
       service = string(get!(line, ["talos-service"])) ?? ""
       %dataset = if service == "kernel" { "talos.kernel" } else { "talos.log" }
@@ -62,11 +57,10 @@ transforms:
       level = get!(line, ["talos-level"])
       if is_string(level) { .level = level }
       if service != "" { ."service.name" = service }
-      for_each(line) -> |key, value| {
-        if !includes(["msg", "talos-level", "talos-time", "talos-service"], key) && !starts_with(key, "_") && get!(., [key]) == null {
-          . = set!(., [key], value)
-        }
-      }
+      # The service's other keys, under the ones above (the socket's own fields go).
+      . = merge(filter(line) -> |key, _value| {
+        !includes(["host", "port", "source_type", "timestamp", "msg", "talos-level", "talos-time", "talos-service"], key) && !starts_with(key, "_")
+      }, .)
       if is_string(.controller) { ."Talos.Controller" = del(.controller) }
       if service != "" && .component == service { del(.component) }
       mapped = false
@@ -77,10 +71,10 @@ transforms:
           ."event.original" = msg
           ._msg = k.msg
           ._time = parse_timestamp(string!(k.time), "%+") ?? ._time
-          ."log.syslog.facility.name" = k.facility
-          ."log.syslog.severity.name" = k.severity
-          # Normalised with the others (../common/pipeline.yaml's ecs).
-          .level = k.severity
+          # As log.syslog.* and the level, over Talos' (../common/pipeline.yaml's ecs).
+          %facility = k.facility
+          %severity = k.severity
+          del(.level)
           mapped = true
         }
       } else if service == "syslogd" && is_string(.content) {
@@ -88,27 +82,12 @@ transforms:
         # priority, hostname and tag; tag is "unknown" when it found no program name, and the
         # content then starts with the ": " after it.
         ._msg = strip_whitespace(replace(string!(del(.content)), r'^: ', ""))
-        # Through string (to_int makes null 0).
-        facility = to_int(string(.facility) ?? "") ?? -1
-        severity = to_int(string(.severity) ?? "") ?? -1
-        if facility >= 0 {
-          ."log.syslog.facility.code" = facility
-          name = get!(["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"], [facility])
-          if name != null { ."log.syslog.facility.name" = name }
-          del(.facility)
-        }
-        if severity >= 0 {
-          ."log.syslog.severity.code" = severity
-          name = get!(["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"], [severity])
-          if name != null {
-            ."log.syslog.severity.name" = name
-            # Normalised with the others (../common/pipeline.yaml's ecs).
-            .level = name
-          }
-          del(.severity)
-        }
-        priority = to_int(string(.priority) ?? "") ?? -1
-        if priority >= 0 { ."log.syslog.priority" = priority; del(.priority) }
+        # As log.syslog.* (the priority from the two) and the level, over Talos'
+        # (../common/pipeline.yaml's ecs).
+        %facility = to_int(del(.facility) || "") ?? null
+        %severity = to_int(del(.severity) || "") ?? null
+        del(.priority)
+        if %severity != null { del(.level) }
         if is_string(.hostname) { ."log.syslog.hostname" = del(.hostname) }
         tag = string(del(.tag)) ?? ""
         if tag != "" && tag != "unknown" { ."log.syslog.appname" = tag }

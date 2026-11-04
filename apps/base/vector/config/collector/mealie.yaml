@@ -15,8 +15,8 @@ transforms:
         %mismatch = "a level without Mealie's <time> - prefix"
       }
       if err == null {
-        l = downcase(string!(line.level))
-        ."log.level" = if l == "warn" { "warning" } else { l }
+        # Normalised with the others (../common/pipeline.yaml's ecs).
+        .level = line.level
         access, err = parse_regex(string!(line.rest), r'^\[(?P<ip>[^\]]+?):(?P<port>\d+)\] (?P<code>\d{3}) [^"]*"(?P<method>[A-Z]+) (?P<path>\S+) HTTP/(?P<version>[0-9.]+)"$')
         if err == null {
           %dataset = "mealie.access"

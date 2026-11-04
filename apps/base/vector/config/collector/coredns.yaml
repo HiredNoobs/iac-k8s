@@ -21,8 +21,8 @@ transforms:
         %mismatch = "no [<LEVEL>] prefix"
       }
       if err == null {
-        l = downcase(string!(line.level))
-        ."log.level" = if l == "warn" { "warning" } else if l == "fatal" { "critical" } else { l }
+        # Normalised with the others (../common/pipeline.yaml's ecs).
+        .level = line.level
         if line.plugin != null { ."log.logger" = line.plugin }
         if line.plugin == "plugin/errors" {
           rest = string!(line.rest)

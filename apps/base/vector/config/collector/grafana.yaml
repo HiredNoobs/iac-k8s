@@ -13,7 +13,7 @@ transforms:
     source: |
       if ._msg == "Request Completed" {
         # to_int would make a missing field 0, so each is checked first.
-        code, err = if .status != null { to_int(.status) } else { to_int("") }
+        code, err = to_int(.status || "")
         if err != null {
           %mismatch = "Request Completed without a numeric status"
         } else {
@@ -59,18 +59,11 @@ transforms:
             if referer != "" { ."http.request.referrer" = referer }
           }
           # 0 when there's no user or organisation (not logged in).
-          if .userId != null {
-            user, err = to_int(.userId)
+          for_each({"userId": "user.id", "orgId": "organization.id"}) -> |key, field| {
+            id, err = to_int(get!(., [key]) || "")
             if err == null {
-              if user != 0 { ."user.id" = to_string(user) }
-              del(.userId)
-            }
-          }
-          if .orgId != null {
-            org, err = to_int(.orgId)
-            if err == null {
-              if org != 0 { ."organization.id" = to_string(org) }
-              del(.orgId)
+              if id != 0 { . = set!(., [field], to_string(id)) }
+              . = remove!(., [key])
             }
           }
           if is_string(.handler) { ."Http.Route" = del(.handler) }

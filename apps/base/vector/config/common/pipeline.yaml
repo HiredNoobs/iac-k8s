@@ -6,8 +6,8 @@
 # source, run from tests/ (how: tests/collector/pipeline.yaml).
 #
 # Each side's handoff.yaml says which of its components come here: to_unparsed (the lines its
-# parsers failed on), to_ecs (the parsed lines), to_final (with what doesn't need ecs, the audit
-# events) and to_victorialogs (with what's sent as it is).
+# parsers failed on), to_ecs (the parsed lines) and to_final (with what doesn't need ecs, the
+# audit events).
 #
 # The common fields (ecs), ECS names (https://www.elastic.co/guide/en/ecs/current/) written as
 # flat dotted keys, so they can't clash with an app's own field of the same top-level name (the
@@ -50,8 +50,8 @@ sources:
 transforms:
   # A line one of the parsers failed on (a runtime error: none is expected, VRL makes every
   # fallible call be handled): as it came into that remap, Vector's reason in metadata.dropped.
-  # Kept, in that source's <name>.log, as a remap_error (ecs). Only the remaps' dropped outputs
-  # come here, so a line can't claim to be one.
+  # Kept, in that source's dataset (<name>.log for most), as a remap_error (ecs). Only the remaps'
+  # dropped outputs come here, so a line can't claim to be one.
   unparsed:
     type: remap
     inputs: [to_unparsed]
@@ -60,12 +60,13 @@ transforms:
       . = remove!(., ["metadata", "dropped"])
       if .metadata == {} { del(.metadata) }
       component = string(dropped.component_id) ?? ""
+      # The node, for this node's own sources (Talos, the audit logs).
+      node = get_env_var("NODE_NAME") ?? ""
       if component == "pods" {
         # Straight from kubernetes_logs.
         . = {
           "_msg": .message,
           "_time": .timestamp,
-          "event.created": now(),
           "Log.Stream": .stream,
           "container.image.name": .kubernetes.container_image,
           "kubernetes": {
@@ -78,12 +79,7 @@ transforms:
         }
       } else if includes(["syslog", "syslog_journal"], component) {
         # As rsyslog sent it.
-        . = {
-          "_msg": .message,
-          "_time": .timestamp,
-          "event.created": now(),
-          "host.ip": .fromhost_ip,
-        }
+        . = {"_msg": .message, "_time": .timestamp, "host.ip": .fromhost_ip}
         %dataset = "syslog.log"
       } else if component == "journald" {
         # As the VM's Vector sent it: the message, its time, the VM.
@@ -93,44 +89,46 @@ transforms:
         . = {
           "_msg": .message,
           "_time": get!(., ["@timestamp"]) || .timestamp,
-          "event.created": now(),
           "Systemd.Unit": get!(., ["_SYSTEMD_UNIT"]),
         }
         if sender != "" { ."host.ip" = sender }
         if hostname != "" { %host = hostname }
         %dataset = "journald.log"
       } else if component == "talos" {
-        # As Talos sent it: the message, when Vector got it (the node is this Vector's).
-        . = {
-          "_msg": .msg,
-          "_time": .timestamp,
-          "event.created": now(),
-        }
-        %host = get_env_var("NODE_NAME") ?? ""
+        # As Talos sent it: the message, when Vector got it.
+        . = {"_msg": .msg, "_time": .timestamp}
+        %host = node
         %dataset = "talos.log"
       } else if includes(["audit_records", "talos_audit"], component) {
         # An audit record as talos made it, or an event's records together (one per line).
-        if is_array(.audit_record) {
-          . = {
-            "_msg": join(map_values(array!(.audit_record)) -> |r| { string(r.line) ?? "" }, "\n") ?? "",
-            "_time": ._time,
-            "event.created": now(),
-          }
+        msg = if is_array(.audit_record) {
+          join(map_values(array!(.audit_record)) -> |r| { string(r.line) ?? "" }, "\n") ?? ""
         } else {
-          . = {"_msg": ._msg, "_time": ._time, "event.created": now()}
+          ._msg
         }
-        %host = get_env_var("NODE_NAME") ?? ""
+        . = {"_msg": msg, "_time": ._time}
+        %host = node
         %dataset = "talos.audit"
+      } else if component == "events" {
+        # A line of kube-apiserver's audit log that isn't an event (a partial line), as it was:
+        # something in the audit log that can't be read is worth seeing.
+        . = {"_msg": .message, "_time": .timestamp}
+        %host = node
+        %dataset = "kubernetes.audit"
+        %provider = "kube-apiserver"
       } else if component != "" && component != "generic" {
         # generic's lines keep <namespace>.<container> (ecs).
         %dataset = component + ".log"
       }
+      # When Vector read it, for the lines rebuilt above (the others have it).
+      if !exists(."event.created") { ."event.created" = now() }
       %error_type = "remap_error"
       %error_message = dropped.message
 
   # Fields every line gets, after its source's own remap. Overwritten whatever the line
   # had, so a container can't pass its logs off as another source's. The remaps say what they
-  # found in metadata (%dataset, %provider, %kind, %mismatch, %error_*), which a line can't set.
+  # found in metadata (%dataset, %provider, %kind, %host, %object, %severity, %facility, %mismatch,
+  # %error_*), which a line can't set.
   ecs:
     type: remap
     inputs: [to_ecs, unparsed]
@@ -156,17 +154,9 @@ transforms:
       # The dataset's product unless the remap says otherwise, the container for the rest.
       dataset = string(%dataset) ?? ""
       provider = string(%provider) ?? ""
-      # A line without a parser of its own (only the fields below) is tagged generic.
-      if dataset == "" && kind == "event" {
-        if is_array(.tags) {
-          .tags = push(array!(.tags), "generic")
-        } else if exists(.tags) {
-          .tags = [.tags, "generic"]
-        } else {
-          .tags = ["generic"]
-        }
-      }
       if dataset == "" {
+        # A line without a parser of its own (only the fields below) is tagged generic.
+        if kind == "event" { .tags = push(array(.tags) ?? compact([.tags]), "generic") }
         dataset = (string(.kubernetes.namespace) ?? "") + "." + (string(.kubernetes.container.name) ?? "")
         # The software: the image's name without its registry, path, tag or digest
         # (ghcr.io/fluxcd/source-controller:v1.9.6 is source-controller; containers are often
@@ -204,9 +194,9 @@ transforms:
       # controller-runtime repeats the object as {"<Kind>": {"name", "namespace"}}: dropped when
       # it's the same one. Without controllerKind, name and namespace can mean anything.
       if is_string(.controllerKind) && !exists(."orchestrator.type") {
-        kind = string!(del(.controllerKind))
+        resource = string!(del(.controllerKind))
         ."orchestrator.type" = "kubernetes"
-        ."orchestrator.resource.type" = downcase(kind)
+        ."orchestrator.resource.type" = downcase(resource)
         if is_string(.name) { ."orchestrator.resource.name" = del(.name) }
         if is_string(.namespace) { ."orchestrator.namespace" = del(.namespace) }
         if is_string(.controllerGroup) {
@@ -216,16 +206,23 @@ transforms:
         if is_string(.controller) { ."Orchestrator.Controller" = del(.controller) }
         if is_string(.reconcileID) { ."trace.id" = del(.reconcileID) }
         if is_string(.revision) { ."Orchestrator.Resource.Revision" = del(.revision) }
-        repeated = get!(., [kind])
+        repeated = get!(., [resource])
         if is_object(repeated) && keys(object!(repeated)) == ["name", "namespace"] && repeated.name == get!(., ["orchestrator.resource.name"]) && repeated.namespace == get!(., ["orchestrator.namespace"]) {
-          . = remove!(., [kind])
+          . = remove!(., [resource])
         }
       }
-      # Flux's notification-controller logs each event it receives with the object it's about
-      # (eventInvolvedObject): as orchestrator.*, as a Kubernetes event's object. Any other key
-      # stays under eventInvolvedObject.
-      if is_object(.eventInvolvedObject) && !exists(."orchestrator.type") {
+      # The object a Kubernetes event is about (its involvedObject, which the remap gives as
+      # %object), or the one Flux's notification-controller logs with each event it receives
+      # (eventInvolvedObject, where any other key stays): as orchestrator.*.
+      ref = object(%object) ?? {}
+      if ref == {} && is_object(.eventInvolvedObject) && !exists(."orchestrator.type") {
         ref = object!(del(.eventInvolvedObject))
+        rest = filter(ref) -> |key, value| {
+          !includes(["kind", "name", "namespace", "uid", "apiVersion", "resourceVersion"], key) || !is_string(value)
+        }
+        if rest != {} { .eventInvolvedObject = rest }
+      }
+      if ref != {} {
         ."orchestrator.type" = "kubernetes"
         if is_string(ref.kind) { ."orchestrator.resource.type" = downcase(string!(ref.kind)) }
         if is_string(ref.name) { ."orchestrator.resource.name" = ref.name }
@@ -233,18 +230,35 @@ transforms:
         if is_string(ref.uid) { ."orchestrator.resource.id" = ref.uid }
         if is_string(ref.apiVersion) { ."orchestrator.api_version" = ref.apiVersion }
         if is_string(ref.resourceVersion) { ."Orchestrator.Resource.ResourceVersion" = ref.resourceVersion }
-        rest = {}
-        for_each(ref) -> |key, value| {
-          if !includes(["kind", "name", "namespace", "uid", "apiVersion", "resourceVersion"], key) || !is_string(value) {
-            rest = set!(rest, [key], value)
-          }
-        }
-        if rest != {} { .eventInvolvedObject = rest }
+      }
+
+      # Syslog's severity and facility, a code or its keyword, as the remap found them (%severity,
+      # %facility: journald's PRIORITY and SYSLOG_FACILITY, syslog, Talos' syslogd and kernel
+      # lines): as log.syslog.* with Elastic's names, the priority from the two, and the level.
+      keywords = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"]
+      facilities = ["kern", "user", "mail", "daemon", "auth", "syslog", "lpr", "news", "uucp", "cron", "authpriv", "ftp", "ntp", "security", "console", "solaris-cron", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"]
+      severity = %severity
+      facility = %facility
+      for_each(keywords) -> |i, k| { if severity == k { severity = i } }
+      for_each(facilities) -> |i, f| { if facility == f { facility = i } }
+      severity = int(severity) ?? -1
+      facility = int(facility) ?? -1
+      if severity > 7 { severity = -1 }
+      if facility > 23 { facility = -1 }
+      if severity >= 0 {
+        ."log.syslog.severity.code" = severity
+        ."log.syslog.severity.name" = get!(["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational", "Debug"], [severity])
+      }
+      if facility >= 0 {
+        ."log.syslog.facility.code" = facility
+        ."log.syslog.facility.name" = get!(facilities, [facility])
+        if severity >= 0 { ."log.syslog.priority" = facility * 8 + severity }
       }
 
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
-      # (anything else as it is, lower case). From a JSON line's level, lvl or severity, else
-      # from the text formats several apps share. The JSON field it came from goes.
+      # (anything else as it is, lower case). From a JSON line's level, lvl or severity (or the
+      # remap's raw level as level), else syslog's severity, else from the text formats several
+      # apps share. The field it came from goes.
       if !exists(."log.level") {
         raw = null
         from = ""
@@ -252,6 +266,7 @@ transforms:
           v = get!(., [key])
           if raw == null && v != null { raw = v; from = key }
         }
+        if raw == null && severity >= 0 { raw = get!(keywords, [severity]) }
         msg = string(._msg) ?? ""
         if raw == null {
           # zap's console format: "<time>\t<level>\t[<logger>\t]<file>.go:<line>\t<message>".
@@ -267,7 +282,7 @@ transforms:
           # klog: "<I|W|E|F>MMDD hh:mm:ss.uuuuuu <pid> <file>:<line>] <message>".
           klog, err = parse_regex(msg, r'^(?P<sev>[IWEF])\d{4} \d\d:\d\d:\d\d\.\d+\s+\d+ (?P<file>[^:\]\s]+):(?P<line>\d+)\] ')
           if err == null {
-            raw = if klog.sev == "I" { "info" } else if klog.sev == "W" { "warning" } else if klog.sev == "E" { "error" } else { "critical" }
+            raw = get!({"I": "info", "W": "warning", "E": "error", "F": "critical"}, [klog.sev])
             ."log.origin.file.name" = klog.file
             ."log.origin.file.line" = to_int(klog.line) ?? null
           }
@@ -281,18 +296,14 @@ transforms:
         if raw == null && starts_with(msg, "Warning: ") { raw = "warning" }
         if is_string(raw) {
           l = downcase(string!(raw))
-          if includes(["trace", "debug", "dbug"], l) {
-            l = "debug"
-          } else if includes(["info", "information", "informational"], l) {
-            l = "info"
-          } else if includes(["warn", "warning"], l) {
-            l = "warning"
-          } else if includes(["error", "err", "eror"], l) {
-            l = "error"
-          } else if includes(["crit", "critical", "fatal", "panic", "dpanic", "alert", "emerg", "emergency"], l) {
-            l = "critical"
-          }
-          ."log.level" = l
+          ."log.level" = get!({
+            "trace": "debug", "dbug": "debug",
+            "information": "info", "informational": "info",
+            "warn": "warning",
+            "err": "error", "eror": "error",
+            "crit": "critical", "fatal": "critical", "panic": "critical", "dpanic": "critical",
+            "alert": "critical", "emerg": "critical", "emergency": "critical",
+          }, [l]) || l
           if from != "" { . = remove!(., [from]) }
         }
       }
@@ -329,24 +340,17 @@ transforms:
     source: |
       ."ecs.version" = "9.5.0"
       ."event.ingested" = now()
-      ips = array(get!(., ["related.ip"])) ?? []
-      for_each(["source.ip", "destination.ip", "client.ip", "server.ip"]) -> |_i, key| {
-        ip = get!(., [key])
-        if is_string(ip) { ips = push(ips, ip) }
-      }
+      ips = filter(map_values(["source.ip", "destination.ip", "client.ip", "server.ip"]) -> |key| { get!(., [key]) }) -> |_i, ip| { is_string(ip) }
+      ips = append(array(get!(., ["related.ip"])) ?? [], ips)
       if ips != [] { ."related.ip" = unique(ips) }
-      users = []
-      for_each(["user.name", "user.id"]) -> |_i, key| {
-        u = get!(., [key])
-        if is_string(u) { users = push(users, u) }
-      }
+      users = filter(map_values(["user.name", "user.id"]) -> |key| { get!(., [key]) }) -> |_i, user| { is_string(user) }
       if users != [] { ."related.user" = unique(users) }
 
 sinks:
   # Every source alike; only pod logs have the kubernetes.* stream fields.
   victorialogs:
     type: http
-    inputs: [to_victorialogs]
+    inputs: [final]
     uri: https://victorialogs.monitoring.svc:9428/insert/jsonline?_stream_fields=event.dataset,event.kind,host.name,kubernetes.namespace,kubernetes.pod.name,kubernetes.container.name&_msg_field=_msg&_time_field=_time
     method: post
     encoding:
