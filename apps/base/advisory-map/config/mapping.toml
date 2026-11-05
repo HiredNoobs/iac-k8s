@@ -1,6 +1,7 @@
 # What runs, as CVE List products and OSV packages (app-advisory-map's docs/mapping.md). Products are
-# named as their CVE records name them, an entry per name where they use several. The VMs' Debian
-# packages need no entry.
+# named as their CVE records name them, an entry per name where they use several. Software with no
+# records yet is named as they would name it: owner/repository (GitHub's CNA) and its Go module. The
+# VMs' Debian packages need no entry.
 #
 # Containers by their image's tag (image_spec, as the pod spec has it): what runs. Helm releases by
 # appVersion where the images can't say it: charts that run them by digest alone (cert-manager,
@@ -43,6 +44,27 @@ product = "kubelet"
 version_label = "kubelet_version"
 target_labels = ["node"]
 kind = "kubernetes"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?coredns/coredns:.*"}'
+vendor = "coredns"
+product = "coredns"
+ecosystem = "Go"
+package = "github.com/coredns/coredns"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+# kubectl's own vulnerabilities are usually filed under Kubernetes, whose server-side ones don't apply.
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?kubectl:.*"}'
+ecosystem = "Go"
+package = "k8s.io/kubectl"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
 
 # -----------------------------------------------------
 # Helm releases
@@ -195,6 +217,17 @@ target_labels = ["namespace", "container"]
 kind = "container"
 
 [[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?victoriametrics/victoria-logs:.*"}'
+vendor = "victoriametrics"
+product = "victorialogs"
+ecosystem = "Go"
+package = "github.com/VictoriaMetrics/VictoriaLogs"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
 vendor = "grafana"
 product = "grafana"
@@ -273,6 +306,15 @@ target_labels = ["namespace", "container"]
 kind = "container"
 
 [[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?lldap/lldap:.*"}'
+vendor = "lldap"
+product = "lldap"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?vaultwarden/server:.*"}'
 vendor = "dani-garcia"
 product = "vaultwarden"
@@ -336,11 +378,33 @@ target_labels = ["namespace", "container"]
 kind = "container"
 
 [[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?oliver006/redis_exporter:.*"}'
+vendor = "oliver006"
+product = "redis_exporter"
+ecosystem = "Go"
+package = "github.com/oliver006/redis_exporter"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?rabbitmq:.*"}'
 vendor = "rabbitmq"
 product = "rabbitmq-server"
 version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?rabbitmqoperator/messaging-topology-operator:.*"}'
+vendor = "rabbitmq"
+product = "messaging-topology-operator"
+ecosystem = "Go"
+package = "github.com/rabbitmq/messaging-topology-operator"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
 
@@ -386,6 +450,24 @@ vendor = "python"
 product = "cpython"
 version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?hirednoobs/contentbot:.*"}'
+vendor = "hirednoobs"
+product = "app-contentbot"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?hirednoobs/advisory-map:.*"}'
+vendor = "hirednoobs"
+product = "app-advisory-map"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
 
