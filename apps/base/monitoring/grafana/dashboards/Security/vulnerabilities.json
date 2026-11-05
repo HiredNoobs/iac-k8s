@@ -1256,7 +1256,7 @@
       "type": "table",
       "title": "Hosts",
       "id": 15,
-      "description": "Each Debian host: its packages, how many of them have an upgrade that fixes CVEs, and those CVEs (critical, high, known exploited). Click a host to filter the dashboard to it.",
+      "description": "Each Debian host: its packages and the CVEs in them (each counted once), how many are critical, high, fixed by an upgrade (patch.yml installs it) and known exploited. Click a host to filter the dashboard to it.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1284,7 +1284,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (count by (target, package) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1294,7 +1294,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1304,7 +1304,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1314,7 +1314,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1324,7 +1324,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
           "instant": true,
           "format": "table"
         }
@@ -1365,10 +1365,10 @@
             "renameByName": {
               "target": "Host",
               "Value #A": "Packages",
-              "Value #B": "To upgrade",
-              "Value #C": "CVEs fixed",
-              "Value #D": "Critical",
-              "Value #E": "High",
+              "Value #B": "CVEs",
+              "Value #C": "Critical",
+              "Value #D": "High",
+              "Value #E": "Fix available",
               "Value #F": "Exploited"
             }
           }
@@ -1382,43 +1382,6 @@
           }
         },
         "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "To upgrade"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "transparent",
-                      "value": null
-                    },
-                    {
-                      "color": "orange",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          },
           {
             "matcher": {
               "id": "byName",
@@ -1496,6 +1459,43 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Fix available"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Exploited"
             },
             "properties": [
@@ -1557,7 +1557,7 @@
         },
         "sortBy": [
           {
-            "displayName": "To upgrade",
+            "displayName": "CVEs",
             "desc": true
           }
         ]
@@ -1565,9 +1565,9 @@
     },
     {
       "type": "table",
-      "title": "Packages to upgrade",
+      "title": "Packages with CVEs",
       "id": 16,
-      "description": "Per host, each source package with an upgrade that fixes CVEs: how many, the worst of them, and how many are known exploited. patch.yml (or apt upgrade) installs them.",
+      "description": "Per host, each source package with CVEs: how many, the worst of them, how many an upgrade fixes, and how many are known exploited.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1585,7 +1585,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
           "instant": true,
           "format": "table"
         },
@@ -1595,7 +1595,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (target, package, installed_version) ((advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"low\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 1) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"medium\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 2) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 3) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 4) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0))",
+          "expr": "max by (target, package, installed_version) ((advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"low\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 1) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"medium\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 2) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 3) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 4) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0))",
           "instant": true,
           "format": "table"
         },
@@ -1605,7 +1605,17 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
           "instant": true,
           "format": "table"
         }
@@ -1625,7 +1635,8 @@
                 "installed_version",
                 "Value #A",
                 "Value #B",
-                "Value #C"
+                "Value #C",
+                "Value #D"
               ]
             }
           }
@@ -1639,15 +1650,17 @@
               "installed_version": 2,
               "Value #A": 3,
               "Value #B": 4,
-              "Value #C": 5
+              "Value #C": 5,
+              "Value #D": 6
             },
             "renameByName": {
               "target": "Host",
               "package": "Source package",
               "installed_version": "Installed",
-              "Value #A": "CVEs fixed",
+              "Value #A": "CVEs",
               "Value #B": "Worst severity",
-              "Value #C": "Exploited"
+              "Value #C": "Fix available",
+              "Value #D": "Exploited"
             }
           }
         }
@@ -1722,6 +1735,43 @@
                     {
                       "color": "transparent",
                       "value": null
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fix available"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
                     }
                   ]
                 }
