@@ -1,7 +1,7 @@
 {
   "uid": "network",
   "title": "Network",
-  "description": "The router's DNS queries (dnsmasq log-queries) and firewall drops, from its syslog in VictoriaLogs.",
+  "description": "The router's DNS queries (dnsmasq log-queries), firewall drops and the connections it lets through (nat-start's LOG_ACCEPT chain), from its syslog in VictoriaLogs, and their matches in abuse.ch and Spamhaus threat intel.",
   "tags": [
     "security"
   ],
@@ -1027,7 +1027,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 5,
         "x": 0,
         "y": 33
       },
@@ -1087,8 +1087,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
+        "w": 5,
+        "x": 5,
         "y": 33
       },
       "targets": [
@@ -1147,8 +1147,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 8,
+        "w": 5,
+        "x": 10,
         "y": 33
       },
       "targets": [
@@ -1211,8 +1211,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 12,
+        "w": 5,
+        "x": 15,
         "y": 33
       },
       "targets": [
@@ -1272,66 +1272,6 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 16,
-        "y": 33
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "victorialogs"
-          },
-          "editorMode": "code",
-          "queryType": "stats",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop | count_uniq(destination.port) as ports"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "noValue": "0",
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "value",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Accepted (logged)",
-      "id": 19,
-      "description": "Connections the router let through (nat-start's LOG_ACCEPT chain), one line each: the Accepted connections row below has them by way out.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "victorialogs"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
         "x": 20,
         "y": 33
       },
@@ -1344,7 +1284,7 @@
           },
           "editorMode": "code",
           "queryType": "stats",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept | count() as packets"
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=drop | count_uniq(destination.port) as ports"
         }
       ],
       "fieldConfig": {
@@ -2324,7 +2264,7 @@
       "type": "stat",
       "title": "Straight out",
       "id": 39,
-      "description": "Devices' connections straight out the WAN (ppp0), not through the VPN: VPN Director's exceptions. The router's own traffic, from its WAN address, isn't counted.",
+      "description": "Devices' connections straight out the WAN (ppp0), not through the VPN: VPN Director's exceptions. Devices are addresses on the router's networks; its own (.1 on each, its tunnel and WAN) aren't counted.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2343,7 +2283,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=ppp0 (source.ip:ipv4_range(\"192.168.0.0/16\") or source.ip:ipv4_range(\"10.0.0.0/8\") or source.ip:ipv4_range(\"172.16.0.0/12\")) | count() as connections",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=ppp0 source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:~\"\\\\.1$\" | count() as connections",
           "queryType": "stats"
         }
       ],
@@ -2384,7 +2324,7 @@
       "type": "stat",
       "title": "Between networks",
       "id": 40,
-      "description": "Connections the router passed from one of its networks to another (out a br bridge).",
+      "description": "Connections a device made from one of the router's networks to another (out a br bridge). DNS to Pi-hole's network (br55) isn't logged.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2403,7 +2343,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:~\"^br\" | count() as connections",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:~\"^br\" source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:~\"\\\\.1$\" | count() as connections",
           "queryType": "stats"
         }
       ],
@@ -2444,7 +2384,7 @@
       "type": "stat",
       "title": "Devices",
       "id": 41,
-      "description": "Addresses that opened a connection through the router.",
+      "description": "Devices that opened a connection through the router. Devices are addresses on the router's networks; its own (.1 on each, its tunnel and WAN) aren't counted.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2463,7 +2403,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept | count_uniq(source.ip) as devices",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:~\"\\\\.1$\" | count_uniq(source.ip) as devices",
           "queryType": "stats"
         }
       ],
@@ -2628,7 +2568,7 @@
       "type": "timeseries",
       "title": "Connections by way out",
       "id": 44,
-      "description": "Accepted connections by the interface they left on.",
+      "description": "Accepted connections by the interface they left on. Not logged: connections to the router itself (its admin page, SSH, DNS, DHCP), traffic within one network (bridged, not routed) and DNS to Pi-hole's network (br55).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2710,7 +2650,7 @@
       "type": "table",
       "title": "Straight out (not through the VPN)",
       "id": 45,
-      "description": "Devices whose connections left without the VPN (ppp0), the busiest first.",
+      "description": "Devices whose connections left without the VPN (ppp0), the busiest first. Devices are addresses on the router's networks; its own (.1 on each, its tunnel and WAN) aren't counted.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2729,7 +2669,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=ppp0 | stats by (source.ip) count() as connections, count_uniq(destination.ip) as destinations, count_uniq(destination.port) as ports | sort by (connections desc) | limit 50",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:=ppp0 source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:~\"\\\\.1$\" | stats by (source.ip) count() as connections, count_uniq(destination.ip) as destinations, count_uniq(destination.port) as ports | sort by (connections desc) | limit 50",
           "queryType": "instant"
         }
       ],
@@ -2973,7 +2913,7 @@
       "type": "table",
       "title": "Between networks",
       "id": 47,
-      "description": "Connections from one of the router's networks to another, by where they went.",
+      "description": "Connections from a device on one of the router's networks to another, by where they went. DNS to Pi-hole's network (br55) isn't logged.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -2992,7 +2932,7 @@
             "uid": "victorialogs"
           },
           "editorMode": "code",
-          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:~\"^br\" | stats by (source.ip, destination.ip, network.transport, destination.port) count() as connections | sort by (connections desc) | limit 50",
+          "expr": "_time:$__range {event.dataset=\"syslog.log\"} host.ip:=\"192.168.111.1\" event.action:=accept observer.egress.interface.name:~\"^br\" source.ip:ipv4_range(\"192.168.0.0/16\") -source.ip:~\"\\\\.1$\" | stats by (source.ip, destination.ip, network.transport, destination.port) count() as connections | sort by (connections desc) | limit 50",
           "queryType": "instant"
         }
       ],
