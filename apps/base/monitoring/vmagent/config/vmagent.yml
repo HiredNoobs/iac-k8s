@@ -45,6 +45,28 @@ scrape_configs:
       - target_label: job
         replacement: node
 
+  # node_exporter on the Proxmox hosts, installed by iac-homelab's proxmox.yml (the monitoring role,
+  # as on the VMs). instance is the Proxmox node name.
+  - job_name: node-proxmox
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["192.168.111.2:9100"]
+        labels: { host: prx-001 }
+      - targets: ["192.168.111.3:9100"]
+        labels: { host: prx-002 }
+      - targets: ["192.168.111.4:9100"]
+        labels: { host: prx-003 }
+      - targets: ["192.168.111.9:9100"]
+        labels: { host: prx-999 }
+    relabel_configs:
+      - source_labels: [host]
+        target_label: instance
+      - action: labeldrop
+        regex: host
+      - target_label: job
+        replacement: node
+
   # Each kubelet, for the persistent volume stats (node_exporter doesn't see the pod volume
   # mounts). Authenticates with vmagent's service account token (vmagent.yaml, nodes/metrics).
   # The kubelets' serving certificates are from the cluster CA (Talos' serverTLSBootstrap,
