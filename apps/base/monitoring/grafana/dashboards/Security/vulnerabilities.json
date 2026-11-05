@@ -1254,8 +1254,537 @@
     },
     {
       "type": "table",
-      "title": "CVEs by package",
+      "title": "Hosts",
       "id": 15,
+      "description": "Each Debian host: its packages, how many of them have an upgrade that fixes CVEs, and those CVEs (critical, high, known exploited). Click a host to filter the dashboard to it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 0,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (target) (advisory_map_inventory_packages{target_kind=\"debian-package\", target=~\"$target\"})",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target) (count by (target, package) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "target",
+                "Value #A",
+                "Value #B",
+                "Value #C",
+                "Value #D",
+                "Value #E",
+                "Value #F"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "target": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5,
+              "Value #F": 6
+            },
+            "renameByName": {
+              "target": "Host",
+              "Value #A": "Packages",
+              "Value #B": "To upgrade",
+              "Value #C": "CVEs fixed",
+              "Value #D": "Critical",
+              "Value #E": "High",
+              "Value #F": "Exploited"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "To upgrade"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Critical"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "dark-red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "High"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Exploited"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Host"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Filter to this host",
+                    "url": "/d/security-vulnerabilities/vulnerabilities?var-target=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "To upgrade",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Packages to upgrade",
+      "id": 16,
+      "description": "Per host, each source package with an upgrade that fixes CVEs: how many, the worst of them, and how many are known exploited. patch.yml (or apt upgrade) installs them.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 10,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (target, package, installed_version) ((advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"low\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 1) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"medium\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 2) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 3) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 4) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0))",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "target",
+                "package",
+                "installed_version",
+                "Value #A",
+                "Value #B",
+                "Value #C"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "target": 0,
+              "package": 1,
+              "installed_version": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5
+            },
+            "renameByName": {
+              "target": "Host",
+              "package": "Source package",
+              "installed_version": "Installed",
+              "Value #A": "CVEs fixed",
+              "Value #B": "Worst severity",
+              "Value #C": "Exploited"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Worst severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "color": "yellow",
+                        "index": 0,
+                        "text": "low"
+                      },
+                      "2": {
+                        "color": "orange",
+                        "index": 1,
+                        "text": "medium"
+                      },
+                      "3": {
+                        "color": "red",
+                        "index": 2,
+                        "text": "high"
+                      },
+                      "4": {
+                        "color": "dark-red",
+                        "index": 3,
+                        "text": "critical"
+                      },
+                      "0": {
+                        "color": "transparent",
+                        "index": 4,
+                        "text": "other"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Exploited"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Worst severity",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "CVEs by package",
+      "id": 17,
       "description": "The VMs' packages against the Debian Security Tracker, by source package: one row per CVE and package, with how many hosts have it (pick a host in Target for its own). Click a CVE for the tracker.",
       "datasource": {
         "type": "prometheus",
@@ -1265,7 +1794,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 35
       },
       "targets": [
         {
@@ -1583,20 +2112,20 @@
     {
       "type": "row",
       "title": "Health",
-      "id": 16,
+      "id": 18,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 47
       },
       "panels": []
     },
     {
       "type": "stat",
       "title": "Feed age",
-      "id": 17,
+      "id": 19,
       "description": "Since each feed last refreshed: red past two days (twice the daily refresh).",
       "datasource": {
         "type": "prometheus",
@@ -1606,7 +2135,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "targets": [
         {
@@ -1660,7 +2189,7 @@
     {
       "type": "stat",
       "title": "Last match",
-      "id": 18,
+      "id": 20,
       "description": "Since versions were last matched: red past 30 minutes (twice the match interval).",
       "datasource": {
         "type": "prometheus",
@@ -1670,7 +2199,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 40
+        "y": 48
       },
       "targets": [
         {
@@ -1723,7 +2252,7 @@
     {
       "type": "stat",
       "title": "Hosts without packages",
-      "id": 19,
+      "id": 21,
       "description": "Debian hosts whose package list is missing (no dpkg textfile): their packages aren't checked.",
       "datasource": {
         "type": "prometheus",
@@ -1733,7 +2262,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 40
+        "y": 48
       },
       "targets": [
         {
@@ -1786,7 +2315,7 @@
     {
       "type": "stat",
       "title": "Unmapped images",
-      "id": 20,
+      "id": 22,
       "description": "Running images no mapping entry covers: not checked (listed below).",
       "datasource": {
         "type": "prometheus",
@@ -1796,7 +2325,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 40
+        "y": 48
       },
       "targets": [
         {
@@ -1849,7 +2378,7 @@
     {
       "type": "stat",
       "title": "Unmatched ranges",
-      "id": 21,
+      "id": 23,
       "description": "Affected ranges that couldn't be compared with an installed version (listed below by reason): neither findings nor dismissed.",
       "datasource": {
         "type": "prometheus",
@@ -1859,7 +2388,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 40
+        "y": 48
       },
       "targets": [
         {
@@ -1912,7 +2441,7 @@
     {
       "type": "table",
       "title": "Unmapped images",
-      "id": 22,
+      "id": 24,
       "description": "Running images no mapping entry covers.",
       "datasource": {
         "type": "prometheus",
@@ -1922,7 +2451,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 52
       },
       "targets": [
         {
@@ -1985,7 +2514,7 @@
     {
       "type": "table",
       "title": "Unmatched ranges",
-      "id": 23,
+      "id": 25,
       "description": "Affected ranges that couldn't be compared, by source and reason: git (commits, not versions), unspecified or unparsable versions, ecosystem (an OSV ecosystem without a list of versions).",
       "datasource": {
         "type": "prometheus",
@@ -1995,7 +2524,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 52
       },
       "targets": [
         {
