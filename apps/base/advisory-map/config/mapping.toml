@@ -206,6 +206,26 @@ target_labels = ["namespace", "container"]
 kind = "container"
 
 [[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?alex1989hu/kubelet-serving-cert-approver:.*"}'
+vendor = "alex1989hu"
+product = "kubelet-serving-cert-approver"
+ecosystem = "Go"
+package = "github.com/alex1989hu/kubelet-serving-cert-approver"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?falcosecurity/falco:.*"}'
+vendor = "falcosecurity"
+product = "falco"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?victoriametrics/(victoria-metrics|vmagent|vmalert):.*"}'
 vendor = "victoriametrics"
 product = "victoriametrics"
