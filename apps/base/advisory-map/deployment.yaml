@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: advisory-map
-          image: hirednoobs/advisory-map:0.3.0@sha256:5693cbf7259427c7259049fadfacb079f0ba9d12537159a6ae25f4cb8d4ceb51
+          image: hirednoobs/advisory-map:0.3.1@sha256:56115b210e3e0038e76383088fec67bf6e6385d20986f2851f0afae8fea948c5
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
