@@ -6,8 +6,8 @@
 # No ICMP module: it needs NET_RAW, which the restricted pod security standard doesn't allow. Hosts
 # are checked on a TCP or HTTPS port instead.
 #
-# Bump the chart version and the image together, the image is the chart's appVersion pinned by its
-# digest (the multi-arch index).
+# The image is the chart's appVersion pinned by its digest (the multi-arch index), set by
+# update-pins.sh when the chart's version changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -26,7 +26,7 @@ spec:
     image:
       registry: docker.io
       repository: prom/blackbox-exporter
-      # renovate: image=prom/blackbox-exporter
+      # update-pins: image=prom/blackbox-exporter
       tag: v0.29.1
       digest: sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
     extraArgs:

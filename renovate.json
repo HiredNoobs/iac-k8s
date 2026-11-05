@@ -69,18 +69,18 @@
       "enabled": false
     },
     {
-      "description": "Charts whose values set image.repository: the regex manager (the comment above the tag) updates the tag and digest, the flux manager would only change the tag",
+      "description": "Charts whose values set image.repository: the regex manager (kube-vip) or update-pins.sh (the chart's appVersion) sets the tag and digest, the flux manager would only change the tag",
       "matchManagers": ["flux"],
       "matchPackageNames": ["plndr/kube-vip", "stakater/reloader", "docker.io/prom/blackbox-exporter"],
       "enabled": false
     },
     {
-      "description": "A chart, the image it runs (its appVersion, pinned by digest) and lint.yml's CRD schemas move together",
-      "matchPackageNames": ["cert-manager", "quay.io/jetstack/cert-manager-*"],
+      "description": "A chart and lint.yml's CRD schemas move together (update-pins.sh sets the images to the chart's appVersion)",
+      "matchPackageNames": ["cert-manager"],
       "groupName": "cert-manager"
     },
     {
-      "matchPackageNames": ["external-secrets", "ghcr.io/external-secrets/external-secrets"],
+      "matchPackageNames": ["external-secrets"],
       "groupName": "external-secrets"
     },
     {
@@ -91,26 +91,6 @@
     {
       "matchPackageNames": ["kube-vip", "plndr/kube-vip"],
       "groupName": "kube-vip"
-    },
-    {
-      "matchPackageNames": ["metrics-server", "registry.k8s.io/metrics-server/metrics-server"],
-      "groupName": "metrics-server"
-    },
-    {
-      "matchPackageNames": ["reloader", "stakater/reloader"],
-      "groupName": "reloader"
-    },
-    {
-      "matchPackageNames": ["kube-state-metrics", "registry.k8s.io/kube-state-metrics/kube-state-metrics"],
-      "groupName": "kube-state-metrics"
-    },
-    {
-      "matchPackageNames": ["prometheus-blackbox-exporter", "prom/blackbox-exporter"],
-      "groupName": "blackbox-exporter"
-    },
-    {
-      "matchPackageNames": ["falco", "falcosecurity/falco"],
-      "groupName": "falco"
     },
     {
       "description": "lint.yml tests Vector's config with the image's version",

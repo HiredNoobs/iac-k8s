@@ -6,8 +6,8 @@
 # Kustomization, HelmRelease and source with its ready and suspended state (Flux's own metrics no
 # longer have it; this is Flux's documented replacement, flux2-monitoring-example).
 #
-# Bump the chart version and the image together, the image is the chart's appVersion pinned by its
-# digest (the multi-arch index).
+# The image is the chart's appVersion pinned by its digest (the multi-arch index), set by
+# update-pins.sh when the chart's version changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -23,7 +23,7 @@ spec:
         name: prometheus-community
   values:
     image:
-      # renovate: image=registry.k8s.io/kube-state-metrics/kube-state-metrics
+      # update-pins: image=registry.k8s.io/kube-state-metrics/kube-state-metrics
       tag: v2.20.0
       sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
     resources:

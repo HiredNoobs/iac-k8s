@@ -7,6 +7,9 @@
 #     checksums upstream publishes with the release (SUMS_FILES), or else of the file downloaded.
 #   - Vendored release manifests: re-downloaded when the image in their kustomization's patch
 #     changed, with the URL and checksum in its comment.
+#   - Images a chart runs (`# update-pins: image=<name>` above their tag): the chart's appVersion
+#     when the chart's version changed, with the digest the registry serves for it. Renovate would
+#     bump them separately: it holds back images whose registry gives no release date, not charts.
 #
 # Only pins whose version changed in the branch are touched: an unchanged version keeps its
 # committed checksum, so a file replaced upstream still fails lint instead of being trusted. A
@@ -132,9 +135,144 @@ function update_vendored {
   log "$file: $sum"
 }
 
+# "<chart> <version> <HelmRepository>" of the HelmRelease in YAML on stdin.
+function chart_release {
+  awk '!chart && /^ +chart: [^ ]/ { chart = $2 }
+       chart && !version && /^ +version: / { version = $2; gsub(/"/, "", version) }
+       /^ +sourceRef:/ { source = 1 }
+       source && !name && /^ +name: / { name = $2 }
+       END { print chart, version, name }'
+}
+
+# "<image> <tag>" for each `# update-pins: image=<name>` in file $1, from the `tag:` line below it.
+function chart_images {
+  sed -nE '/# update-pins: image=/ { s/.*image=([^[:space:]]+).*/\1/; N; s/\n[[:space:]]*tag: "?([^@"[:space:]]+).*/ \1/p }' "$1" | sort -u
+}
+
+# The URL of the HelmRepository named $1, if the repo has one by that name (or several, all with
+# the same URL).
+function helm_repository {
+  local urls
+  # shellcheck disable=SC2016 # awk's fields, through xargs.
+  urls=$(git grep -l '^kind: HelmRepository' -- apps infrastructure | xargs awk -v name="$1" '
+    FNR == 1 || /^---/ { repository = found = 0 }
+    /^kind: HelmRepository/ { repository = 1 }
+    repository && $1 == "name:" && $2 == name { found = 1 }
+    found && $1 == "url:" { sub(/\/$/, "", $2); print $2; found = 0 }' | sort -u)
+  [[ -n $urls && $urls != *$'\n'* ]] && echo "$urls"
+}
+
+# The appVersion of chart $2 version $3, from the index of the Helm repository at $1.
+function app_version {
+  local index
+  index=$(curl -fsSL "$1/index.yaml")
+  awk -v chart="$2" -v version="$3" '
+    function item_end() {
+      # exit runs END, which ends the item again.
+      if (in_chart && item_version == version && app != "") { print app; in_chart = 0; exit }
+      item_version = app = ""
+    }
+    function value(s) { sub(/^[^:]*: */, "", s); gsub(/["\047]/, "", s); return s }
+    /^entries:/ { entries = 1; next }
+    !entries { next }
+    /^[^ ]/ { item_end(); entries = 0; next }
+    /^  [^ -]/ { item_end(); in_chart = ($1 == chart ":"); indent = 0; next }
+    !in_chart { next }
+    {
+      # Each version is a list item, its keys indented to where the first one starts. Lists in an
+      # item (keywords, urls) are at that indent too.
+      line = $0
+      if (match(line, /^ *- /) && (!indent || RLENGTH == indent)) {
+        item_end()
+        indent = RLENGTH
+        line = sprintf("%" indent "s", "") substr(line, indent + 1)
+      }
+      if (!indent || substr(line, 1, indent) ~ /[^ ]/) next
+      key = substr(line, indent + 1)
+      if (key ~ /^appVersion:/) app = value(key)
+      else if (key ~ /^version:/) item_version = value(key)
+    }
+    END { item_end() }' <<< "$index"
+}
+
+# The digest of image $1's tag $2, as the registry serves it to an anonymous pull: the multi-arch
+# index where there is one.
+function image_digest {
+  local image=$1 tag=$2 registry repository url challenge realm service scope token
+  local -a auth=()
+  # The index first, the image's own manifest for single-platform images.
+  local accept=application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json
+  accept+=,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json
+
+  if [[ $image == *.*/* ]]; then
+    registry=${image%%/*}
+    repository=${image#*/}
+  else
+    registry="registry-1.docker.io"
+    repository=$image
+    [[ $repository == */* ]] || repository=library/$repository
+  fi
+  url="https://$registry/v2/$repository/manifests/$tag"
+
+  # Registries that want a token say where to get one.
+  challenge=$(curl -sSI -H "Accept: $accept" "$url" | sed -nE 's/^[Ww]{3}-[Aa]uthenticate: Bearer (.*)\r$/\1/p')
+  if [[ -n $challenge ]]; then
+    realm=$(sed -nE 's/.*realm="([^"]*)".*/\1/p' <<< "$challenge")
+    service=$(sed -nE 's/.*service="([^"]*)".*/\1/p' <<< "$challenge")
+    scope=$(sed -nE 's/.*scope="([^"]*)".*/\1/p' <<< "$challenge")
+    token=$(curl -fsSL -G "$realm" --data-urlencode "service=$service" \
+      --data-urlencode "scope=${scope:-repository:$repository:pull}" | sed -nE 's/.*"(access_)?token" *: *"([^"]+)".*/\2/p')
+    auth=(-H "Authorization: Bearer $token")
+  fi
+
+  # The last response's, after redirects (registry.k8s.io's).
+  curl -fsSIL -H "Accept: $accept" "${auth[@]}" "$url" \
+    | sed -nE 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: (sha256:[0-9a-f]{64})\r$/\1/p' | tail -n1
+}
+
+# Sets the images pinned in a HelmRelease to its chart's appVersion if the chart's version changed.
+function update_chart_images {
+  local file=$1 chart version source old_version repository app image tag new_tag digest
+
+  read -r chart version source < <(chart_release < "$file")
+  old_version=$(git show "HEAD:$file" | chart_release | cut -d' ' -f2)
+  [[ $version == "$old_version" ]] && return 0
+
+  if ! repository=$(helm_repository "$source"); then
+    log "$file: no single HelmRepository $source"
+    return 1
+  fi
+  if ! app=$(app_version "$repository" "$chart" "$version") || [[ -z $app ]]; then
+    log "$chart $version: no appVersion in $repository"
+    return 1
+  fi
+
+  while read -r image tag; do
+    # Some charts' appVersion leaves out the tags' v.
+    new_tag=$app
+    [[ $tag == v* && $app != v* ]] && new_tag=v$app
+    [[ $new_tag == "$tag" ]] && continue
+
+    if ! digest=$(image_digest "$image" "$new_tag") || [[ ! $digest =~ ^sha256:[0-9a-f]{64}$ ]]; then
+      log "$image:$new_tag: no digest found"
+      return 1
+    fi
+    # From the comment to the digest, on the tag's line (tag@digest) or a digest:/sha: line after it.
+    sed -i -E "\\@# update-pins: image=${image//./\\.}[[:space:]]*\$@,/sha256:/ {
+      s/(tag: \"?)[^@\"[:space:]]+/\\1$new_tag/
+      s/sha256:[0-9a-f]{64}/$digest/
+    }" "$file"
+    log "$image: $new_tag@$digest"
+  done < <(chart_images "$file")
+}
+
 update_lint_checksums
 
 for entry in "${VENDORED[@]}"; do
   # shellcheck disable=SC2086 # Space-separated on purpose.
   update_vendored $entry
+done
+
+for release in $(git grep -l '# update-pins: image=' -- apps infrastructure); do
+  update_chart_images "$release"
 done

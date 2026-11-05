@@ -1,5 +1,5 @@
-# Bump the chart version and the image together, the image is the chart's appVersion pinned by
-# its digest (the multi-arch index).
+# The image is the chart's appVersion pinned by its digest (the multi-arch index), set by
+# update-pins.sh when the chart's version changes.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -18,7 +18,7 @@ spec:
     image:
       # Only the digest is used once it's set, the tag says which version it is.
       repository: stakater/reloader
-      # renovate: image=stakater/reloader
+      # update-pins: image=stakater/reloader
       tag: v1.4.22
       digest: sha256:96cc6bad219032f01a795803f23093ee0277b9308999ec4ce25a8382a22910df
     reloader:

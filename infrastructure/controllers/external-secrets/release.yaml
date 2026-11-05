@@ -1,5 +1,5 @@
-# Bump the chart version and the image together, the image is the chart's appVersion pinned by
-# its digest (the multi-arch index). The CRDs come with the chart, add their schemas to lint.yml.
+# The image is the chart's appVersion pinned by its digest (the multi-arch index), set by
+# update-pins.sh when the chart's version changes. The CRDs come with the chart, add their schemas to lint.yml.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -20,20 +20,20 @@ spec:
     crds: CreateReplace
   values:
     image:
-      # renovate: image=ghcr.io/external-secrets/external-secrets
-      tag: v2.13.0@sha256:f799d87a6a959e597a4ba7a8d2379886292c3fcfbee678f7dc2d3566051bcb96
+      # update-pins: image=ghcr.io/external-secrets/external-secrets
+      tag: v2.14.0@sha256:10608eb53e636e744903d5f3657a4d9c44e28d9d9c181b73e07bc7dd2e6884dc
     webhook:
       image:
-        # renovate: image=ghcr.io/external-secrets/external-secrets
-        tag: v2.13.0@sha256:f799d87a6a959e597a4ba7a8d2379886292c3fcfbee678f7dc2d3566051bcb96
+        # update-pins: image=ghcr.io/external-secrets/external-secrets
+        tag: v2.14.0@sha256:10608eb53e636e744903d5f3657a4d9c44e28d9d9c181b73e07bc7dd2e6884dc
       resources:
         requests:
           cpu: 10m
           memory: 32Mi
     certController:
       image:
-        # renovate: image=ghcr.io/external-secrets/external-secrets
-        tag: v2.13.0@sha256:f799d87a6a959e597a4ba7a8d2379886292c3fcfbee678f7dc2d3566051bcb96
+        # update-pins: image=ghcr.io/external-secrets/external-secrets
+        tag: v2.14.0@sha256:10608eb53e636e744903d5f3657a4d9c44e28d9d9c181b73e07bc7dd2e6884dc
       resources:
         requests:
           cpu: 10m
