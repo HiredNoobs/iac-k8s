@@ -1,0 +1,420 @@
+# What runs, as CVE List products and OSV packages (app-advisory-map's docs/mapping.md). Products are
+# named as their CVE records name them, an entry per name where they use several. The VMs' Debian
+# packages need no entry.
+#
+# Containers by their image's tag (image_spec, as the pod spec has it): what runs, even where a chart
+# pins an image older than its appVersion. Helm releases by appVersion only where their images aren't
+# mapped themselves, with an images regex that covers those.
+
+[images]
+query = "kube_pod_container_info"
+label = "image_spec"
+
+# -----------------------------------------------------
+# Talos and Kubernetes
+# -----------------------------------------------------
+
+[[software]]
+query = 'node_os_info{id="talos"}'
+vendor = "siderolabs"
+product = "talos"
+ecosystem = "Go"
+package = "github.com/siderolabs/talos"
+version_label = "version_id"
+kind = "talos"
+images = '^ghcr\.io/siderolabs/'
+
+[[software]]
+query = "kube_node_info"
+vendor = "kubernetes"
+product = "kubernetes"
+ecosystem = "Go"
+package = "k8s.io/kubernetes"
+version_label = "kubelet_version"
+target_labels = ["node"]
+kind = "kubernetes"
+images = '^registry\.k8s\.io/(kube-apiserver|kube-controller-manager|kube-scheduler|kube-proxy):'
+
+[[software]]
+query = "kube_node_info"
+vendor = "kubernetes"
+product = "kubelet"
+version_label = "kubelet_version"
+target_labels = ["node"]
+kind = "kubernetes"
+
+# -----------------------------------------------------
+# Helm releases
+# -----------------------------------------------------
+
+[[software]]
+query = 'gotk_resource_info{customresource_kind="HelmRelease", name="cert-manager"}'
+vendor = "cert-manager"
+product = "cert-manager"
+ecosystem = "Go"
+package = "github.com/cert-manager/cert-manager"
+version_label = "chart_app_version"
+target_labels = ["exported_namespace", "name"]
+kind = "helm"
+images = '^quay\.io/jetstack/cert-manager-'
+
+[[software]]
+query = 'gotk_resource_info{customresource_kind="HelmRelease", name="longhorn"}'
+vendor = "suse"
+product = "longhorn"
+version_label = "chart_app_version"
+target_labels = ["exported_namespace", "name"]
+kind = "helm"
+images = '^(docker\.io/)?longhornio/'
+
+[[software]]
+query = 'gotk_resource_info{customresource_kind="HelmRelease", name="kube-vip"}'
+ecosystem = "Go"
+package = "github.com/kube-vip/kube-vip"
+version_label = "chart_app_version"
+target_labels = ["exported_namespace", "name"]
+kind = "helm"
+images = '/kube-vip:'
+
+# -----------------------------------------------------
+# Containers
+# -----------------------------------------------------
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?external-secrets/external-secrets:.*"}'
+vendor = "external-secrets"
+product = "external-secrets"
+ecosystem = "Go"
+package = "github.com/external-secrets/external-secrets"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?envoyproxy/gateway:.*"}'
+vendor = "envoyproxy"
+product = "gateway"
+ecosystem = "Go"
+package = "github.com/envoyproxy/gateway"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?envoyproxy/envoy:.*"}'
+vendor = "envoyproxy"
+product = "envoy"
+ecosystem = "Go"
+package = "github.com/envoyproxy/envoy"
+version_label = "image_spec"
+version_regex = ':(?:distroless-)?v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/source-controller:.*"}'
+vendor = "fluxcd"
+product = "source-controller"
+ecosystem = "Go"
+package = "github.com/fluxcd/source-controller"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/kustomize-controller:.*"}'
+vendor = "fluxcd"
+product = "kustomize-controller"
+ecosystem = "Go"
+package = "github.com/fluxcd/kustomize-controller"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/helm-controller:.*"}'
+ecosystem = "Go"
+package = "github.com/fluxcd/helm-controller"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/notification-controller:.*"}'
+vendor = "fluxcd"
+product = "notification-controller"
+ecosystem = "Go"
+package = "github.com/fluxcd/notification-controller"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?stakater/reloader:.*"}'
+ecosystem = "Go"
+package = "github.com/stakater/Reloader"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?metrics-server/metrics-server:.*"}'
+ecosystem = "Go"
+package = "sigs.k8s.io/metrics-server"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?kube-state-metrics/kube-state-metrics:.*"}'
+ecosystem = "Go"
+package = "k8s.io/kube-state-metrics"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?victoriametrics/(victoria-metrics|vmagent|vmalert):.*"}'
+vendor = "victoriametrics"
+product = "victoriametrics"
+ecosystem = "Go"
+package = "github.com/VictoriaMetrics/VictoriaMetrics"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
+vendor = "grafana"
+product = "grafana"
+ecosystem = "Go"
+package = "github.com/grafana/grafana"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
+vendor = "grafana"
+product = "grafana oss"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
+vendor = "grafana"
+product = "grafana/grafana"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?prom/alertmanager:.*"}'
+vendor = "prometheus"
+product = "alertmanager"
+ecosystem = "Go"
+package = "github.com/prometheus/alertmanager"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?prom/node-exporter:.*"}'
+ecosystem = "Go"
+package = "github.com/prometheus/node_exporter"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?prom/blackbox-exporter:.*"}'
+ecosystem = "Go"
+package = "github.com/prometheus/blackbox_exporter"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?ghostunnel/ghostunnel:.*"}'
+ecosystem = "Go"
+package = "github.com/ghostunnel/ghostunnel"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?authelia/authelia:.*"}'
+vendor = "authelia"
+product = "authelia"
+ecosystem = "Go"
+package = "github.com/authelia/authelia/v4"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?vaultwarden/server:.*"}'
+vendor = "dani-garcia"
+product = "vaultwarden"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?vaultwarden/server:.*"}'
+vendor = "vaultwarden"
+product = "vaultwarden"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?mealie:.*"}'
+vendor = "mealie-recipes"
+product = "mealie"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?mealie:.*"}'
+vendor = "mealie"
+product = "mealie"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?mealie:.*"}'
+vendor = "mealie_project"
+product = "mealie"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?gethomepage/homepage:.*"}'
+vendor = "gethomepage"
+product = "homepage"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?redis:.*"}'
+vendor = "redis"
+product = "redis"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?rabbitmq:.*"}'
+vendor = "rabbitmq"
+product = "rabbitmq-server"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?unbound:.*"}'
+vendor = "nlnet labs"
+product = "unbound"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?unbound:.*"}'
+vendor = "nlnetlabs"
+product = "unbound"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?timberio/vector:.*"}'
+vendor = "vectordotdev"
+product = "vector"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?python:.*"}'
+vendor = "python software foundation"
+product = "cpython"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?python:.*"}'
+vendor = "python"
+product = "cpython"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^-@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+
+# -----------------------------------------------------
+# The VMs (iac-homelab's package-versions)
+# -----------------------------------------------------
+
+[[software]]
+query = 'vm_binary_info{binary="vault"}'
+vendor = "hashicorp"
+product = "vault"
+ecosystem = "Go"
+package = "github.com/hashicorp/vault"
+kind = "vm-binary"
+
+[[software]]
+query = 'vm_binary_info{binary="forgejo"}'
+vendor = "forgejo"
+product = "forgejo"
+kind = "vm-binary"
+
+[[software]]
+query = 'dpkg_package_info{package="vector"}'
+vendor = "vectordotdev"
+product = "vector"
+version_regex = '([0-9][^-]*)'
+kind = "vm-package"
+
+[[software]]
+query = 'node_exporter_build_info{instance=~"prx-999-.*"}'
+ecosystem = "Go"
+package = "github.com/prometheus/node_exporter"
+kind = "vm-binary"

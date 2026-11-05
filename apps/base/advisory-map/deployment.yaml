@@ -1,0 +1,87 @@
+# One replica: the feeds' volume is ReadWriteOnce, Recreate stops the old pod before the new one
+# mounts it. The image's user is 10001 (the restricted pod security standard), fsGroup lets it write
+# the volume; it writes nothing else, so the root filesystem is read only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: advisory-map
+  labels:
+    app.kubernetes.io/name: advisory-map
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: advisory-map
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: advisory-map
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: advisory-map
+          image: hirednoobs/advisory-map:0.1.1@sha256:13066cf38605f0364ba1bd992c7ec24f43821099b012fc4ecf2dba41449961f0
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: PROMETHEUS_URL
+              value: https://victoriametrics.monitoring.svc:8428
+            - name: PROMETHEUS_CA_FILE
+              value: /etc/advisory-map/tls/ca.crt
+            - name: MAPPING_FILE
+              value: /etc/advisory-map/mapping.toml
+            - name: DATA_DIR
+              value: /data
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            periodSeconds: 30
+          # The limit leaves room for the CVE List's pack in the page cache, which counts against it.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: mapping
+              mountPath: /etc/advisory-map/mapping.toml
+              subPath: mapping.toml
+              readOnly: true
+            - name: tls
+              mountPath: /etc/advisory-map/tls
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: advisory-map-data
+        - name: mapping
+          configMap:
+            name: advisory-map-mapping
+        - name: tls
+          secret:
+            secretName: advisory-map-monitoring-tls
+            items:
+              - { key: ca.crt, path: ca.crt }

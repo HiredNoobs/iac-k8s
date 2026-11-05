@@ -1,0 +1,19 @@
+# advisory-map (app-advisory-map): the CVEs that apply to what VictoriaMetrics knows is installed,
+# as metrics for vmagent (its advisory-map job). The VMs' Debian packages come from iac-homelab's
+# package-versions, everything else through config/mapping.toml. Advisories are downloaded whole
+# (the Debian Security Tracker, the CVE List from GitHub, OSV's bucket, CISA's KEV) and matched
+# here: nothing about the lab is sent out. Plain manifests, the app has no chart.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: advisory-map
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+# The name gets a hash of the file, so a mapping change rolls the pod.
+configMapGenerator:
+  - name: advisory-map-mapping
+    files:
+      - config/mapping.toml

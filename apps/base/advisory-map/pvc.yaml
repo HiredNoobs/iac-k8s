@@ -1,0 +1,15 @@
+# The feeds' last good copies (DATA_DIR): the CVE List clone (~340 MB), the Debian tracker (~90 MB
+# plus a download beside it), the OSV index and each ecosystem's archive while it's read. All of it
+# can be fetched again.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: advisory-map-data
+  labels:
+    app.kubernetes.io/name: advisory-map
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
