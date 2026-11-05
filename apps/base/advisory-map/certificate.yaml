@@ -1,0 +1,17 @@
+# A certificate from the monitoring CA (infrastructure/configs/cluster-issuer/monitoring-ca.yaml)
+# for its ca.crt, which VictoriaMetrics' server certificate is checked against. VictoriaMetrics
+# doesn't ask for a client certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: advisory-map-monitoring
+spec:
+  secretName: advisory-map-monitoring-tls
+  commonName: advisory-map
+  usages:
+    - digital signature
+    - key encipherment
+    - client auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: monitoring-ca

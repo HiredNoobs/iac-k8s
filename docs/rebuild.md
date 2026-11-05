@@ -31,6 +31,7 @@ Longhorn backs up every volume to ``cifs://192.168.111.6/longhorn-backups`` each
 | ``data-redis-0..2`` | ``redis`` | contentbot's data (the AOF). | If wanted. |
 | ``data-rabbitmq-0..2`` | ``rabbitmq`` | Queued messages. Users and permissions are in git. | No. |
 | ``vector-aggregator`` | ``vector`` | Its buffer and downloaded geo data and threat intel, fetched again on start. | No. |
+| ``advisory-map-data`` | ``advisory-map`` | The advisory feeds, fetched again on start (the CVE List takes a few minutes). | No. |
 
 ## Vault's secrets
 

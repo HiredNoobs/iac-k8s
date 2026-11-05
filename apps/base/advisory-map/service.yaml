@@ -1,0 +1,15 @@
+# /metrics, for vmagent (its advisory-map job).
+apiVersion: v1
+kind: Service
+metadata:
+  name: advisory-map
+  labels:
+    app.kubernetes.io/name: advisory-map
+spec:
+  selector:
+    app.kubernetes.io/name: advisory-map
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
