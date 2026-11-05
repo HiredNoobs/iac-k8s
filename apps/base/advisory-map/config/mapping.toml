@@ -2,9 +2,10 @@
 # named as their CVE records name them, an entry per name where they use several. The VMs' Debian
 # packages need no entry.
 #
-# Containers by their image's tag (image_spec, as the pod spec has it): what runs, even where a chart
-# pins an image older than its appVersion. Helm releases by appVersion only where their images aren't
-# mapped themselves, with an images regex that covers those.
+# Containers by their image's tag (image_spec, as the pod spec has it): what runs. Helm releases by
+# appVersion where the images can't say it: charts that run them by digest alone (cert-manager,
+# reloader; update-pins.sh keeps their images at the chart's appVersion), or many images for one
+# product (Longhorn). Their images regex covers what they run.
 
 [images]
 query = "kube_pod_container_info"
@@ -68,13 +69,13 @@ kind = "helm"
 images = '^(docker\.io/)?longhornio/'
 
 [[software]]
-query = 'gotk_resource_info{customresource_kind="HelmRelease", name="kube-vip"}'
+query = 'gotk_resource_info{customresource_kind="HelmRelease", name="reloader"}'
 ecosystem = "Go"
-package = "github.com/kube-vip/kube-vip"
+package = "github.com/stakater/Reloader"
 version_label = "chart_app_version"
 target_labels = ["exported_namespace", "name"]
 kind = "helm"
-images = '/kube-vip:'
+images = '(^|/)stakater/reloader(:|$)'
 
 # -----------------------------------------------------
 # Containers
@@ -156,9 +157,9 @@ target_labels = ["namespace", "container"]
 kind = "container"
 
 [[software]]
-query = 'kube_pod_container_info{image_spec=~"(.*/)?stakater/reloader:.*"}'
+query = 'kube_pod_container_info{image_spec=~"(.*/)?plndr/kube-vip:.*"}'
 ecosystem = "Go"
-package = "github.com/stakater/Reloader"
+package = "github.com/kube-vip/kube-vip"
 version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
