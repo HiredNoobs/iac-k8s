@@ -17,7 +17,7 @@ sources:
       method: newline_delimited
 
 transforms:
-  # The Proxmox hosts send their journals through rsyslog (iac-homelab's proxmox/rsyslog.conf):
+  # The Proxmox hosts send their journals through rsyslog (iac-homelab's rsyslog role):
   # RFC 5424 with the app name journal and each entry's journal fields as JSON. Those go to the
   # journal parser (syslog_journal, then journald.yaml), as the prx-999 VMs' journals do; only
   # from the hosts' addresses (the relay keeps the sender's), anything else is syslog.

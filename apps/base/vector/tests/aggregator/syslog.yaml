@@ -336,7 +336,7 @@ tests:
       - insert_at: syslog_by_sender
         type: vrl
         source: |
-          # As iac-homelab's proxmox/rsyslog.conf sends it (from a run of it in rsyslog 8.2001).
+          # As iac-homelab's rsyslog role sends it (from a run of its rsyslog.conf in rsyslog 8.2001).
           . = {
             "message": s'<38>1 2026-10-15T18:00:00.123456+00:00 prx-001 journal - - - { "MESSAGE": "Accepted publickey for root from 192.168.50.140 port 51234 ssh2: ED25519 SHA256:abc", "PRIORITY": "6", "SYSLOG_FACILITY": "4", "SYSLOG_IDENTIFIER": "sshd-session", "_PID": "1234", "_COMM": "sshd-session", "_CMDLINE": "sshd-session: root [priv]", "_SYSTEMD_UNIT": "ssh.service", "_HOSTNAME": "prx-001", "_TRANSPORT": "syslog", "_BOOT_ID": "b00t", "_SYSTEMD_SLICE": "system.slice" }',
             "fromhost_ip": "192.168.111.2", "received": "2026-10-15T18:00:00.200000+00:00", "transport": "imtcp",
