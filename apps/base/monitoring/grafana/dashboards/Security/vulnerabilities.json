@@ -1,7 +1,7 @@
 {
   "uid": "security-vulnerabilities",
   "title": "Vulnerabilities",
-  "description": "CVEs that apply to what's running (advisory-map): applications, Talos, Kubernetes and the VMs' Debian packages, with known-exploited ones flagged.",
+  "description": "CVEs that apply to what's running (advisory-map): applications, Talos, Kubernetes and the VMs' Debian packages, with known-exploited ones flagged and the weaknesses (CWEs) they're instances of.",
   "tags": [
     "security"
   ],
@@ -169,6 +169,35 @@
         },
         "multi": false,
         "includeAll": false
+      },
+      {
+        "name": "cwe",
+        "label": "Weakness",
+        "description": "Narrows the Weaknesses row to these CWEs.",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(advisory_map_vulnerability_cwe_info, cwe)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "definition": "label_values(advisory_map_vulnerability_cwe_info, cwe)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 3
       }
     ]
   },
@@ -2161,6 +2190,282 @@
     },
     {
       "type": "row",
+      "title": "Weaknesses",
+      "id": 26,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Without a CWE",
+      "id": 27,
+      "description": "CVEs whose records cite no weakness (CWE): mostly records from before 2022, which describe the problem in text only.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 4,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}) unless on (cve) advisory_map_vulnerability_cwe_info) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "CVEs by weakness",
+      "id": 28,
+      "description": "The weaknesses (CWEs) the most CVEs are instances of, as their records cite them. A CVE with several counts under each.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 4,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sort_desc(topk(15, count by (cwe, cwe_name) (advisory_map_vulnerability_cwe_info{cwe=~\"$cwe\"} and on (cve) advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})))",
+          "instant": true,
+          "legendFormat": "{{cwe}} {{cwe_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "CVEs by weakness",
+      "id": 29,
+      "description": "Each CVE with the weaknesses (CWEs) its record cites, and how many findings it has. Click a CVE for its record, a CWE for MITRE's definition.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 14,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(label_replace(label_replace(advisory_map_vulnerability_cwe_info{cwe=~\"$cwe\"} * on (cve) group_left () count by (cve) (advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}), \"definition\", \"https://cwe.mitre.org/data/definitions/$1.html\", \"cwe\", \"CWE-(\\\\d+)\"), \"record\", \"https://www.cve.org/CVERecord?id=$1\", \"cve\", \"(CVE-.+)\"), \"record\", \"https://osv.dev/vulnerability/$1\", \"cve\", \"(GHSA-.+)\")",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "cwe",
+                "cwe_name",
+                "cve",
+                "Value",
+                "definition",
+                "record"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "cwe": 0,
+              "cwe_name": 1,
+              "cve": 2,
+              "Value": 3,
+              "definition": 4,
+              "record": 5
+            },
+            "renameByName": {
+              "cwe": "CWE",
+              "cwe_name": "Weakness",
+              "cve": "CVE",
+              "Value": "Findings"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None",
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CVE"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Record",
+                    "url": "${__data.fields.record}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CWE"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Definition",
+                    "url": "${__data.fields.definition}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Findings"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "definition"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "record"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Findings",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
       "title": "Health",
       "id": 18,
       "collapsed": false,
@@ -2168,7 +2473,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 58
       },
       "panels": []
     },
@@ -2185,7 +2490,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 48
+        "y": 59
       },
       "targets": [
         {
@@ -2249,7 +2554,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 48
+        "y": 59
       },
       "targets": [
         {
@@ -2312,7 +2617,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 48
+        "y": 59
       },
       "targets": [
         {
@@ -2375,7 +2680,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 48
+        "y": 59
       },
       "targets": [
         {
@@ -2438,7 +2743,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 48
+        "y": 59
       },
       "targets": [
         {
@@ -2501,7 +2806,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 52
+        "y": 63
       },
       "targets": [
         {
@@ -2574,7 +2879,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 52
+        "y": 63
       },
       "targets": [
         {

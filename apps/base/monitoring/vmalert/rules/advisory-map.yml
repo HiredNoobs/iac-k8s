@@ -1,0 +1,50 @@
+# advisory-map (apps/base/advisory-map), from its own metrics (vmagent's advisory-map job). A feed
+# that stops refreshing or a match that stops succeeding leaves the Vulnerabilities dashboard
+# showing the last findings, with nothing on it saying they're old.
+groups:
+  - name: advisory-map
+    interval: 60s
+    rules:
+      # Feeds refresh daily (FEED_REFRESH), keeping the last good copy while a refresh fails. Two
+      # days without a refresh, or none since the app started without a copy, means each try
+      # fails: the source down or changed, the volume full.
+      - alert: AdvisoryFeedStale
+        expr: >-
+          time() - advisory_map_feed_last_success_timestamp_seconds > 2 * 86400
+          or (advisory_map_feed_last_attempt_timestamp_seconds
+          unless on (job, instance, feed) advisory_map_feed_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: advisory-map's {{ $labels.feed }} feed isn't refreshing
+          description: >-
+            The {{ $labels.feed }} feed hasn't refreshed for two days, or never has: findings
+            are matched against its last good copy, if it has one, and miss what's been
+            published since.
+          runbook: >-
+            The refresh's error: kubectl -n advisory-map logs deploy/advisory-map | grep 'feed
+            {{ $labels.feed }}'. Feed ages are on the Vulnerabilities dashboard (Health).
+            Trigger: set CVELIST_URL (or OSV_URL) to an unreachable URL and delete
+            /data/cvelist.meta.json (osv.meta.json) on the volume, then restart the pod; it
+            fires an hour later.
+
+      # Matching runs every 15 minutes (MATCH_INTERVAL); a failed run keeps the last findings.
+      # Absent: the app isn't running or isn't scraped (TargetDown covers a failing scrape).
+      - alert: AdvisoryMatchFailing
+        expr: >-
+          time() - advisory_map_match_last_success_timestamp_seconds > 3600
+          or absent(advisory_map_match_last_success_timestamp_seconds)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: advisory-map hasn't matched versions for over an hour
+          description: >-
+            advisory-map's matches have failed for over an hour, or it isn't reporting: the
+            dashboard's findings are from its last good match and miss what's been installed,
+            upgraded or published since.
+          runbook: >-
+            The error: kubectl -n advisory-map logs deploy/advisory-map | grep 'match failed'
+            (usually VictoriaMetrics unreachable, or a mapping query it refuses). Trigger: set
+            PROMETHEUS_URL to an unreachable URL and restart the pod; it fires 15 minutes later.

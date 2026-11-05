@@ -19,3 +19,4 @@ configMapGenerator:
       - rules/falco.yml
       - rules/redis.yml
       - rules/rabbitmq.yml
+      - rules/advisory-map.yml
