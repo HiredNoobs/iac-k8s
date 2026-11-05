@@ -197,6 +197,15 @@ scrape_configs:
     # The objects' own namespace/pod labels win over the target's.
     honor_labels: true
 
+  # advisory-map (apps/base/advisory-map): the CVEs that apply to what's installed. Not through the
+  # pods job: its findings' own namespace label would become exported_namespace there.
+  - job_name: advisory-map
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ["advisory-map.advisory-map.svc:8080"]
+    honor_labels: true
+
   # blackbox_exporter's probes (blackbox-exporter/release.yaml has the modules). Each target group
   # sets its module, which is kept as a label (the alerts in vmalert/rules/blackbox.yml use it);
   # instance is the target. Names resolve like any client's (the router, then Pi-hole), so the
