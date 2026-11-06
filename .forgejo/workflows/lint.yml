@@ -17,8 +17,8 @@ env:
   # The Flux CRDs' schemas, same version as gotk-components.yaml and FLUX_VERSION in tools-bin's
   # context-setup.
   # renovate: datasource=github-releases depName=fluxcd/flux2 extractVersion=^v(?<version>.+)$
-  FLUX_VERSION: "2.9.6"
-  FLUX_CRD_SCHEMAS_SHA256: "380b713bd28a2c27cfc7710219aae79e1c9ceff9bee50197c023047190532987"
+  FLUX_VERSION: "2.10.0"
+  FLUX_CRD_SCHEMAS_SHA256: "a1d64309d0965ef681f161ce2d28a1a58aa78239d6f5e94ea6e556b5674cfefb"
   # Kubernetes' schemas at a fixed commit (kubeconform's default follows master). By hand, with
   # kubernetes_version in iac-homelab.
   KUBERNETES_VERSION: "1.37.0"
