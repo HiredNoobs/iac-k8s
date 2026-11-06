@@ -21,7 +21,7 @@ tests:
               assert_eq!(get!(., ["event.outcome"]), "failure")
               # The first number is the response code (plugin/errors), by its name.
               assert_eq!(get!(., ["dns.response_code"]), "SERVFAIL")
-              assert!(get!(., ["event.count"]) == null)
+              assert!(get!(., ["Dns.ErrorCount"]) == null)
               assert_eq!(get!(., ["dns.question.name"]), "pihole.hirednoobs.com")
               assert_eq!(get!(., ["dns.question.type"]), "AAAA")
               assert_eq!(get!(., ["error.message"]), "read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")

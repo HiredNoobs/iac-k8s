@@ -67,6 +67,25 @@ tests:
               assert_eq!(get!(., ["log.origin.file.name"]), "cidrallocator.go")
               assert_eq!(get!(., ["event.original"]), "I1014 15:45:34.240357       1 cidrallocator.go:278] updated ClusterIP allocator for Service CIDR 10.96.0.0/12")
 
+  - name: "klog warning line"
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "W1013 08:00:00.123456       1 reflector.go:561] k8s.io/client-go: failed to list",
+            "timestamp": t'2026-10-13T08:00:00.124Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "cert-manager", "pod_name": "x-1", "container_name": "cert-manager-controller"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(._msg, "k8s.io/client-go: failed to list")
+              assert_eq!(get!(., ["log.origin.file.line"]), 561)
+
   - name: "klog client-go warning is a warning (the longhorn-manager sample)"
     inputs:
       - insert_at: pods

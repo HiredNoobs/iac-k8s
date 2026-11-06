@@ -21,20 +21,6 @@ tests:
               assert!(is_timestamp(get!(., ["event.ingested"])))
               assert!(is_timestamp(get!(., ["event.created"])))
 
-  - name: a parsed audit event is an event
-    inputs:
-      - insert_at: events
-        type: vrl
-        source: |
-          . = {"message": "{\"auditID\":\"a4\",\"verb\":\"get\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
-    outputs:
-      - extract_from: final
-        conditions:
-          - type: vrl
-            source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert!(!exists(."error.type"))
-
   - name: audit event
     inputs:
       - insert_at: events
@@ -58,6 +44,7 @@ tests:
               assert!(!exists(."error.message"))
               assert_eq!(get!(., ["event.dataset"]), "kubernetes.audit")
               assert_eq!(get!(., ["event.provider"]), "kube-apiserver")
+              assert_eq!(get!(., ["event.kind"]), "event")
               assert_eq!(get!(., ["ecs.version"]), "9.5.0")
               assert!(is_timestamp(get!(., ["event.created"])))
               assert_eq!(get!(., ["host.hostname"]), "cp-1")
@@ -92,7 +79,7 @@ tests:
               for_each(keys(.)) -> |_i, k| {
                 assert!(starts_with(k, "_") || match(k, r'^[A-Z]') || includes(["ecs", "event", "url", "http", "host", "source", "client", "related", "user", "user_agent", "orchestrator"], split(k, ".")[0]), "not ECS: " + k)
               }
-              assert!(!exists(.objectRef))
+              assert!(!exists(."error.type"))
 
   - name: audit event, refused
     inputs:

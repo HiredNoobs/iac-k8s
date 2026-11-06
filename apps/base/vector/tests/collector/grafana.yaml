@@ -84,6 +84,10 @@ tests:
               assert_eq!(get!(., ["event.dataset"]), "monitoring.grafana")
               assert_eq!(.tags, ["generic"])
               assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(get!(., ["log.logger"]), "cleanup")
+              assert_eq!(._time, t'2026-10-15T08:00:00.123Z')
+              assert!(!exists(.t))
 
   - name: "format mismatch: Grafana Request Completed without a status"
     inputs:

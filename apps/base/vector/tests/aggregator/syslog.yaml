@@ -507,20 +507,56 @@ tests:
               assert_eq!(get!(., ["related.ip"]), ["192.168.50.56", "192.168.111.100"])
               assert!(!exists(."dns.response_code"))
 
-  - name: router DNS answers without an address
+  - name: router DNS answer, a name that doesn't exist
     inputs:
       - insert_at: syslog
         type: vrl
         source: |
           . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: reply nope.example.com is NXDOMAIN", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["dns.question.name"]), "nope.example.com")
+              assert_eq!(get!(., ["event.action"]), "dns-reply")
+              assert_eq!(get!(., ["dns.response_code"]), "NXDOMAIN")
+              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert!(!exists(."dns.resolved_ip"))
+
+  - name: router DNS answer, a name without a record of that type
+    inputs:
       - insert_at: syslog
         type: vrl
         source: |
           . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: cached v4only.example.com is NODATA-IPv6", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["event.action"]), "dns-cached")
+              assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert!(!exists(."dns.resolved_ip"))
+
+  - name: router DNS answer, a CNAME
+    inputs:
       - insert_at: syslog
         type: vrl
         source: |
           . = {"message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: reply www.example.org is <CNAME>", "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02+01:00", "transport": "imudp"}
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(get!(., ["Dns.Answer"]), "<CNAME>")
+              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert!(!exists(."dns.response_code"))
+
+  - name: router DNS answer from a hosts file
+    inputs:
       - insert_at: syslog
         type: vrl
         source: |
@@ -530,24 +566,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              name = get!(., ["dns.question.name"])
-              if name == "nope.example.com" {
-                assert_eq!(get!(., ["event.action"]), "dns-reply")
-                assert_eq!(get!(., ["dns.response_code"]), "NXDOMAIN")
-                assert_eq!(get!(., ["event.outcome"]), "failure")
-                assert!(!exists(."dns.resolved_ip"))
-              } else if name == "v4only.example.com" {
-                assert_eq!(get!(., ["event.action"]), "dns-cached")
-                assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
-                assert_eq!(get!(., ["event.outcome"]), "success")
-              } else if name == "www.example.org" {
-                assert_eq!(get!(., ["Dns.Answer"]), "<CNAME>")
-                assert!(!exists(."dns.response_code"))
-              } else {
-                assert_eq!(name, "router.asus.com")
-                assert_eq!(get!(., ["event.action"]), "dns-hosts")
-                assert_eq!(get!(., ["dns.resolved_ip"]), ["192.168.50.1"])
-              }
+              assert_eq!(get!(., ["dns.question.name"]), "router.asus.com")
+              assert_eq!(get!(., ["event.action"]), "dns-hosts")
+              assert_eq!(get!(., ["dns.resolved_ip"]), ["192.168.50.1"])
 
   - name: router firewall drop, TCP SYN from outside
     inputs:
