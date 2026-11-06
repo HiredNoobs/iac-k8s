@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: advisory-map
-          image: hirednoobs/advisory-map:0.3.1@sha256:56115b210e3e0038e76383088fec67bf6e6385d20986f2851f0afae8fea948c5
+          image: hirednoobs/advisory-map:0.3.2@sha256:2b3147b4aa61e4c429dd353b1b8c36aba36287c16eef0297f8349acaf0759731
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -47,6 +47,16 @@ spec:
               value: /etc/advisory-map/mapping.toml
             - name: DATA_DIR
               value: /data
+            # Hourly where a refresh fetches only what changed (KEV, OSV, the CVE List); the Debian
+            # tracker comes whole. CWE keeps the 24h default.
+            - name: FEED_REFRESH_KEV
+              value: 1h
+            - name: FEED_REFRESH_OSV
+              value: 1h
+            - name: FEED_REFRESH_CVELIST
+              value: 1h
+            - name: FEED_REFRESH_DEBIAN
+              value: 6h
           ports:
             - name: http
               containerPort: 8080
