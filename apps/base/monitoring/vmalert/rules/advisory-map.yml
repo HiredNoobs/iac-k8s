@@ -5,9 +5,9 @@ groups:
   - name: advisory-map
     interval: 60s
     rules:
-      # Feeds refresh daily (FEED_REFRESH), keeping the last good copy while a refresh fails. Two
-      # days without a refresh, or none since the app started without a copy, means each try
-      # fails: the source down or changed, the volume full.
+      # Feeds refresh every 1-24h (FEED_REFRESH_* in the deployment), keeping the last good copy
+      # while a refresh fails. Two days without a refresh, or none since the app started without
+      # a copy, means each try fails: the source down or changed, the volume full.
       - alert: AdvisoryFeedStale
         expr: >-
           time() - advisory_map_feed_last_success_timestamp_seconds > 2 * 86400

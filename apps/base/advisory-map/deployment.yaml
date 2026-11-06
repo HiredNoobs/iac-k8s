@@ -47,6 +47,16 @@ spec:
               value: /etc/advisory-map/mapping.toml
             - name: DATA_DIR
               value: /data
+            # Hourly where a refresh fetches only what changed (KEV, OSV, the CVE List); the Debian
+            # tracker comes whole. CWE keeps the 24h default.
+            - name: FEED_REFRESH_KEV
+              value: 1h
+            - name: FEED_REFRESH_OSV
+              value: 1h
+            - name: FEED_REFRESH_CVELIST
+              value: 1h
+            - name: FEED_REFRESH_DEBIAN
+              value: 6h
           ports:
             - name: http
               containerPort: 8080
