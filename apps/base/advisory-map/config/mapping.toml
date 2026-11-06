@@ -1,7 +1,7 @@
 # What runs, as CVE List products and OSV packages (app-advisory-map's docs/mapping.md). Products are
 # named as their CVE records name them, an entry per name where they use several. Software with no
 # records yet is named as they would name it: owner/repository (GitHub's CNA) and its Go module. The
-# VMs' Debian packages need no entry.
+# VMs' and Proxmox hosts' Debian packages need no entry.
 #
 # Containers by their image's tag (image_spec, as the pod spec has it): what runs. Helm releases by
 # appVersion where the images can't say it: charts that run them by digest alone (cert-manager,
@@ -521,3 +521,13 @@ query = 'node_exporter_build_info{instance=~"prx-999-.*"}'
 ecosystem = "Go"
 package = "github.com/prometheus/node_exporter"
 kind = "vm-binary"
+
+# -----------------------------------------------------
+# The Proxmox hosts (iac-homelab's proxmox.yml)
+# -----------------------------------------------------
+
+[[software]]
+query = 'node_exporter_build_info{instance=~"prx-\\d+"}'
+ecosystem = "Go"
+package = "github.com/prometheus/node_exporter"
+kind = "host-binary"
