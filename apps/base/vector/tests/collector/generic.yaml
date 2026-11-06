@@ -1,6 +1,6 @@
-# Unit tests for config/collector/generic.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/generic.yaml.
 tests:
-  - name: "klog structured line (the csi-snapshotter sample)"
+  - name: klog structured line (the csi-snapshotter sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -15,21 +15,21 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(."log.level", "error")
               assert_eq!(._msg, "Failed to watch")
-              assert_eq!(get!(., ["error.message"]), "failed to list *v1.VolumeSnapshotClass: the server could not find the requested resource (get volumesnapshotclasses.snapshot.storage.k8s.io)")
-              assert_eq!(get!(., ["log.logger"]), "UnhandledError")
+              assert_eq!(."error.message", "failed to list *v1.VolumeSnapshotClass: the server could not find the requested resource (get volumesnapshotclasses.snapshot.storage.k8s.io)")
+              assert_eq!(."log.logger", "UnhandledError")
               assert_eq!(.reflector, "github.com/kubernetes-csi/external-snapshotter/client/v8/informers/externalversions/factory.go:143")
               assert_eq!(.type, "*v1.VolumeSnapshotClass")
-              assert_eq!(get!(., ["log.origin.file.name"]), "reflector.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 227)
-              assert_eq!(get!(., ["event.original"]), "E1014 11:28:39.910225       1 reflector.go:227] \"Failed to watch\" err=\"failed to list *v1.VolumeSnapshotClass: the server could not find the requested resource (get volumesnapshotclasses.snapshot.storage.k8s.io)\" logger=\"UnhandledError\" reflector=\"github.com/kubernetes-csi/external-snapshotter/client/v8/informers/externalversions/factory.go:143\" type=\"*v1.VolumeSnapshotClass\"")
+              assert_eq!(."log.origin.file.name", "reflector.go")
+              assert_eq!(."log.origin.file.line", 227)
+              assert_eq!(."event.original", "E1014 11:28:39.910225       1 reflector.go:227] \"Failed to watch\" err=\"failed to list *v1.VolumeSnapshotClass: the server could not find the requested resource (get volumesnapshotclasses.snapshot.storage.k8s.io)\" logger=\"UnhandledError\" reflector=\"github.com/kubernetes-csi/external-snapshotter/client/v8/informers/externalversions/factory.go:143\" type=\"*v1.VolumeSnapshotClass\"")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(.err))
               assert!(!exists(.logger))
               assert_eq!(._time, t'2026-10-15T08:00:00.500Z')
 
-  - name: "klog structured line, quotes inside a value (the kube-controller-manager sample)"
+  - name: klog structured line, quotes inside a value (the kube-controller-manager sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -45,9 +45,9 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "Unhandled Error")
-              assert_eq!(get!(., ["error.message"]), "error syncing CronJobController lldap/lldap-bootstrap, requeuing: Operation cannot be fulfilled on cronjobs.batch \"lldap-bootstrap\": the object has been modified")
+              assert_eq!(."error.message", "error syncing CronJobController lldap/lldap-bootstrap, requeuing: Operation cannot be fulfilled on cronjobs.batch \"lldap-bootstrap\": the object has been modified")
 
-  - name: "klog plain line (the kube-apiserver sample)"
+  - name: klog plain line (the kube-apiserver sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -62,12 +62,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "updated ClusterIP allocator for Service CIDR 10.96.0.0/12")
-              assert_eq!(get!(., ["log.origin.file.name"]), "cidrallocator.go")
-              assert_eq!(get!(., ["event.original"]), "I1014 15:45:34.240357       1 cidrallocator.go:278] updated ClusterIP allocator for Service CIDR 10.96.0.0/12")
+              assert_eq!(."log.origin.file.name", "cidrallocator.go")
+              assert_eq!(."event.original", "I1014 15:45:34.240357       1 cidrallocator.go:278] updated ClusterIP allocator for Service CIDR 10.96.0.0/12")
 
-  - name: "klog warning line"
+  - name: klog warning line
     inputs:
       - insert_at: pods
         type: vrl
@@ -82,11 +82,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(."log.level", "warning")
               assert_eq!(._msg, "k8s.io/client-go: failed to list")
-              assert_eq!(get!(., ["log.origin.file.line"]), 561)
+              assert_eq!(."log.origin.file.line", 561)
 
-  - name: "klog client-go warning is a warning (the longhorn-manager sample)"
+  - name: klog client-go warning is a warning (the longhorn-manager sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -101,10 +101,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(."log.level", "warning")
               assert_eq!(._msg, "Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice")
 
-  - name: "zap console line with logger, caller and fields (the Envoy Gateway sample)"
+  - name: zap console line with logger, caller and fields (the Envoy Gateway sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -119,17 +119,17 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["log.logger"]), "provider")
-              assert_eq!(get!(., ["log.origin.file.name"]), "kubernetes/controller.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 1263)
+              assert_eq!(."log.level", "info")
+              assert_eq!(."log.logger", "provider")
+              assert_eq!(."log.origin.file.name", "kubernetes/controller.go")
+              assert_eq!(."log.origin.file.line", 1263)
               assert_eq!(._msg, "processing OIDC HMAC Secret")
               assert_eq!(.runner, "provider")
               assert_eq!(.namespace, "envoy-gateway")
               assert_eq!(.name, "envoy-oidc-hmac")
-              assert_eq!(get!(., ["event.original"]), "2026-10-15T00:17:00.888Z\tinfo\tprovider\tkubernetes/controller.go:1263\tprocessing OIDC HMAC Secret\t{\"runner\": \"provider\", \"namespace\": \"envoy-gateway\", \"name\": \"envoy-oidc-hmac\"}")
+              assert_eq!(."event.original", "2026-10-15T00:17:00.888Z\tinfo\tprovider\tkubernetes/controller.go:1263\tprocessing OIDC HMAC Secret\t{\"runner\": \"provider\", \"namespace\": \"envoy-gateway\", \"name\": \"envoy-oidc-hmac\"}")
 
-  - name: "zap console line with a caller only (the VictoriaMetrics sample)"
+  - name: zap console line with a caller only (the VictoriaMetrics sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -144,12 +144,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert!(!exists(."log.logger"))
-              assert_eq!(get!(., ["log.origin.file.name"]), "VictoriaMetrics/lib/promscrape/scraper.go")
+              assert_eq!(."log.origin.file.name", "VictoriaMetrics/lib/promscrape/scraper.go")
               assert_eq!(._msg, "kubernetes_sd_configs: added targets: 2, removed targets: 3; total targets: 75")
 
-  - name: "zap console line without a caller, a logger and fields (the RabbitMQ topology operator sample)"
+  - name: zap console line without a caller, a logger and fields (the RabbitMQ topology operator sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -164,14 +164,14 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "debug")
-              assert_eq!(get!(., ["log.logger"]), "events")
+              assert_eq!(."log.level", "debug")
+              assert_eq!(."log.logger", "events")
               assert_eq!(._msg, "Event occurred")
               assert_eq!(.reason, "PasswordUpdated")
               assert_eq!(.object, {"name": "contentbot", "namespace": "rabbitmq"})
               assert_eq!(.note, "synced password for user \"contentbot\"")
 
-  - name: "zap console line without a caller or logger, a controller's fields (the RabbitMQ topology operator sample)"
+  - name: zap console line without a caller or logger, a controller's fields (the RabbitMQ topology operator sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -186,15 +186,15 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert!(!exists(."log.logger"))
               assert_eq!(._msg, "Finished reconciling")
-              assert_eq!(get!(., ["orchestrator.resource.type"]), "user")
-              assert_eq!(get!(., ["orchestrator.resource.name"]), "contentbot")
-              assert_eq!(get!(., ["trace.id"]), "6b343405-f8bb-4ecc-bcda-32608de5a5e7")
+              assert_eq!(."orchestrator.resource.type", "user")
+              assert_eq!(."orchestrator.resource.name", "contentbot")
+              assert_eq!(."trace.id", "6b343405-f8bb-4ecc-bcda-32608de5a5e7")
               assert!(!exists(.User))
 
-  - name: "Go slog text line with pairs (the kube-vip sample)"
+  - name: Go slog text line with pairs (the kube-vip sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -209,14 +209,14 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "new leader")
               assert_eq!(.leader, "prx-001-srv-prod-core-worker-002")
               assert_eq!(.service, "rsyslog")
               assert_eq!(.uid, "42dfedcc-1d30-4700-b8ff-659e2f0fa42b")
-              assert_eq!(get!(., ["event.original"]), "2026/10/14 15:29:38 INFO new leader leader=prx-001-srv-prod-core-worker-002 service=rsyslog uid=42dfedcc-1d30-4700-b8ff-659e2f0fa42b")
+              assert_eq!(."event.original", "2026/10/14 15:29:38 INFO new leader leader=prx-001-srv-prod-core-worker-002 service=rsyslog uid=42dfedcc-1d30-4700-b8ff-659e2f0fa42b")
 
-  - name: "Go slog text line with an error (the longhorn-manager sample)"
+  - name: Go slog text line with an error (the longhorn-manager sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -231,12 +231,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "smartctl failed")
               assert_eq!(.device, "/dev/sdb")
-              assert_eq!(get!(., ["error.message"]), "exit status 4")
+              assert_eq!(."error.message", "exit status 4")
 
-  - name: "Go slog text line without pairs"
+  - name: Go slog text line without pairs
     inputs:
       - insert_at: pods
         type: vrl
@@ -253,7 +253,7 @@ tests:
             source: |
               assert_eq!(._msg, "starting")
 
-  - name: "logfmt line of a Longhorn replica (the instance-manager sample)"
+  - name: logfmt line of a Longhorn replica (the instance-manager sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -268,19 +268,19 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "Starting hashing snapshot backup-n-ada89a9d-d5ec-4f5a-a181-fa444666d046")
               assert_eq!(._time, t'2026-10-15T00:00:31.071971522Z')
-              assert_eq!(get!(., ["Storage.Volume.Name"]), "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53")
-              assert_eq!(get!(., ["Storage.Replica.Name"]), "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-r-0c677d08")
+              assert_eq!(."Storage.Volume.Name", "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53")
+              assert_eq!(."Storage.Replica.Name", "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-r-0c677d08")
               assert!(!exists(."Storage.Engine.Name"))
-              assert_eq!(get!(., ["log.origin.function"]), "replica.(*SnapshotHashJob).Execute")
-              assert_eq!(get!(., ["log.origin.file.name"]), "hash.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 198)
+              assert_eq!(."log.origin.function", "replica.(*SnapshotHashJob).Execute")
+              assert_eq!(."log.origin.file.name", "hash.go")
+              assert_eq!(."log.origin.file.line", 198)
               for_each(["time", "level", "msg", "func", "file"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
-              assert_eq!(get!(., ["event.original"]), "[pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-r-0c677d08] time=\"2026-10-15T00:00:31.071971522Z\" level=info msg=\"Starting hashing snapshot backup-n-ada89a9d-d5ec-4f5a-a181-fa444666d046\" func=\"replica.(*SnapshotHashJob).Execute\" file=\"hash.go:198\"")
+              assert_eq!(."event.original", "[pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-r-0c677d08] time=\"2026-10-15T00:00:31.071971522Z\" level=info msg=\"Starting hashing snapshot backup-n-ada89a9d-d5ec-4f5a-a181-fa444666d046\" func=\"replica.(*SnapshotHashJob).Execute\" file=\"hash.go:198\"")
 
-  - name: "logfmt line with its own pairs (the Longhorn backup job sample)"
+  - name: logfmt line with its own pairs (the Longhorn backup job sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -301,7 +301,7 @@ tests:
               assert_eq!(.concurrent, "2")
               assert!(!exists(."Storage.Volume.Name"))
 
-  - name: "Python logging line (the contentbot sample)"
+  - name: Python logging line (the contentbot sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -316,13 +316,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "Received packet PING data ")
-              assert_eq!(get!(., ["log.origin.file.name"]), "async_client.py")
-              assert_eq!(get!(., ["log.origin.function"]), "_receive_packet")
-              assert_eq!(get!(., ["log.origin.file.line"]), 433)
+              assert_eq!(."log.origin.file.name", "async_client.py")
+              assert_eq!(."log.origin.function", "_receive_packet")
+              assert_eq!(."log.origin.file.line", 433)
 
-  - name: "Pi-hole FTL line (the sample)"
+  - name: Pi-hole FTL line (the sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -337,12 +337,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "Size of /etc/pihole/pihole-FTL.db is 0.36 MB, deleted 0 of 4907 rows")
-              assert_eq!(get!(., ["process.pid"]), 184)
-              assert_eq!(get!(., ["process.thread.id"]), 186)
+              assert_eq!(."process.pid", 184)
+              assert_eq!(."process.thread.id", 186)
 
-  - name: "Pi-hole's other programs' lines (the cron sample)"
+  - name: Pi-hole's other programs' lines (the cron sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -358,10 +358,10 @@ tests:
           - type: vrl
             source: |
               assert!(!exists(."log.level"))
-              assert_eq!(get!(., ["process.name"]), "crond")
+              assert_eq!(."process.name", "crond")
               assert_eq!(._msg, "USER root pid 563550 cmd PATH=\"$PATH:/usr/sbin:/usr/local/bin/\" pihole updatechecker")
 
-  - name: "RabbitMQ line, its colour codes removed (the sample)"
+  - name: RabbitMQ line, its colour codes removed (the sample)
     inputs:
       - insert_at: pods
         type: vrl
@@ -376,12 +376,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["process.thread.name"]), "0.428328.0")
+              assert_eq!(."log.level", "info")
+              assert_eq!(."process.thread.name", "0.428328.0")
               assert_eq!(._msg, "Successfully set permissions for user 'contentbot' in virtual host '/' to '.*', '.*', '.*'")
-              assert_eq!(get!(., ["event.original"]), "2026-10-14 10:43:46.799992+00:00 [info] <0.428328.0> Successfully set permissions for user 'contentbot' in virtual host '/' to '.*', '.*', '.*'")
+              assert_eq!(."event.original", "2026-10-14 10:43:46.799992+00:00 [info] <0.428328.0> Successfully set permissions for user 'contentbot' in virtual host '/' to '.*', '.*', '.*'")
 
-  - name: "a line in none of the formats is left as it is (the homepage banner)"
+  - name: a line in none of the formats is left as it is (the homepage banner)
     inputs:
       - insert_at: pods
         type: vrl
@@ -401,7 +401,7 @@ tests:
               assert!(!exists(."log.level"))
               assert_eq!(.tags, ["generic"])
 
-  - name: "a line's pairs don't replace Vector's fields"
+  - name: a line's pairs don't replace Vector's fields
     inputs:
       - insert_at: pods
         type: vrl
@@ -417,10 +417,10 @@ tests:
           - type: vrl
             source: |
               assert_eq!(.kubernetes.namespace, "kube-vip")
-              assert_eq!(get!(., ["Log.Stream"]), "stderr")
+              assert_eq!(."Log.Stream", "stderr")
               assert_eq!(._time, t'2026-10-15T08:00:00.500Z')
 
-  - name: "a JSON line isn't one of generic's text formats, and has no event.original"
+  - name: a JSON line isn't one of generic's text formats, and has no event.original
     inputs:
       - insert_at: pods
         type: vrl

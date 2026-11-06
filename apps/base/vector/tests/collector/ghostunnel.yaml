@@ -1,4 +1,4 @@
-# Unit tests for config/collector/ghostunnel.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/ghostunnel.yaml.
 tests:
   - name: ghostunnel pipe (the sample)
     inputs:
@@ -15,8 +15,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "ghostunnel.log")
-              assert_eq!(get!(., ["source.ip"]), "10.244.10.27")
-              assert_eq!(get!(., ["source.port"]), 45578)
-              assert_eq!(get!(., ["destination.ip"]), "127.0.0.1")
-              assert_eq!(get!(., ["destination.port"]), 17170)
+              assert_eq!(."event.dataset", "ghostunnel.log")
+              assert_eq!(."source.ip", "10.244.10.27")
+              assert_eq!(."source.port", 45578)
+              assert_eq!(."destination.ip", "127.0.0.1")
+              assert_eq!(."destination.port", 17170)

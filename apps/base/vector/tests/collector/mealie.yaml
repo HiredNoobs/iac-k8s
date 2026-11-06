@@ -1,4 +1,4 @@
-# Unit tests for config/collector/mealie.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/mealie.yaml.
 tests:
   - name: Mealie access line (the sample)
     inputs:
@@ -15,19 +15,19 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "mealie.access")
-              assert_eq!(get!(., ["event.category"]), ["web"])
-              assert_eq!(get!(., ["event.type"]), ["access"])
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["source.ip"]), "10.244.1.1")
-              assert_eq!(get!(., ["source.port"]), 48410)
-              assert_eq!(get!(., ["http.response.status_code"]), 200)
-              assert_eq!(get!(., ["http.request.method"]), "GET")
-              assert_eq!(get!(., ["http.version"]), "1.1")
-              assert_eq!(get!(., ["url.path"]), "/api/app/about")
-              assert_eq!(get!(., ["url.query"]), "x=1")
+              assert_eq!(."event.dataset", "mealie.access")
+              assert_eq!(."event.category", ["web"])
+              assert_eq!(."event.type", ["access"])
+              assert_eq!(."log.level", "info")
+              assert_eq!(."source.ip", "10.244.1.1")
+              assert_eq!(."source.port", 48410)
+              assert_eq!(."http.response.status_code", 200)
+              assert_eq!(."http.request.method", "GET")
+              assert_eq!(."http.version", "1.1")
+              assert_eq!(."url.path", "/api/app/about")
+              assert_eq!(."url.query", "x=1")
 
-  - name: Mealie other line
+  - name: Mealie's other lines keep their level, no access fields
     inputs:
       - insert_at: pods
         type: vrl
@@ -42,8 +42,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "mealie.log")
-              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(."event.dataset", "mealie.log")
+              assert_eq!(."log.level", "warning")
               assert!(!exists(."source.ip"))
 
   - name: Mealie's uvicorn line is fine
@@ -61,7 +61,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")
 
   - name: "format mismatch: Mealie level and space without its prefix"
     inputs:
@@ -78,7 +78,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."error.type", "format_mismatch")
 
   - name: Mealie traceback line is fine
     inputs:
@@ -95,4 +95,4 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")

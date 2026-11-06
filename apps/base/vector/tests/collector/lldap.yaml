@@ -1,4 +1,4 @@
-# Unit tests for config/collector/lldap.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/lldap.yaml.
 tests:
   - name: lldap's own line (the sample)
     inputs:
@@ -15,8 +15,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "lldap.log")
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."event.dataset", "lldap.log")
+              assert_eq!(."log.level", "info")
               assert!(!exists(.level))
 
   - name: lldap login attempt (the sample)
@@ -34,14 +34,14 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.action"]), "password-login")
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.outcome"]), "unknown")
-              assert_eq!(get!(., ["user.name"]), "hirednoobs")
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.outcome", "unknown")
+              assert_eq!(."user.name", "hirednoobs")
+              assert_eq!(."log.level", "info")
 
-  - name: lldap's WARN line
+  - name: lldap's WARN level is warning
     inputs:
       - insert_at: pods
         type: vrl
@@ -56,7 +56,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(."log.level", "warning")
 
   - name: lldap-bootstrap removed a user from a group
     inputs:
@@ -73,13 +73,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "lldap.bootstrap")
-              assert_eq!(get!(., ["event.provider"]), "lldap-bootstrap")
-              assert_eq!(get!(., ["event.category"]), ["iam"])
-              assert_eq!(get!(., ["event.action"]), "removed-from-group")
-              assert_eq!(get!(., ["event.type"]), ["group", "change"])
-              assert_eq!(get!(., ["user.name"]), "mallory")
-              assert_eq!(get!(., ["group.name"]), "lldap_admin")
+              assert_eq!(."event.dataset", "lldap.bootstrap")
+              assert_eq!(."event.provider", "lldap-bootstrap")
+              assert_eq!(."event.category", ["iam"])
+              assert_eq!(."event.action", "removed-from-group")
+              assert_eq!(."event.type", ["group", "change"])
+              assert_eq!(."user.name", "mallory")
+              assert_eq!(."group.name", "lldap_admin")
 
   - name: lldap-bootstrap deleted a group
     inputs:
@@ -96,9 +96,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "group-deleted")
-              assert_eq!(get!(., ["event.type"]), ["group", "deletion"])
-              assert_eq!(get!(., ["group.name"]), "extra")
+              assert_eq!(."event.action", "group-deleted")
+              assert_eq!(."event.type", ["group", "deletion"])
+              assert_eq!(."group.name", "extra")
               assert!(!exists(."user.name"))
 
   - name: "format mismatch: lldap timestamped line without a level"
@@ -116,7 +116,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."error.type", "format_mismatch")
 
   - name: lldap startup line is fine
     inputs:
@@ -133,4 +133,4 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")

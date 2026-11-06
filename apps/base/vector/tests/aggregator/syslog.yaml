@@ -1,4 +1,4 @@
-# Unit tests for config/aggregator/syslog.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/aggregator/syslog.yaml.
 tests:
   - name: syslog RFC 3164 over UDP (as rsyslog relays it)
     inputs:
@@ -15,30 +15,30 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
-              assert_eq!(get!(., ["event.provider"]), "dnsmasq")
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.dataset", "syslog.log")
+              assert_eq!(."event.provider", "dnsmasq")
+              assert_eq!(."event.kind", "event")
               assert_eq!(._msg, "query[A] example.com from 192.168.50.10")
               # No year or time zone in the message: when rsyslog received it.
               assert_eq!(._time, t'2026-10-14T13:36:48.450111Z')
-              assert!(is_timestamp(get!(., ["event.created"])))
-              assert_eq!(get!(., ["host.hostname"]), "RT-AX88U")
-              assert_eq!(get!(., ["host.name"]), "RT-AX88U")
-              assert_eq!(get!(., ["host.ip"]), "192.168.111.1")
-              assert_eq!(get!(., ["Log.Transport"]), "udp")
+              assert!(is_timestamp(."event.created"))
+              assert_eq!(."host.hostname", "RT-AX88U")
+              assert_eq!(."host.name", "RT-AX88U")
+              assert_eq!(."host.ip", "192.168.111.1")
+              assert_eq!(."Log.Transport", "udp")
               assert!(!exists(."network.transport"))
-              assert_eq!(get!(., ["process.name"]), "dnsmasq")
-              assert_eq!(get!(., ["process.pid"]), 123)
-              assert_eq!(get!(., ["log.syslog.hostname"]), "RT-AX88U")
-              assert_eq!(get!(., ["log.syslog.appname"]), "dnsmasq")
-              assert_eq!(get!(., ["log.syslog.procid"]), "123")
-              assert_eq!(get!(., ["log.syslog.severity.code"]), 6)
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Informational")
-              assert_eq!(get!(., ["log.syslog.facility.code"]), 3)
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "daemon")
-              assert_eq!(get!(., ["log.syslog.priority"]), 30)
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert!(get!(., ["log.syslog.version"]) == null)
+              assert_eq!(."process.name", "dnsmasq")
+              assert_eq!(."process.pid", 123)
+              assert_eq!(."log.syslog.hostname", "RT-AX88U")
+              assert_eq!(."log.syslog.appname", "dnsmasq")
+              assert_eq!(."log.syslog.procid", "123")
+              assert_eq!(."log.syslog.severity.code", 6)
+              assert_eq!(."log.syslog.severity.name", "Informational")
+              assert_eq!(."log.syslog.facility.code", 3)
+              assert_eq!(."log.syslog.facility.name", "daemon")
+              assert_eq!(."log.syslog.priority", 30)
+              assert_eq!(."log.level", "info")
+              assert!(!exists(."log.syslog.version"))
               # The socket's own fields, and rsyslog's, are gone.
               for_each(["message", "fromhost_ip", "received", "transport", "host", "port", "source_type", "timestamp"]) -> |_i, k| {
                 assert!(get!(., [k]) == null, "still there: " + k)
@@ -63,16 +63,16 @@ tests:
               assert_eq!(._msg, "a \"quoted\" \\back\\slash ü")
               # Its own timestamp, which has a time zone.
               assert_eq!(._time, t'2026-10-14T13:36:48.451744Z')
-              assert_eq!(get!(., ["log.syslog.version"]), "1")
-              assert_eq!(get!(., ["log.syslog.msgid"]), "ID7")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Warning")
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "auth")
-              assert_eq!(get!(., ["log.syslog.priority"]), 36)
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["Log.Transport"]), "tcp")
-              assert_eq!(get!(., ["log.syslog.structured_data"]), {"timeQuality": {"tzKnown": "1"}, "origin@32473": {"ip": "192.168.50.1"}})
-              assert_eq!(get!(., ["host.hostname"]), "nas")
-              assert_eq!(get!(., ["process.pid"]), 42)
+              assert_eq!(."log.syslog.version", "1")
+              assert_eq!(."log.syslog.msgid", "ID7")
+              assert_eq!(."log.syslog.severity.name", "Warning")
+              assert_eq!(."log.syslog.facility.name", "auth")
+              assert_eq!(."log.syslog.priority", 36)
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."Log.Transport", "tcp")
+              assert_eq!(."log.syslog.structured_data", {"timeQuality": {"tzKnown": "1"}, "origin@32473": {"ip": "192.168.50.1"}})
+              assert_eq!(."host.hostname", "nas")
+              assert_eq!(."process.pid", 42)
 
   - name: syslog critical severity is critical
     inputs:
@@ -88,10 +88,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "critical")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Critical")
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "kern")
-              assert!(get!(., ["process.pid"]) == null)
+              assert_eq!(."log.level", "critical")
+              assert_eq!(."log.syslog.severity.name", "Critical")
+              assert_eq!(."log.syslog.facility.name", "kern")
+              assert!(!exists(."process.pid"))
 
   - name: "format mismatch: a line on the syslog port that isn't syslog"
     inputs:
@@ -107,11 +107,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
-              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."event.dataset", "syslog.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "format_mismatch")
               assert_eq!(._msg, "just some text")
-              assert_eq!(get!(., ["host.ip"]), "192.168.111.50")
+              assert_eq!(."host.ip", "192.168.111.50")
               assert_eq!(._time, t'2026-10-14T13:36:48Z')
 
   - name: router Wi-Fi, a device associated (the sample)
@@ -128,21 +128,21 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert_eq!(get!(., ["client.mac"]), "D6-6D-66-BE-4C-3A")
-              assert_eq!(get!(., ["observer.ingress.interface.name"]), "wl0.1")
-              assert_eq!(get!(., ["event.action"]), "associated")
-              assert_eq!(get!(., ["event.category"]), ["network"])
-              assert_eq!(get!(., ["event.type"]), ["connection", "start"])
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."client.mac", "D6-6D-66-BE-4C-3A")
+              assert_eq!(."observer.ingress.interface.name", "wl0.1")
+              assert_eq!(."event.action", "associated")
+              assert_eq!(."event.category", ["network"])
+              assert_eq!(."event.type", ["connection", "start"])
               assert!(!exists(."event.outcome"))
 
-  - name: router Wi-Fi, a device disassociated (the sample)
+  - name: "router Wi-Fi, pairwise key handshake: the device is in (the sample)"
     inputs:
       - insert_at: syslog
         type: vrl
         source: |
           . = {
-            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA 28:7b:11:05:6d:5e IEEE 802.11: disassociated",
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl1.1: STA f4:d1:08:ab:66:34 WPA: pairwise key handshake completed (RSN)",
             "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
           }
     outputs:
@@ -150,28 +150,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["client.mac"]), "28-7B-11-05-6D-5E")
-              assert_eq!(get!(., ["event.action"]), "disassociated")
-              assert_eq!(get!(., ["event.type"]), ["connection", "end"])
-
-  - name: router Wi-Fi, WPS failed (the sample)
-    inputs:
-      - insert_at: syslog
-        type: vrl
-        source: |
-          . = {
-            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d4:da:cd:7c:4c:3e IEEE 802.1X: authentication failed - EAP type: 0 (unknown)",
-            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
-          }
-    outputs:
-      - extract_from: final
-        conditions:
-          - type: vrl
-            source: |
-              assert_eq!(get!(., ["event.action"]), "wps-failed")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."client.mac", "F4-D1-08-AB-66-34")
+              assert_eq!(."event.action", "pairwise-key-handshake-completed")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.outcome", "success")
 
   - name: router Wi-Fi, group key handshake (the sample)
     inputs:
@@ -187,10 +170,66 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["client.mac"]), "06-72-3D-BF-A0-E1")
-              assert_eq!(get!(., ["observer.ingress.interface.name"]), "wl1.1")
-              assert_eq!(get!(., ["event.action"]), "group-key-handshake-completed")
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."client.mac", "06-72-3D-BF-A0-E1")
+              assert_eq!(."observer.ingress.interface.name", "wl1.1")
+              assert_eq!(."event.action", "group-key-handshake-completed")
+              assert_eq!(."event.outcome", "success")
+
+  - name: router Wi-Fi, a device disassociated (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA 28:7b:11:05:6d:5e IEEE 802.11: disassociated",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."client.mac", "28-7B-11-05-6D-5E")
+              assert_eq!(."event.action", "disassociated")
+              assert_eq!(."event.type", ["connection", "end"])
+
+  - name: router Wi-Fi, a WPS attempt (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d4:da:cd:7c:4c:3e IEEE 802.1X: Supplicant used different EAP type: 254 (expanded)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."client.mac", "D4-DA-CD-7C-4C-3E")
+              assert_eq!(."event.action", "wps-attempted")
+              assert_eq!(."event.category", ["authentication"])
+              assert!(!exists(."event.outcome"))
+
+  - name: router Wi-Fi, WPS failed (the sample)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d4:da:cd:7c:4c:3e IEEE 802.1X: authentication failed - EAP type: 0 (unknown)",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "wps-failed")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.outcome", "failure")
 
   - name: router Wi-Fi, another station line keeps the device only
     inputs:
@@ -206,7 +245,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["client.mac"]), "06-72-3D-BF-A0-E1")
+              assert_eq!(."client.mac", "06-72-3D-BF-A0-E1")
               assert!(!exists(."event.action"))
               assert!(!exists(."event.category"))
 
@@ -224,18 +263,18 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.provider"]), "dnsmasq-dhcp")
-              assert_eq!(get!(., ["event.action"]), "dhcp-ack")
-              assert_eq!(get!(., ["event.category"]), ["network"])
-              assert_eq!(get!(., ["event.type"]), ["protocol"])
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["network.protocol"]), "dhcp")
-              assert_eq!(get!(., ["observer.ingress.interface.name"]), "br0")
-              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
-              assert_eq!(get!(., ["client.mac"]), "28-7B-11-05-6D-5E")
-              assert_eq!(get!(., ["client.domain"]), "Smart-TV-Pro")
-              assert_eq!(get!(., ["related.hosts"]), ["Smart-TV-Pro"])
-              assert_eq!(get!(., ["related.ip"]), ["192.168.50.56"])
+              assert_eq!(."event.provider", "dnsmasq-dhcp")
+              assert_eq!(."event.action", "dhcp-ack")
+              assert_eq!(."event.category", ["network"])
+              assert_eq!(."event.type", ["protocol"])
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."network.protocol", "dhcp")
+              assert_eq!(."observer.ingress.interface.name", "br0")
+              assert_eq!(."client.ip", "192.168.50.56")
+              assert_eq!(."client.mac", "28-7B-11-05-6D-5E")
+              assert_eq!(."client.domain", "Smart-TV-Pro")
+              assert_eq!(."related.hosts", ["Smart-TV-Pro"])
+              assert_eq!(."related.ip", ["192.168.50.56"])
 
   - name: router DHCP request (the sample)
     inputs:
@@ -251,8 +290,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dhcp-request")
-              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
+              assert_eq!(."event.action", "dhcp-request")
+              assert_eq!(."client.ip", "192.168.50.56")
               assert!(!exists(."client.domain"))
               assert!(!exists(."event.outcome"))
 
@@ -270,8 +309,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dhcp-discover")
-              assert_eq!(get!(., ["client.mac"]), "28-7B-11-05-6D-5E")
+              assert_eq!(."event.action", "dhcp-discover")
+              assert_eq!(."client.mac", "28-7B-11-05-6D-5E")
               assert!(!exists(."client.ip"))
 
   - name: router DHCP refused, the reason isn't a hostname
@@ -288,48 +327,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dhcp-nak")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."event.action", "dhcp-nak")
+              assert_eq!(."event.outcome", "failure")
               assert!(!exists(."client.domain"))
-
-  - name: "router Wi-Fi, pairwise key handshake: the device is in (the sample)"
-    inputs:
-      - insert_at: syslog
-        type: vrl
-        source: |
-          . = {
-            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl1.1: STA f4:d1:08:ab:66:34 WPA: pairwise key handshake completed (RSN)",
-            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
-          }
-    outputs:
-      - extract_from: final
-        conditions:
-          - type: vrl
-            source: |
-              assert_eq!(get!(., ["client.mac"]), "F4-D1-08-AB-66-34")
-              assert_eq!(get!(., ["event.action"]), "pairwise-key-handshake-completed")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.outcome"]), "success")
-
-  - name: router Wi-Fi, a WPS attempt (the sample)
-    inputs:
-      - insert_at: syslog
-        type: vrl
-        source: |
-          . = {
-            "message": "<30>Oct 15 08:21:23 RT-BE86U-FFA0-1F4D20D-C hostapd: wl0.1: STA d4:da:cd:7c:4c:3e IEEE 802.1X: Supplicant used different EAP type: 254 (expanded)",
-            "fromhost_ip": "192.168.111.1", "received": "2026-10-15T09:21:23.834+01:00", "transport": "imudp"
-          }
-    outputs:
-      - extract_from: final
-        conditions:
-          - type: vrl
-            source: |
-              assert_eq!(get!(., ["client.mac"]), "D4-DA-CD-7C-4C-3E")
-              assert_eq!(get!(., ["event.action"]), "wps-attempted")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert!(!exists(."event.outcome"))
 
   - name: a Proxmox host's journal entry (sshd) goes to the journal parser
     inputs:
@@ -347,25 +347,25 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "sshd.log")
-              assert_eq!(get!(., ["event.action"]), "ssh_login")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["user.name"]), "root")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(."event.dataset", "sshd.log")
+              assert_eq!(."event.action", "ssh_login")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."user.name", "root")
+              assert_eq!(."source.ip", "192.168.50.140")
               assert_eq!(._msg, "Accepted publickey for root from 192.168.50.140 port 51234 ssh2: ED25519 SHA256:abc")
               # When it was logged; when the relay got it.
               assert_eq!(._time, t'2026-10-15T18:00:00.123456Z')
-              assert_eq!(get!(., ["event.created"]), t'2026-10-15T18:00:00.200Z')
-              assert_eq!(get!(., ["host.hostname"]), "prx-001")
-              assert_eq!(get!(., ["host.name"]), "prx-001.hirednoobs.com")
-              assert_eq!(get!(., ["host.ip"]), "192.168.111.2")
-              assert_eq!(get!(., ["host.boot.id"]), "b00t")
-              assert_eq!(get!(., ["process.pid"]), 1234)
-              assert_eq!(get!(., ["process.command_line"]), "sshd-session: root [priv]")
-              assert_eq!(get!(., ["Systemd.Unit"]), "ssh.service")
-              assert_eq!(get!(., ["Systemd.Journal.SystemdSlice"]), "system.slice")
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "auth")
+              assert_eq!(."event.created", t'2026-10-15T18:00:00.200Z')
+              assert_eq!(."host.hostname", "prx-001")
+              assert_eq!(."host.name", "prx-001.hirednoobs.com")
+              assert_eq!(."host.ip", "192.168.111.2")
+              assert_eq!(."host.boot.id", "b00t")
+              assert_eq!(."process.pid", 1234)
+              assert_eq!(."process.command_line", "sshd-session: root [priv]")
+              assert_eq!(."Systemd.Unit", "ssh.service")
+              assert_eq!(."Systemd.Journal.SystemdSlice", "system.slice")
+              assert_eq!(."log.level", "info")
+              assert_eq!(."log.syslog.facility.name", "auth")
               for_each(["message", "MESSAGE", "fromhost_ip", "received", "transport", "X-Forwarded-For", "@timestamp", "Log.Transport"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
               assert!(!exists(.tags))
 
@@ -384,11 +384,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "journald.log")
-              assert_eq!(get!(., ["event.provider"]), "pvestatd")
-              assert_eq!(get!(., ["host.hostname"]), "prx-999")
-              assert_eq!(get!(., ["host.ip"]), "192.168.111.9")
-              assert_eq!(get!(., ["Systemd.Unit"]), "pvestatd.service")
+              assert_eq!(."event.dataset", "journald.log")
+              assert_eq!(."event.provider", "pvestatd")
+              assert_eq!(."host.hostname", "prx-999")
+              assert_eq!(."host.ip", "192.168.111.9")
+              assert_eq!(."Systemd.Unit", "pvestatd.service")
               assert_eq!(._msg, "status update time (5.012 seconds)")
 
   - name: a journal entry from anywhere but the Proxmox hosts stays syslog
@@ -406,9 +406,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
-              assert_eq!(get!(., ["host.ip"]), "192.168.50.66")
-              assert_eq!(get!(., ["log.syslog.appname"]), "journal")
+              assert_eq!(."event.dataset", "syslog.log")
+              assert_eq!(."host.ip", "192.168.50.66")
+              assert_eq!(."log.syslog.appname", "journal")
               assert!(!exists(."event.action"))
               assert!(!exists(."user.name"))
 
@@ -427,9 +427,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "syslog.log")
+              assert_eq!(."event.dataset", "syslog.log")
               assert_eq!(._msg, "something")
-              assert_eq!(get!(., ["host.ip"]), "192.168.111.3")
+              assert_eq!(."host.ip", "192.168.111.3")
 
   - name: router DNS query (log-queries)
     inputs:
@@ -445,18 +445,18 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.provider"]), "dnsmasq")
-              assert_eq!(get!(., ["event.action"]), "dns-query")
-              assert_eq!(get!(., ["event.category"]), ["network"])
-              assert_eq!(get!(., ["event.type"]), ["protocol"])
-              assert_eq!(get!(., ["network.protocol"]), "dns")
-              assert_eq!(get!(., ["dns.type"]), "query")
-              assert_eq!(get!(., ["dns.question.name"]), "www.example.com")
-              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
-              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.56")
-              assert_eq!(get!(., ["related.ip"]), ["192.168.50.56"])
-              assert_eq!(get!(., ["related.hosts"]), ["www.example.com"])
+              assert_eq!(."event.provider", "dnsmasq")
+              assert_eq!(."event.action", "dns-query")
+              assert_eq!(."event.category", ["network"])
+              assert_eq!(."event.type", ["protocol"])
+              assert_eq!(."network.protocol", "dns")
+              assert_eq!(."dns.type", "query")
+              assert_eq!(."dns.question.name", "www.example.com")
+              assert_eq!(."dns.question.type", "AAAA")
+              assert_eq!(."client.ip", "192.168.50.56")
+              assert_eq!(."source.ip", "192.168.50.56")
+              assert_eq!(."related.ip", ["192.168.50.56"])
+              assert_eq!(."related.hosts", ["www.example.com"])
               assert!(!exists(."Dns.Serial"))
               assert!(!exists(."event.outcome"))
 
@@ -474,17 +474,17 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dns-reply")
-              assert_eq!(get!(., ["dns.type"]), "answer")
-              assert_eq!(get!(., ["dns.question.name"]), "www.example.com")
-              assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
-              assert_eq!(get!(., ["dns.resolved_ip"]), ["93.184.215.14"])
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["Dns.Serial"]), 4711)
-              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
-              assert_eq!(get!(., ["client.port"]), 53124)
-              assert_eq!(get!(., ["source.port"]), 53124)
-              assert_eq!(get!(., ["related.ip"]), ["93.184.215.14", "192.168.50.56"])
+              assert_eq!(."event.action", "dns-reply")
+              assert_eq!(."dns.type", "answer")
+              assert_eq!(."dns.question.name", "www.example.com")
+              assert_eq!(."dns.response_code", "NOERROR")
+              assert_eq!(."dns.resolved_ip", ["93.184.215.14"])
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."Dns.Serial", 4711)
+              assert_eq!(."client.ip", "192.168.50.56")
+              assert_eq!(."client.port", 53124)
+              assert_eq!(."source.port", 53124)
+              assert_eq!(."related.ip", ["93.184.215.14", "192.168.50.56"])
 
   - name: router DNS forwarded upstream (log-queries=extra)
     inputs:
@@ -500,11 +500,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dns-forwarded")
-              assert_eq!(get!(., ["dns.type"]), "query")
-              assert_eq!(get!(., ["destination.ip"]), "192.168.111.100")
-              assert_eq!(get!(., ["client.ip"]), "192.168.50.56")
-              assert_eq!(get!(., ["related.ip"]), ["192.168.50.56", "192.168.111.100"])
+              assert_eq!(."event.action", "dns-forwarded")
+              assert_eq!(."dns.type", "query")
+              assert_eq!(."destination.ip", "192.168.111.100")
+              assert_eq!(."client.ip", "192.168.50.56")
+              assert_eq!(."related.ip", ["192.168.50.56", "192.168.111.100"])
               assert!(!exists(."dns.response_code"))
 
   - name: router DNS answer, a name that doesn't exist
@@ -518,10 +518,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["dns.question.name"]), "nope.example.com")
-              assert_eq!(get!(., ["event.action"]), "dns-reply")
-              assert_eq!(get!(., ["dns.response_code"]), "NXDOMAIN")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."dns.question.name", "nope.example.com")
+              assert_eq!(."event.action", "dns-reply")
+              assert_eq!(."dns.response_code", "NXDOMAIN")
+              assert_eq!(."event.outcome", "failure")
               assert!(!exists(."dns.resolved_ip"))
 
   - name: router DNS answer, a name without a record of that type
@@ -535,9 +535,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dns-cached")
-              assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."event.action", "dns-cached")
+              assert_eq!(."dns.response_code", "NOERROR")
+              assert_eq!(."event.outcome", "success")
               assert!(!exists(."dns.resolved_ip"))
 
   - name: router DNS answer, a CNAME
@@ -551,8 +551,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["Dns.Answer"]), "<CNAME>")
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."Dns.Answer", "<CNAME>")
+              assert_eq!(."event.outcome", "success")
               assert!(!exists(."dns.response_code"))
 
   - name: router DNS answer from a hosts file
@@ -566,9 +566,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["dns.question.name"]), "router.asus.com")
-              assert_eq!(get!(., ["event.action"]), "dns-hosts")
-              assert_eq!(get!(., ["dns.resolved_ip"]), ["192.168.50.1"])
+              assert_eq!(."dns.question.name", "router.asus.com")
+              assert_eq!(."event.action", "dns-hosts")
+              assert_eq!(."dns.resolved_ip", ["192.168.50.1"])
 
   - name: router firewall drop, TCP SYN from outside
     inputs:
@@ -584,23 +584,23 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["process.name"]), "kernel")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["event.action"]), "drop")
-              assert_eq!(get!(., ["event.category"]), ["network"])
-              assert_eq!(get!(., ["event.type"]), ["connection", "denied"])
-              assert_eq!(get!(., ["observer.ingress.interface.name"]), "eth0")
+              assert_eq!(."process.name", "kernel")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."event.action", "drop")
+              assert_eq!(."event.category", ["network"])
+              assert_eq!(."event.type", ["connection", "denied"])
+              assert_eq!(."observer.ingress.interface.name", "eth0")
               assert!(!exists(."observer.egress.interface.name"))
-              assert_eq!(get!(., ["destination.mac"]), "A0-36-BC-12-34-56")
-              assert_eq!(get!(., ["source.mac"]), "00-1B-21-AA-BB-CC")
-              assert_eq!(get!(., ["source.ip"]), "203.0.113.7")
-              assert_eq!(get!(., ["destination.ip"]), "81.2.69.160")
-              assert_eq!(get!(., ["source.port"]), 48234)
-              assert_eq!(get!(., ["destination.port"]), 8443)
-              assert_eq!(get!(., ["network.transport"]), "tcp")
-              assert_eq!(get!(., ["network.type"]), "ipv4")
-              assert_eq!(get!(., ["Firewall.TcpFlags"]), ["SYN"])
-              assert_eq!(get!(., ["related.ip"]), ["203.0.113.7", "81.2.69.160"])
+              assert_eq!(."destination.mac", "A0-36-BC-12-34-56")
+              assert_eq!(."source.mac", "00-1B-21-AA-BB-CC")
+              assert_eq!(."source.ip", "203.0.113.7")
+              assert_eq!(."destination.ip", "81.2.69.160")
+              assert_eq!(."source.port", 48234)
+              assert_eq!(."destination.port", 8443)
+              assert_eq!(."network.transport", "tcp")
+              assert_eq!(."network.type", "ipv4")
+              assert_eq!(."Firewall.TcpFlags", ["SYN"])
+              assert_eq!(."related.ip", ["203.0.113.7", "81.2.69.160"])
 
   - name: router firewall drop, ICMPv6 between interfaces
     inputs:
@@ -616,12 +616,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["observer.ingress.interface.name"]), "br0")
-              assert_eq!(get!(., ["observer.egress.interface.name"]), "eth0")
-              assert_eq!(get!(., ["network.type"]), "ipv6")
-              assert_eq!(get!(., ["network.transport"]), "icmpv6")
-              assert_eq!(get!(., ["Firewall.Icmp.Type"]), 128)
-              assert_eq!(get!(., ["Firewall.Icmp.Code"]), 0)
+              assert_eq!(."observer.ingress.interface.name", "br0")
+              assert_eq!(."observer.egress.interface.name", "eth0")
+              assert_eq!(."network.type", "ipv6")
+              assert_eq!(."network.transport", "icmpv6")
+              assert_eq!(."Firewall.Icmp.Type", 128)
+              assert_eq!(."Firewall.Icmp.Code", 0)
               assert!(!exists(."Firewall.TcpFlags"))
               assert!(!exists(."source.port"))
 

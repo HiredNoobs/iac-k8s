@@ -1,4 +1,4 @@
-# Unit tests for config/collector/kubernetes-events.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/kubernetes-events.yaml.
 tests:
   - name: Kubernetes event from the kubelet, repeated
     inputs:
@@ -15,29 +15,29 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "kubernetes.event")
-              assert_eq!(get!(., ["event.provider"]), "kubelet")
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.dataset", "kubernetes.event")
+              assert_eq!(."event.provider", "kubelet")
+              assert_eq!(."event.kind", "event")
               assert_eq!(._msg, "Back-off restarting failed container app in pod app-7d9f-x2_homepage(p-1)")
               # When it last happened.
               assert_eq!(._time, t'2026-10-14T09:04:00Z')
-              assert_eq!(get!(., ["event.start"]), "2026-10-14T09:00:00Z")
-              assert_eq!(get!(., ["event.end"]), "2026-10-14T09:04:00Z")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["event.reason"]), "BackOff")
-              assert_eq!(get!(., ["event.id"]), "e-1")
-              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
-              assert_eq!(get!(., ["orchestrator.resource.type"]), "pod")
-              assert_eq!(get!(., ["orchestrator.resource.name"]), "app-7d9f-x2")
-              assert_eq!(get!(., ["orchestrator.namespace"]), "homepage")
-              assert_eq!(get!(., ["orchestrator.resource.id"]), "p-1")
-              assert_eq!(get!(., ["orchestrator.api_version"]), "v1")
-              assert_eq!(get!(., ["container.name"]), "app")
-              assert_eq!(get!(., ["Orchestrator.Event.Count"]), 5)
-              assert_eq!(get!(., ["Orchestrator.Resource.ResourceVersion"]), "812")
+              assert_eq!(."event.start", "2026-10-14T09:00:00Z")
+              assert_eq!(."event.end", "2026-10-14T09:04:00Z")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."event.reason", "BackOff")
+              assert_eq!(."event.id", "e-1")
+              assert_eq!(."orchestrator.type", "kubernetes")
+              assert_eq!(."orchestrator.resource.type", "pod")
+              assert_eq!(."orchestrator.resource.name", "app-7d9f-x2")
+              assert_eq!(."orchestrator.namespace", "homepage")
+              assert_eq!(."orchestrator.resource.id", "p-1")
+              assert_eq!(."orchestrator.api_version", "v1")
+              assert_eq!(."container.name", "app")
+              assert_eq!(."Orchestrator.Event.Count", 5)
+              assert_eq!(."Orchestrator.Resource.ResourceVersion", "812")
               # The node it happened on, not kubectl's.
-              assert_eq!(get!(., ["host.hostname"]), "worker-3")
-              assert_eq!(get!(., ["host.name"]), "worker-3.hirednoobs.com")
+              assert_eq!(."host.hostname", "worker-3")
+              assert_eq!(."host.name", "worker-3.hirednoobs.com")
               assert_eq!(.kubernetes.node.name, "worker-1")
               for_each(["apiVersion", "kind", "metadata", "involvedObject", "reason", "type", "source", "firstTimestamp", "lastTimestamp", "count", "reportingComponent", "reportingInstance"]) -> |_i, k| {
                 assert!(get!(., [k]) == null, "still there: " + k)
@@ -59,18 +59,18 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.provider"]), "default-scheduler")
-              assert_eq!(get!(., ["event.action"]), "Binding")
-              assert_eq!(get!(., ["event.reason"]), "Scheduled")
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."event.provider", "default-scheduler")
+              assert_eq!(."event.action", "Binding")
+              assert_eq!(."event.reason", "Scheduled")
+              assert_eq!(."log.level", "info")
               assert_eq!(._time, t'2026-10-14T09:00:00.123456Z')
-              assert_eq!(get!(., ["event.start"]), "2026-10-14T09:00:00.123456Z")
-              assert!(get!(., ["event.end"]) == null)
-              assert!(get!(., ["Orchestrator.Event.Count"]) == null)
-              assert_eq!(get!(., ["Orchestrator.Event.ReportingInstance"]), "default-scheduler-cp-1")
+              assert_eq!(."event.start", "2026-10-14T09:00:00.123456Z")
+              assert!(!exists(."event.end"))
+              assert!(!exists(."Orchestrator.Event.Count"))
+              assert_eq!(."Orchestrator.Event.ReportingInstance", "default-scheduler-cp-1")
               # Not a kubelet's: no node of its own, and not kubectl's.
-              assert!(get!(., ["host.hostname"]) == null)
-              assert!(get!(., ["host.name"]) == null)
+              assert!(!exists(."host.hostname"))
+              assert!(!exists(."host.name"))
 
   - name: Kubernetes event from Flux, with its annotations
     inputs:
@@ -87,13 +87,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.provider"]), "kustomize-controller")
-              assert_eq!(get!(., ["orchestrator.resource.type"]), "kustomization")
-              assert_eq!(get!(., ["orchestrator.api_version"]), "kustomize.toolkit.fluxcd.io/v1")
-              assert_eq!(get!(., ["Orchestrator.Event.Annotations"]), {"kustomize.toolkit.fluxcd.io/revision": "master@sha1:e24edef"})
-              assert_eq!(get!(., ["Orchestrator.Event.Name"]), "apps.17fe2")
-              assert!(get!(., ["container.name"]) == null)
-              assert!(get!(., ["host.hostname"]) == null)
+              assert_eq!(."event.provider", "kustomize-controller")
+              assert_eq!(."orchestrator.resource.type", "kustomization")
+              assert_eq!(."orchestrator.api_version", "kustomize.toolkit.fluxcd.io/v1")
+              assert_eq!(."Orchestrator.Event.Annotations", {"kustomize.toolkit.fluxcd.io/revision": "master@sha1:e24edef"})
+              assert_eq!(."Orchestrator.Event.Name", "apps.17fe2")
+              assert!(!exists(."container.name"))
+              assert!(!exists(."host.hostname"))
 
   - name: kubectl's own message isn't an event
     inputs:
@@ -110,10 +110,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "kubectl.log")
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert_eq!(get!(., ["host.hostname"]), "worker-1")
-              assert!(get!(., ["orchestrator.type"]) == null)
+              assert_eq!(."event.dataset", "kubectl.log")
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."host.hostname", "worker-1")
+              assert!(!exists(."orchestrator.type"))
 
   - name: "format mismatch: JSON from kubectl that isn't an event"
     inputs:
@@ -130,6 +130,6 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "kubectl.log")
-              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."event.dataset", "kubectl.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "format_mismatch")

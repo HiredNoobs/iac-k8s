@@ -1,5 +1,4 @@
-# Unit tests for config/collector/talos.yaml (how to run them: tests/collector/pipeline.yaml). The lines
-# are real ones from the nodes unless noted.
+# Unit tests for config/collector/talos.yaml. The lines are real ones from the nodes unless noted.
 tests:
   - name: Talos service line, the service's own fields kept (apid)
     inputs:
@@ -12,17 +11,17 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "talos.log")
-              assert_eq!(get!(., ["event.provider"]), "talos")
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert_eq!(get!(., ["service.name"]), "apid")
+              assert_eq!(."event.dataset", "talos.log")
+              assert_eq!(."event.provider", "talos")
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."service.name", "apid")
               assert_eq!(._msg, "finished unary call")
               assert_eq!(._time, t'2026-10-15T12:00:00.123456789Z')
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["host.hostname"]), "cp-1")
-              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
-              assert_eq!(get!(., ["grpc.method"]), "/machine.MachineService/Version")
-              assert_eq!(get!(., ["peer.address"]), "192.168.50.140:51234")
+              assert_eq!(."log.level", "info")
+              assert_eq!(."host.hostname", "cp-1")
+              assert_eq!(."host.name", "cp-1.hirednoobs.com")
+              assert_eq!(."grpc.method", "/machine.MachineService/Version")
+              assert_eq!(."peer.address", "192.168.50.140:51234")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(."event.original"))
               for_each(["msg", "talos-level", "talos-time", "talos-service", "host", "port", "source_type", "timestamp", "level"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
@@ -39,8 +38,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["service.name"]), "kubelet")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."service.name", "kubelet")
               assert_eq!(.pod, "kube-system/kube-apiserver-cp-1")
 
   - name: etcd's line (zap JSON, its own fields kept)
@@ -55,10 +54,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["service.name"]), "etcd")
+              assert_eq!(."service.name", "etcd")
               assert_eq!(._msg, "starting compact hash check")
               assert_eq!(.caller, "etcdserver/corrupt.go:278")
-              assert_eq!(get!(., ["local-member-id"]), "48c452a36a97e90")
+              assert_eq!(."local-member-id", "48c452a36a97e90")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(."event.original"))
 
@@ -74,9 +73,9 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "apply request took too long")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["log.origin.file.name"]), "etcdserver/util.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 170)
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."log.origin.file.name", "etcdserver/util.go")
+              assert_eq!(."log.origin.file.line", 170)
               assert_eq!(.took, "112.5ms")
               assert_eq!(.tags, ["generic"])
 
@@ -112,14 +111,14 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
-              assert_eq!(get!(., ["service.name"]), "kernel")
+              assert_eq!(."event.dataset", "talos.kernel")
+              assert_eq!(."service.name", "kernel")
               assert_eq!(._msg, "audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192")
               assert_eq!(._time, t'2026-10-15T15:52:48.436605742Z')
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "kern")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Warning")
-              assert_eq!(get!(., ["event.original"]), "kern: warning: [2026-10-15T15:52:48.436605742Z]: audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."log.syslog.facility.name", "kern")
+              assert_eq!(."log.syslog.severity.name", "Warning")
+              assert_eq!(."event.original", "kern: warning: [2026-10-15T15:52:48.436605742Z]: audit: audit_lost=13856217 audit_rate_limit=4096 audit_backlog_limit=8192")
               assert!(!exists(.tags))
 
   - name: kernel line, a padded severity (err)
@@ -134,8 +133,8 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "audit: rate limit exceeded")
-              assert_eq!(get!(., ["log.level"]), "error")
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Error")
+              assert_eq!(."log.level", "error")
+              assert_eq!(."log.syslog.severity.name", "Error")
 
   - name: kernel line, Talos' own warning with its fields
     inputs:
@@ -148,13 +147,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
+              assert_eq!(."event.dataset", "talos.kernel")
               assert_eq!(._msg, "[talos] error watching discovery service state")
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "user")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["Talos.Controller"]), "cluster.DiscoveryServiceController")
+              assert_eq!(."log.syslog.facility.name", "user")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."Talos.Controller", "cluster.DiscoveryServiceController")
               assert_eq!(.component, "controller-runtime")
-              assert!(starts_with(string!(get!(., ["error.message"])), "rpc error: code = Unavailable"))
+              assert!(starts_with(string!(."error.message"), "rpc error: code = Unavailable"))
               assert!(!exists(.controller))
 
   - name: kernel continuation line, kept as it is
@@ -168,8 +167,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "talos.kernel")
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.dataset", "talos.kernel")
+              assert_eq!(."event.kind", "event")
               assert_eq!(._msg, "SUBSYSTEM=scsi")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(."log.syslog.facility.name"))
@@ -190,8 +189,8 @@ tests:
               assert_eq!(._msg, "serving static pod manifests")
               assert_eq!(._time, t'2026-10-15T15:52:03.440944166Z')
               assert_eq!(.level, "DEBUG")
-              assert_eq!(get!(., ["Talos.Controller"]), "k8s.StaticPodServerController")
-              assert_eq!(get!(., ["event.original"]), "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests")
+              assert_eq!(."Talos.Controller", "k8s.StaticPodServerController")
+              assert_eq!(."event.original", "2026-10-15T15:52:03.440Z DEBUG serving static pod manifests")
               assert_eq!(.size, "14571")
               assert_eq!(.tags, ["generic"])
               assert!(!exists(.component))
@@ -209,8 +208,8 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "removing image")
-              assert_eq!(get!(., ["log.level"]), "debug")
-              assert_eq!(get!(., ["Talos.Controller"]), "cri.ImageGCController")
+              assert_eq!(."log.level", "debug")
+              assert_eq!(."Talos.Controller", "cri.ImageGCController")
               assert!(!exists(."Orchestrator.Controller"))
 
   - name: the static pod manifests line is dropped
@@ -233,9 +232,9 @@ tests:
           - type: vrl
             source: |
               assert!(starts_with(string!(._msg), "received CSR signing request from 192.168.111.12:56088: subject CN="))
-              assert_eq!(get!(., ["log.origin.file.name"]), "reg.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 68)
-              assert!(starts_with(string!(get!(., ["event.original"])), "2026/10/15 15:52:11.522743 reg.go:68: "))
+              assert_eq!(."log.origin.file.name", "reg.go")
+              assert_eq!(."log.origin.file.line", 68)
+              assert!(starts_with(string!(."event.original"), "2026/10/15 15:52:11.522743 reg.go:68: "))
               assert_eq!(.tags, ["generic"])
 
   - name: gRPC request, trustd's (a peer with an address)
@@ -249,15 +248,15 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "/securityapi.SecurityService/Certificate")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["event.duration"]), 1813620)
-              assert_eq!(get!(., ["Rpc.Grpc.StatusCode"]), "OK")
-              assert_eq!(get!(., ["source.ip"]), "192.168.111.12")
-              assert_eq!(get!(., ["source.port"]), 56088)
-              assert_eq!(get!(., ["related.ip"]), ["192.168.111.12"])
-              assert_eq!(get!(., ["user_agent.original"]), "grpc-go/1.83.2")
-              assert_eq!(get!(., ["log.origin.file.name"]), "log.go")
+              assert_eq!(."event.action", "/securityapi.SecurityService/Certificate")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."event.duration", 1813620)
+              assert_eq!(."Rpc.Grpc.StatusCode", "OK")
+              assert_eq!(."source.ip", "192.168.111.12")
+              assert_eq!(."source.port", 56088)
+              assert_eq!(."related.ip", ["192.168.111.12"])
+              assert_eq!(."user_agent.original", "grpc-go/1.83.2")
+              assert_eq!(."log.origin.file.name", "log.go")
               assert!(starts_with(string!(._msg), "OK [/securityapi.SecurityService/Certificate] "))
               assert!(!exists(."Rpc.Authorization"))
               assert!(!exists(."error.message"))
@@ -274,12 +273,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "/machine.MachineService/ServiceList")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["event.duration"]), 115731)
-              assert_eq!(get!(., ["Rpc.Authorization"]), "authorized based on PID (253) match with service \"dashboard\" (allowed roles [os:meta:writer os:reader]); authorized ([os:admin os:operator os:reader] includes [os:meta:writer os:reader])")
-              assert_eq!(get!(., ["user.roles"]), ["os:meta:writer", "os:reader"])
-              assert_eq!(get!(., ["user_agent.original"]), "grpc-go/1.83.2")
+              assert_eq!(."event.action", "/machine.MachineService/ServiceList")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."event.duration", 115731)
+              assert_eq!(."Rpc.Authorization", "authorized based on PID (253) match with service \"dashboard\" (allowed roles [os:meta:writer os:reader]); authorized ([os:admin os:operator os:reader] includes [os:meta:writer os:reader])")
+              assert_eq!(."user.roles", ["os:meta:writer", "os:reader"])
+              assert_eq!(."user_agent.original", "grpc-go/1.83.2")
               assert!(!exists(."source.ip"))
               assert!(!exists(."log.origin.file.name"))
 
@@ -294,12 +293,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["Rpc.Grpc.StatusCode"]), "PermissionDenied")
-              assert_eq!(get!(., ["error.message"]), "not authorized")
-              assert_eq!(get!(., ["event.duration"]), 62500000000)
-              assert_eq!(get!(., ["source.ip"]), "192.168.111.5")
-              assert_eq!(get!(., ["user_agent.original"]), "talosctl/v1.14.1 (linux; amd64)")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."Rpc.Grpc.StatusCode", "PermissionDenied")
+              assert_eq!(."error.message", "not authorized")
+              assert_eq!(."event.duration", 62500000000)
+              assert_eq!(."source.ip", "192.168.111.5")
+              assert_eq!(."user_agent.original", "talosctl/v1.14.1 (linux; amd64)")
 
   - name: dns-resolve-cache query
     inputs:
@@ -313,21 +312,21 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "making dns request")
-              assert_eq!(get!(., ["log.level"]), "debug")
-              assert_eq!(get!(., ["network.protocol"]), "dns")
-              assert_eq!(get!(., ["network.transport"]), "udp")
-              assert_eq!(get!(., ["event.category"]), ["network"])
-              assert_eq!(get!(., ["dns.question.name"]), "redis.hirednoobs.com")
-              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
-              assert_eq!(get!(., ["dns.type"]), "query")
-              assert_eq!(get!(., ["dns.id"]), "37758")
-              assert_eq!(get!(., ["dns.header_flags"]), ["RD", "AD"])
-              assert_eq!(get!(., ["source.ip"]), "10.244.8.9")
-              assert_eq!(get!(., ["source.port"]), 52314)
-              assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
-              assert_eq!(get!(., ["server.ip"]), "192.168.111.1")
-              assert_eq!(get!(., ["server.port"]), 53)
-              assert_eq!(get!(., ["related.ip"]), ["10.244.8.9", "169.254.116.108", "192.168.111.1"])
+              assert_eq!(."log.level", "debug")
+              assert_eq!(."network.protocol", "dns")
+              assert_eq!(."network.transport", "udp")
+              assert_eq!(."event.category", ["network"])
+              assert_eq!(."dns.question.name", "redis.hirednoobs.com")
+              assert_eq!(."dns.question.type", "AAAA")
+              assert_eq!(."dns.type", "query")
+              assert_eq!(."dns.id", "37758")
+              assert_eq!(."dns.header_flags", ["RD", "AD"])
+              assert_eq!(."source.ip", "10.244.8.9")
+              assert_eq!(."source.port", 52314)
+              assert_eq!(."destination.ip", "169.254.116.108")
+              assert_eq!(."server.ip", "192.168.111.1")
+              assert_eq!(."server.port", 53)
+              assert_eq!(."related.ip", ["10.244.8.9", "169.254.116.108", "192.168.111.1"])
               for_each(["data", "question", "proto", "remote_addr", "local_addr", "upstream", "component", "tags"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
               assert!(!exists(."dns.response_code"))
               assert!(!exists(."event.outcome"))
@@ -343,12 +342,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["dns.type"]), "answer")
-              assert_eq!(get!(., ["dns.response_code"]), "NOERROR")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["dns.header_flags"]), ["QR", "RD", "RA"])
-              assert_eq!(get!(., ["dns.answers"]), [{"name": "www.hirednoobs.com", "ttl": 300, "class": "IN", "type": "CNAME", "data": "edge.hirednoobs.com."}, {"name": "edge.hirednoobs.com", "ttl": 300, "class": "IN", "type": "A", "data": "192.168.111.101"}])
-              assert_eq!(get!(., ["dns.resolved_ip"]), ["192.168.111.101"])
+              assert_eq!(."dns.type", "answer")
+              assert_eq!(."dns.response_code", "NOERROR")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."dns.header_flags", ["QR", "RD", "RA"])
+              assert_eq!(."dns.answers", [{"name": "www.hirednoobs.com", "ttl": 300, "class": "IN", "type": "CNAME", "data": "edge.hirednoobs.com."}, {"name": "edge.hirednoobs.com", "ttl": 300, "class": "IN", "type": "A", "data": "192.168.111.101"}])
+              assert_eq!(."dns.resolved_ip", ["192.168.111.101"])
               assert!(!exists(."server.ip"))
               assert!(!exists(.data))
 
@@ -363,8 +362,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["dns.response_code"]), "NXDOMAIN")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."dns.response_code", "NXDOMAIN")
+              assert_eq!(."event.outcome", "failure")
               assert!(!exists(."dns.answers"))
               assert!(!exists(."dns.resolved_ip"))
 
@@ -381,7 +380,7 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "info: guest-ping called")
-              assert_eq!(get!(., ["log.syslog.hostname"]), "localhost")
+              assert_eq!(."log.syslog.hostname", "localhost")
               for_each(["content", "facility", "severity", "priority", "hostname", "tag"]) -> |_i, k| { assert!(get!(., [k]) == null, "still there: " + k) }
               assert!(!exists(."log.syslog.appname"))
               assert!(!exists(.tags))
@@ -405,15 +404,15 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert_eq!(."event.dataset", "talos.log")
               assert_eq!(._msg, "info: guest-exec called")
-              assert_eq!(get!(., ["log.syslog.appname"]), "qemu-ga")
-              assert_eq!(get!(., ["log.syslog.facility.code"]), 1)
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "user")
-              assert_eq!(get!(., ["log.syslog.severity.code"]), 4)
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Warning")
-              assert_eq!(get!(., ["log.syslog.priority"]), 12)
-              assert_eq!(get!(., ["log.level"]), "warning")
+              assert_eq!(."log.syslog.appname", "qemu-ga")
+              assert_eq!(."log.syslog.facility.code", 1)
+              assert_eq!(."log.syslog.facility.name", "user")
+              assert_eq!(."log.syslog.severity.code", 4)
+              assert_eq!(."log.syslog.severity.name", "Warning")
+              assert_eq!(."log.syslog.priority", 12)
+              assert_eq!(."log.level", "warning")
               assert!(!exists(.level))
               assert!(!exists(.tags))
 
@@ -428,9 +427,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
-              assert_eq!(get!(., ["event.dataset"]), "talos.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "format_mismatch")
+              assert_eq!(."event.dataset", "talos.log")
               assert!(!exists(.tags))
 
   - name: a Talos line can't set Vector's fields
@@ -444,6 +443,6 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "talos.log")
-              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
+              assert_eq!(."event.dataset", "talos.log")
+              assert_eq!(."host.name", "cp-1.hirednoobs.com")
               assert_eq!(._time, t'2026-10-15T12:00:01Z')
