@@ -41,15 +41,20 @@ configMapGenerator:
       - dashboards/Gateway/gateway-logs.json
     options:
       disableNameSuffixHash: true
-  # Kubernetes: grafana.com 1860 rev 45 (Node Exporter Full);
-  # dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
+  # Kubernetes: dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-views-*).
   - name: grafana-dashboards-kubernetes
     files:
       - dashboards/Kubernetes/k8s-views-global.json
       - dashboards/Kubernetes/k8s-views-namespaces.json
       - dashboards/Kubernetes/k8s-views-nodes.json
       - dashboards/Kubernetes/k8s-views-pods.json
-      - dashboards/Kubernetes/node-exporter-full.json
+    options:
+      disableNameSuffixHash: true
+  # Hosts: grafana.com 1860 rev 45 (Node Exporter Full), every node_exporter: the Talos nodes, the
+  # Debian VMs and the Proxmox hosts.
+  - name: grafana-dashboards-hosts
+    files:
+      - dashboards/Hosts/node-exporter-full.json
     options:
       disableNameSuffixHash: true
   # Control plane: dotdc/grafana-dashboards-kubernetes v3.0.8 (k8s-system-api-server,
