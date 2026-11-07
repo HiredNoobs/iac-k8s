@@ -1854,6 +1854,9 @@ spec:
 
                   The Operator watches this Secret and re-syncs the User's credentials to RabbitMQ whenever it changes,
                   so updating the Secret's `password`/`passwordHash` rotates the User's password.
+
+                  To only choose the username and have the Operator generate the password, set `usernameFromMeta` instead.
+                  Cannot be set together with `usernameFromMeta`.
                 properties:
                   name:
                     default: ""
@@ -1933,6 +1936,12 @@ spec:
                   - administrator
                   type: string
                 type: array
+              usernameFromMeta:
+                description: |-
+                  When true, the User's metadata.name is used as the RabbitMQ username and a random password is
+                  generated. Both are stored in the operator-owned Secret `<metadata.name>-user-credentials`.
+                  Cannot be set together with importCredentialsSecret. Defaults to false.
+                type: boolean
             required:
             - rabbitmqClusterReference
             type: object
@@ -2456,7 +2465,7 @@ spec:
         - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
         command:
         - /manager
-        image: ghcr.io/rabbitmq/messaging-topology-operator:1.20.4
+        image: ghcr.io/rabbitmq/messaging-topology-operator:1.20.5
         livenessProbe:
           httpGet:
             path: /healthz
