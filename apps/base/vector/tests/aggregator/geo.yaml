@@ -1,7 +1,6 @@
-# Unit tests for config/aggregator/geo.yaml (how to run them: tests/collector/pipeline.yaml), run
-# from tests/ so geo/ is MaxMind's test databases (geo/README.md). In them 89.160.20.112 is
-# Linköping (Bredband2 AB, AS29518), 81.2.69.160 London (no ASN), 2001:480::1 San Diego, and
-# 8.8.8.8 isn't there.
+# Unit tests for config/aggregator/geo.yaml. In geo/'s test databases, 89.160.20.112 is Linköping
+# (Bredband2 AB, AS29518), 81.2.69.160 London (no ASN), 2001:480::1 San Diego, and 8.8.8.8 isn't
+# there.
 tests:
   - name: a public source gets its place and network
     inputs:
@@ -15,15 +14,15 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["source.geo.country_iso_code"]), "SE")
-              assert_eq!(get!(., ["source.geo.country_name"]), "Sweden")
-              assert_eq!(get!(., ["source.geo.city_name"]), "Linköping")
-              assert_eq!(get!(., ["source.geo.continent_name"]), "Europe")
-              assert_eq!(get!(., ["source.geo.region_name"]), "Östergötland County")
-              assert!(is_float(get!(., ["source.geo.location.lat"])))
-              assert!(is_float(get!(., ["source.geo.location.lon"])))
-              assert_eq!(get!(., ["source.as.number"]), 29518)
-              assert_eq!(get!(., ["source.as.organization.name"]), "Bredband2 AB")
+              assert_eq!(."source.geo.country_iso_code", "SE")
+              assert_eq!(."source.geo.country_name", "Sweden")
+              assert_eq!(."source.geo.city_name", "Linköping")
+              assert_eq!(."source.geo.continent_name", "Europe")
+              assert_eq!(."source.geo.region_name", "Östergötland County")
+              assert!(is_float(."source.geo.location.lat"))
+              assert!(is_float(."source.geo.location.lon"))
+              assert_eq!(."source.as.number", 29518)
+              assert_eq!(."source.as.organization.name", "Bredband2 AB")
               # The private side is left alone.
               assert!(!exists(."destination.geo.country_iso_code"))
               assert!(!exists(."destination.as.number"))
@@ -40,13 +39,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["destination.geo.city_name"]), "London")
-              assert_eq!(get!(., ["destination.geo.country_iso_code"]), "GB")
+              assert_eq!(."destination.geo.city_name", "London")
+              assert_eq!(."destination.geo.country_iso_code", "GB")
               assert!(!exists(."destination.as.number"))
               assert!(!exists(."destination.as.organization.name"))
               assert!(!exists(."source.geo.country_iso_code"))
 
-  - name: IPv6
+  - name: a public IPv6 address gets its place too
     inputs:
       - insert_at: geo
         type: vrl
@@ -58,8 +57,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["source.geo.city_name"]), "San Diego")
-              assert_eq!(get!(., ["source.geo.country_iso_code"]), "US")
+              assert_eq!(."source.geo.city_name", "San Diego")
+              assert_eq!(."source.geo.country_iso_code", "US")
 
   - name: a documentation address and one the data doesn't know get nothing
     inputs:
@@ -73,7 +72,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")
               assert!(!exists(."source.geo.country_iso_code"))
               assert!(!exists(."destination.geo.country_iso_code"))
               assert!(!exists(."source.as.number"))
@@ -91,7 +90,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")
               assert!(!exists(."source.geo.country_iso_code"))
               assert!(!exists(."destination.geo.country_iso_code"))
               assert!(!exists(."source.as.number"))
@@ -111,8 +110,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "drop")
-              assert_eq!(get!(., ["source.ip"]), "89.160.20.112")
-              assert_eq!(get!(., ["source.geo.city_name"]), "Linköping")
-              assert_eq!(get!(., ["source.as.number"]), 29518)
-              assert_eq!(get!(., ["destination.port"]), 22)
+              assert_eq!(."event.action", "drop")
+              assert_eq!(."source.ip", "89.160.20.112")
+              assert_eq!(."source.geo.city_name", "Linköping")
+              assert_eq!(."source.as.number", 29518)
+              assert_eq!(."destination.port", 22)

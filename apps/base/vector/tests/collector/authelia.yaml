@@ -1,4 +1,4 @@
-# Unit tests for config/collector/authelia.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/authelia.yaml.
 tests:
   - name: Authelia failed first factor, banned
     inputs:
@@ -15,17 +15,17 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
-              assert_eq!(get!(., ["log.level"]), "error")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
-              assert_eq!(get!(., ["user.name"]), "bob")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.action"]), "password-login")
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["event.reason"]), "banned")
-              assert_eq!(get!(., ["http.request.method"]), "POST")
-              assert_eq!(get!(., ["url.path"]), "/api/firstfactor")
+              assert_eq!(."event.dataset", "authelia.log")
+              assert_eq!(."log.level", "error")
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert_eq!(."user.name", "bob")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."event.reason", "banned")
+              assert_eq!(."http.request.method", "POST")
+              assert_eq!(."url.path", "/api/firstfactor")
               assert!(!exists(.remote_ip))
               assert!(!exists(.method))
               assert!(!exists(.path))
@@ -45,7 +45,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "totp-login")
+              assert_eq!(."event.action", "totp-login")
               assert!(!exists(."user.name"))
               assert!(!exists(."event.reason"))
 
@@ -64,9 +64,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["user.name"]), "mallory")
-              assert_eq!(get!(., ["event.reason"]), "unknown user")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."user.name", "mallory")
+              assert_eq!(."event.reason", "unknown user")
+              assert_eq!(."event.outcome", "failure")
 
   - name: Authelia request timeout (its own status_code)
     inputs:
@@ -83,11 +83,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["http.response.status_code"]), 408)
+              assert_eq!(."http.response.status_code", 408)
               assert!(!exists(.status_code))
-              assert_eq!(get!(., ["http.request.method"]), "GET")
-              assert_eq!(get!(., ["url.path"]), "/")
-              assert_eq!(get!(., ["error.message"]), "read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout")
+              assert_eq!(."http.request.method", "GET")
+              assert_eq!(."url.path", "/")
+              assert_eq!(."error.message", "read tcp 10.244.7.77:9091->10.244.10.27:34274: i/o timeout")
 
   - name: Authelia access decision (the sample line, from a visitor)
     inputs:
@@ -104,16 +104,16 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "authorization")
+              assert_eq!(."event.action", "authorization")
               # A refused request to a site, not a login.
-              assert_eq!(get!(., ["event.category"]), ["web"])
-              assert_eq!(get!(., ["event.type"]), ["access", "denied"])
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["url.full"]), "https://victoriametrics.hirednoobs.com/")
-              assert_eq!(get!(., ["url.domain"]), "victoriametrics.hirednoobs.com")
-              assert_eq!(get!(., ["url.path"]), "/")
-              assert_eq!(get!(., ["http.response.status_code"]), 302)
-              assert_eq!(get!(., ["http.request.method"]), "GET")
+              assert_eq!(."event.category", ["web"])
+              assert_eq!(."event.type", ["access", "denied"])
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."url.full", "https://victoriametrics.hirednoobs.com/")
+              assert_eq!(."url.domain", "victoriametrics.hirednoobs.com")
+              assert_eq!(."url.path", "/")
+              assert_eq!(."http.response.status_code", 302)
+              assert_eq!(."http.request.method", "GET")
               assert!(!exists(."user.name"))
               # The check request's copies.
               assert!(!exists(.method))
@@ -134,12 +134,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["http.request.method"]), "GET")
-              assert_eq!(get!(., ["url.path"]), "/x")
+              assert_eq!(."http.request.method", "GET")
+              assert_eq!(."url.path", "/x")
               assert_eq!(.method, "POST")
               assert_eq!(.path, "/somewhere/else")
               # A 401 from a pod address isn't a probe's redirect: kept.
-              assert_eq!(get!(., ["source.ip"]), "10.244.6.37")
+              assert_eq!(."source.ip", "10.244.6.37")
 
   - name: Authelia anonymous redirect from a pod address (a probe) is dropped
     inputs:
@@ -168,8 +168,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["user.name"]), "alice")
-              assert_eq!(get!(., ["http.response.status_code"]), 302)
+              assert_eq!(."user.name", "alice")
+              assert_eq!(."http.response.status_code", 302)
 
   - name: Authelia start-up line, before its JSON format applies
     inputs:
@@ -186,9 +186,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert_eq!(get!(., ["log.level"]), "info")
+              assert_eq!(."event.dataset", "authelia.log")
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."log.level", "info")
               assert_eq!(._msg, "Authelia v4.39.28 is starting")
               assert_eq!(._time, t'2026-11-03T01:38:43Z')
               assert!(!exists(.msg))
@@ -210,5 +210,5 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "authelia.log")
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."event.dataset", "authelia.log")
+              assert_eq!(."error.type", "format_mismatch")

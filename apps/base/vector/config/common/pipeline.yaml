@@ -2,8 +2,7 @@
 # (daemonset.yaml: pod logs, the audit log, Talos; ../collector/), and vector-aggregator
 # (aggregator.yaml: what other machines send, the LAN's syslog and the prx-999 VMs' and Proxmox
 # hosts' journals; ../aggregator/). Each loads this directory and its own as one config
-# (--config /etc/vector/*.yaml); tests in ../../tests/<collector|aggregator>/, a file per
-# source, run from tests/ (how: tests/collector/pipeline.yaml).
+# (--config /etc/vector/*.yaml); tests in ../../tests/ (its README.md).
 #
 # Each side's handoff.yaml says which of its components come here: to_unparsed (the lines its
 # parsers failed on), to_ecs (the parsed lines) and to_final (with what doesn't need ecs, the
@@ -257,8 +256,8 @@ transforms:
 
       # The app's own level, in one vocabulary: debug, info, notice, warning, error, critical
       # (anything else as it is, lower case). From a JSON line's level, lvl or severity (or the
-      # remap's raw level as level), else syslog's severity, else from the text formats several
-      # apps share. The field it came from goes.
+      # remap's raw level as level), else syslog's severity, else from the text: a klog prefix
+      # (kubectl's own lines) or client-go's "Warning: ". The field it came from goes.
       if !exists(."log.level") {
         raw = null
         from = ""
@@ -269,16 +268,6 @@ transforms:
         if raw == null && severity >= 0 { raw = get!(keywords, [severity]) }
         msg = string(._msg) ?? ""
         if raw == null {
-          # zap's console format: "<time>\t<level>\t[<logger>\t]<file>.go:<line>\t<message>".
-          zap, err = parse_regex(msg, r'^\d{4}-\d\d-\d\dT\S+\t(?P<level>[A-Za-z]+)\t(?:(?P<logger>[^\t]+)\t)?(?P<file>[^\t\s]+\.go):(?P<line>\d+)\t')
-          if err == null {
-            raw = zap.level
-            if zap.logger != null && !exists(."log.logger") { ."log.logger" = zap.logger }
-            ."log.origin.file.name" = zap.file
-            ."log.origin.file.line" = to_int(zap.line) ?? null
-          }
-        }
-        if raw == null {
           # klog: "<I|W|E|F>MMDD hh:mm:ss.uuuuuu <pid> <file>:<line>] <message>".
           klog, err = parse_regex(msg, r'^(?P<sev>[IWEF])\d{4} \d\d:\d\d:\d\d\.\d+\s+\d+ (?P<file>[^:\]\s]+):(?P<line>\d+)\] ')
           if err == null {
@@ -286,11 +275,6 @@ transforms:
             ."log.origin.file.name" = klog.file
             ."log.origin.file.line" = to_int(klog.line) ?? null
           }
-        }
-        if raw == null {
-          # logfmt (logrus' text format, Go's slog): a level= pair.
-          kv, err = parse_regex(msg, r'(?:^|\s)level=(?P<level>[A-Za-z]+)(?:\s|$)')
-          if err == null { raw = kv.level }
         }
         # client-go's warnings from the API server (deprecated APIs).
         if raw == null && starts_with(msg, "Warning: ") { raw = "warning" }

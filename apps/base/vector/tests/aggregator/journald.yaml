@@ -1,4 +1,4 @@
-# Unit tests for config/aggregator/journald.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/aggregator/journald.yaml.
 tests:
   - name: journald entry, the common fields (cron)
     inputs:
@@ -26,39 +26,39 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "journald.log")
-              assert_eq!(get!(., ["event.provider"]), "CRON")
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.dataset", "journald.log")
+              assert_eq!(."event.provider", "CRON")
+              assert_eq!(."event.kind", "event")
               assert_eq!(._msg, "(root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)")
               # When it was logged (@timestamp), not when it reached the listener (timestamp).
               assert_eq!(._time, t'2026-10-14T12:00:00.123456Z')
               # When the VM's Vector read it.
-              assert_eq!(get!(., ["event.created"]), t'2026-10-14T12:00:00.200Z')
-              assert_eq!(get!(., ["host.hostname"]), "prx-999-srv-mgmt-001")
-              assert_eq!(get!(., ["host.name"]), "prx-999-srv-mgmt-001.hirednoobs.com")
+              assert_eq!(."event.created", t'2026-10-14T12:00:00.200Z')
+              assert_eq!(."host.hostname", "prx-999-srv-mgmt-001")
+              assert_eq!(."host.name", "prx-999-srv-mgmt-001.hirednoobs.com")
               # The VM's own address: the last X-Forwarded-For entry (Envoy's).
-              assert_eq!(get!(., ["host.ip"]), "192.168.111.254")
-              assert_eq!(get!(., ["host.id"]), "a1a1")
-              assert_eq!(get!(., ["host.boot.id"]), "b007")
-              assert_eq!(get!(., ["process.pid"]), 4242)
-              assert_eq!(get!(., ["process.name"]), "cron")
-              assert_eq!(get!(., ["process.executable"]), "/usr/sbin/cron")
-              assert_eq!(get!(., ["process.command_line"]), "/usr/sbin/CRON -f")
-              assert_eq!(get!(., ["process.user.id"]), "0")
-              assert_eq!(get!(., ["process.group.id"]), "0")
-              assert_eq!(get!(., ["log.syslog.appname"]), "CRON")
-              assert_eq!(get!(., ["log.syslog.procid"]), "4242")
-              assert_eq!(get!(., ["log.syslog.severity.code"]), 6)
-              assert_eq!(get!(., ["log.syslog.severity.name"]), "Informational")
-              assert_eq!(get!(., ["log.syslog.facility.code"]), 9)
-              assert_eq!(get!(., ["log.syslog.facility.name"]), "cron")
-              assert_eq!(get!(., ["log.syslog.priority"]), 78)
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["Systemd.Unit"]), "cron.service")
-              assert_eq!(get!(., ["Systemd.Transport"]), "syslog")
-              assert_eq!(get!(., ["Systemd.Journal.SystemdInvocationId"]), "inv1")
-              assert_eq!(get!(., ["Systemd.Journal.SystemdSlice"]), "system.slice")
-              assert_eq!(get!(., ["Systemd.Journal.CapEffective"]), "1ffffffffff")
+              assert_eq!(."host.ip", "192.168.111.254")
+              assert_eq!(."host.id", "a1a1")
+              assert_eq!(."host.boot.id", "b007")
+              assert_eq!(."process.pid", 4242)
+              assert_eq!(."process.name", "cron")
+              assert_eq!(."process.executable", "/usr/sbin/cron")
+              assert_eq!(."process.command_line", "/usr/sbin/CRON -f")
+              assert_eq!(."process.user.id", "0")
+              assert_eq!(."process.group.id", "0")
+              assert_eq!(."log.syslog.appname", "CRON")
+              assert_eq!(."log.syslog.procid", "4242")
+              assert_eq!(."log.syslog.severity.code", 6)
+              assert_eq!(."log.syslog.severity.name", "Informational")
+              assert_eq!(."log.syslog.facility.code", 9)
+              assert_eq!(."log.syslog.facility.name", "cron")
+              assert_eq!(."log.syslog.priority", 78)
+              assert_eq!(."log.level", "info")
+              assert_eq!(."Systemd.Unit", "cron.service")
+              assert_eq!(."Systemd.Transport", "syslog")
+              assert_eq!(."Systemd.Journal.SystemdInvocationId", "inv1")
+              assert_eq!(."Systemd.Journal.SystemdSlice", "system.slice")
+              assert_eq!(."Systemd.Journal.CapEffective", "1ffffffffff")
               # The journal's bookkeeping, and what was moved, is gone.
               for_each(keys(.)) -> |_i, k| {
                 assert!(!match(k, r'^(_|[A-Z]+_)[A-Z_]+$|^(message|timestamp|@timestamp|host|path|source_type|X-Forwarded-For)$'), "still there: " + k)
@@ -82,20 +82,20 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "sshd.log")
-              assert_eq!(get!(., ["event.provider"]), "sshd")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.action"]), "ssh_login")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["user.name"]), "hirednoobs")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
-              assert_eq!(get!(., ["source.port"]), 50004)
-              assert_eq!(get!(., ["related.ip"]), ["192.168.50.140"])
-              assert_eq!(get!(., ["related.user"]), ["hirednoobs"])
-              assert_eq!(get!(., ["Ssh.Method"]), "publickey")
-              assert_eq!(get!(., ["Ssh.Signature"]), "ED25519 SHA256:bbb")
-              assert_eq!(get!(., ["host.hostname"]), "prx-999-srv-vault-001")
+              assert_eq!(."event.dataset", "sshd.log")
+              assert_eq!(."event.provider", "sshd")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.action", "ssh_login")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."user.name", "hirednoobs")
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert_eq!(."source.port", 50004)
+              assert_eq!(."related.ip", ["192.168.50.140"])
+              assert_eq!(."related.user", ["hirednoobs"])
+              assert_eq!(."Ssh.Method", "publickey")
+              assert_eq!(."Ssh.Signature", "ED25519 SHA256:bbb")
+              assert_eq!(."host.hostname", "prx-999-srv-vault-001")
 
   - name: sshd failed login, invalid user
     inputs:
@@ -112,12 +112,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "ssh_login")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["event.reason"]), "invalid user")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.66")
-              assert_eq!(get!(., ["source.port"]), 40000)
-              assert_eq!(get!(., ["user.name"]), "admin0")
+              assert_eq!(."event.action", "ssh_login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."event.reason", "invalid user")
+              assert_eq!(."source.ip", "192.168.50.66")
+              assert_eq!(."source.port", 40000)
+              assert_eq!(."user.name", "admin0")
 
   - name: sshd failed login, closed before authentication
     inputs:
@@ -134,11 +134,56 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "ssh_login")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["event.reason"]), "closed before authentication")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.67")
-              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(."event.action", "ssh_login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."event.reason", "closed before authentication")
+              assert_eq!(."source.ip", "192.168.50.67")
+              assert_eq!(."user.name", "root")
+
+  - name: sshd failed login, a wrong password
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Failed password for root from 192.168.50.66 port 40022 ssh2",
+            "timestamp": "2026-10-14T12:00:02Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "ssh_login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."event.reason", "failed password")
+              assert_eq!(."Ssh.Method", "password")
+              assert_eq!(."user.name", "root")
+              assert_eq!(."source.ip", "192.168.50.66")
+              assert_eq!(."source.port", 40022)
+
+  - name: sshd's PAM line for a wrong password
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=192.168.50.66  user=root",
+            "timestamp": "2026-10-14T12:00:02Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session", "PRIORITY": "5"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "sshd.log")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.action", "authentication_failure")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."source.ip", "192.168.50.66")
+              assert_eq!(."user.name", "root")
 
   - name: sudo command (the command is the process, sudo its parent)
     inputs:
@@ -156,20 +201,20 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "sudo.log")
-              assert_eq!(get!(., ["event.provider"]), "sudo")
-              assert_eq!(get!(., ["event.category"]), ["process"])
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["user.name"]), "www-data")
-              assert_eq!(get!(., ["user.effective.name"]), "root")
-              assert_eq!(get!(., ["process.command_line"]), "/bin/bash")
-              assert_eq!(get!(., ["process.working_directory"]), "/var/www")
-              assert_eq!(get!(., ["process.parent.pid"]), 5000)
-              assert_eq!(get!(., ["process.parent.name"]), "sudo")
-              assert_eq!(get!(., ["process.parent.command_line"]), "sudo -s")
-              assert!(get!(., ["process.pid"]) == null)
-              assert_eq!(get!(., ["log.level"]), "notice")
+              assert_eq!(."event.dataset", "sudo.log")
+              assert_eq!(."event.provider", "sudo")
+              assert_eq!(."event.category", ["process"])
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."user.name", "www-data")
+              assert_eq!(."user.effective.name", "root")
+              assert_eq!(."process.command_line", "/bin/bash")
+              assert_eq!(."process.working_directory", "/var/www")
+              assert_eq!(."process.parent.pid", 5000)
+              assert_eq!(."process.parent.name", "sudo")
+              assert_eq!(."process.parent.command_line", "sudo -s")
+              assert!(!exists(."process.pid"))
+              assert_eq!(."log.level", "notice")
 
   - name: sudo refused (NOT in sudoers)
     inputs:
@@ -186,11 +231,32 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["error.message"]), "user NOT in sudoers")
-              assert_eq!(get!(., ["user.name"]), "eve")
-              assert_eq!(get!(., ["Terminal.Name"]), "pts/1")
-              assert_eq!(get!(., ["log.level"]), "critical")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."error.message", "user NOT in sudoers")
+              assert_eq!(."user.name", "eve")
+              assert_eq!(."Terminal.Name", "pts/1")
+              assert_eq!(."log.level", "critical")
+
+  - name: sudo's PAM line for a wrong password
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "pam_unix(sudo:auth): authentication failure; logname=eve uid=1001 euid=0 tty=/dev/pts/1 ruser=eve rhost=  user=eve",
+            "timestamp": "2026-10-14T12:00:02Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "SYSLOG_IDENTIFIER": "sudo", "PRIORITY": "5"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "sudo.log")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.action", "authentication_failure")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."user.name", "eve")
 
   - name: Vault audit response with the root token
     inputs:
@@ -207,27 +273,27 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "vault.audit")
-              assert_eq!(get!(., ["event.provider"]), "vault")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.type"]), ["info"])
-              assert_eq!(get!(., ["event.action"]), "update")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["event.id"]), "r-1")
-              assert_eq!(get!(., ["source.ip"]), "192.168.111.254")
-              assert_eq!(get!(., ["source.port"]), 51000)
-              assert_eq!(get!(., ["user.name"]), "root")
-              assert_eq!(get!(., ["user.roles"]), ["root"])
+              assert_eq!(."event.dataset", "vault.audit")
+              assert_eq!(."event.provider", "vault")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.type", ["info"])
+              assert_eq!(."event.action", "update")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."event.id", "r-1")
+              assert_eq!(."source.ip", "192.168.111.254")
+              assert_eq!(."source.port", 51000)
+              assert_eq!(."user.name", "root")
+              assert_eq!(."user.roles", ["root"])
               assert_eq!(._time, t'2026-10-14T12:00:00.5Z')
               assert_eq!(._msg, "response update sys/audit/stdout by root")
               # The rest, Vault's names capitalised; the request's data keeps its keys.
-              assert_eq!(get!(., ["Secrets.Audit.Request", "Path"]), "sys/audit/stdout")
-              assert_eq!(get!(., ["Secrets.Audit.Request", "MountType"]), "system")
-              assert_eq!(get!(., ["Secrets.Audit.Auth", "TokenPolicies"]), ["root"])
-              assert_eq!(get!(., ["Secrets.Audit.Type"]), "response")
+              assert_eq!(."Secrets.Audit.Request".Path, "sys/audit/stdout")
+              assert_eq!(."Secrets.Audit.Request".MountType, "system")
+              assert_eq!(."Secrets.Audit.Auth".TokenPolicies, ["root"])
+              assert_eq!(."Secrets.Audit.Type", "response")
               # The data as one JSON text field.
-              assert_eq!(get!(., ["Secrets.Audit.Request.Data"]), "{\"file_path\":\"hmac-sha256:cc\"}")
-              assert!(get!(., ["Secrets.Audit.Time"]) == null)
+              assert_eq!(."Secrets.Audit.Request.Data", "{\"file_path\":\"hmac-sha256:cc\"}")
+              assert!(!exists(."Secrets.Audit.Time"))
 
   - name: Vault audit, a failed userpass login (the error in the response's data)
     inputs:
@@ -244,10 +310,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["error.message"]), "invalid username or password")
-              assert!(get!(., ["user.name"]) == null)
-              assert_eq!(get!(., ["Secrets.Audit.Response.Data"]), "{\"error\":\"invalid username or password\"}")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."error.message", "invalid username or password")
+              assert!(!exists(."user.name"))
+              assert_eq!(."Secrets.Audit.Response.Data", "{\"error\":\"invalid username or password\"}")
               assert_eq!(._msg, "response update auth/userpass/login/nobody failed: invalid username or password")
 
   - name: Vault audit, a Kubernetes login (the token's metadata keeps its keys in the response too)
@@ -265,11 +331,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["Secrets.Audit.Auth.Metadata"]), {"role": "eso", "service_account_uid": "sa-1"})
-              assert_eq!(get!(., ["Secrets.Audit.Response.Auth.Metadata"]), {"role": "eso", "service_account_uid": "sa-1"})
-              assert_eq!(get!(., ["Secrets.Audit.Response", "Auth", "ClientToken"]), "hmac-sha256:dd")
-              assert_eq!(get!(., ["Secrets.Audit.Response", "MountAccessor"]), "auth_kubernetes_1")
-              assert!(get!(., ["Secrets.Audit.Response", "Auth", "Metadata"]) == null)
+              assert_eq!(."Secrets.Audit.Auth.Metadata", {"role": "eso", "service_account_uid": "sa-1"})
+              assert_eq!(."Secrets.Audit.Response.Auth.Metadata", {"role": "eso", "service_account_uid": "sa-1"})
+              assert_eq!(."Secrets.Audit.Response".Auth.ClientToken, "hmac-sha256:dd")
+              assert_eq!(."Secrets.Audit.Response".MountAccessor, "auth_kubernetes_1")
+              assert!(!exists(."Secrets.Audit.Response".Auth.Metadata))
 
   - name: Vault audit, a secret read (its keys stay inside one data field)
     inputs:
@@ -286,11 +352,33 @@ tests:
         conditions:
           - type: vrl
             source: |
-              data = get!(., ["Secrets.Audit.Response.Data"])
+              data = ."Secrets.Audit.Response.Data"
               assert!(is_string(data))
               assert_eq!(parse_json!(data), {"data": {"CYTUBE_USER": "hmac-sha256:9f2c", "CYTUBE_PASS": "hmac-sha256:1c7a"}, "metadata": {"version": 3}})
-              assert!(get!(., ["Secrets.Audit.Response", "Data"]) == null)
-              assert_eq!(get!(., ["event.action"]), "read")
+              assert!(!exists(."Secrets.Audit.Response".Data))
+              assert_eq!(."event.action", "read")
+
+  - name: Vault audit, a delete request by an OIDC user (the token's email)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"oidc-alice\",\"policies\":[\"admin\"],\"metadata\":{\"email\":\"alice@example.com\",\"role\":\"admin\"}},\"request\":{\"id\":\"r-5\",\"operation\":\"delete\",\"path\":\"labv2/metadata/production/old\",\"remote_address\":\"192.168.50.140\",\"remote_port\":51004},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"request\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "delete")
+              assert_eq!(."event.type", ["info", "end"])
+              assert_eq!(."user.name", "oidc-alice")
+              assert_eq!(."user.email", "alice@example.com")
+              # A request: its outcome is the response's.
+              assert!(!exists(."event.outcome"))
 
   - name: Vault's own line
     inputs:
@@ -307,9 +395,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "vault.log")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["log.logger"]), "core")
+              assert_eq!(."event.dataset", "vault.log")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."log.logger", "core")
 
   - name: Forgejo failed login through the proxy (no port)
     inputs:
@@ -326,20 +414,20 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "forgejo.log")
-              assert_eq!(get!(., ["event.provider"]), "forgejo")
+              assert_eq!(."event.dataset", "forgejo.log")
+              assert_eq!(."event.provider", "forgejo")
               # The line as it came, like the other sources' parsers.
               assert_eq!(._msg, "2026/10/14 12:00:00 routers/web/auth/auth.go:220:SignInPost() [W] Failed authentication attempt for admin from 192.168.50.88: user does not exist [uid: 0, name: admin]")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["log.origin.file.name"]), "routers/web/auth/auth.go")
-              assert_eq!(get!(., ["log.origin.file.line"]), 220)
-              assert_eq!(get!(., ["log.origin.function"]), "SignInPost")
-              assert_eq!(get!(., ["event.action"]), "password-login")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["user.name"]), "admin")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.88")
-              assert!(get!(., ["source.port"]) == null)
-              assert_eq!(get!(., ["event.reason"]), "user does not exist [uid: 0, name: admin]")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."log.origin.file.name", "routers/web/auth/auth.go")
+              assert_eq!(."log.origin.file.line", 220)
+              assert_eq!(."log.origin.function", "SignInPost")
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."user.name", "admin")
+              assert_eq!(."source.ip", "192.168.50.88")
+              assert!(!exists(."source.port"))
+              assert_eq!(."event.reason", "user does not exist [uid: 0, name: admin]")
 
   - name: Forgejo failed login as the journal has it (no console prefix, port 0)
     inputs:
@@ -357,17 +445,17 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "forgejo.log")
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert_eq!(get!(., ["event.action"]), "password-login")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["user.name"]), "hirednoobs")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
-              assert!(get!(., ["source.port"]) == null)
-              assert_eq!(get!(., ["event.reason"]), "user's password is invalid [uid: 1, name: HiredNoobs]")
-              assert_eq!(get!(., ["log.level"]), "warning")
-              assert_eq!(get!(., ["log.origin.file.name"]), "routers/web/auth/auth.go")
-              assert_eq!(get!(., ["log.origin.function"]), "SignInPost")
+              assert_eq!(."event.dataset", "forgejo.log")
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."user.name", "hirednoobs")
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert!(!exists(."source.port"))
+              assert_eq!(."event.reason", "user's password is invalid [uid: 1, name: HiredNoobs]")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."log.origin.file.name", "routers/web/auth/auth.go")
+              assert_eq!(."log.origin.function", "SignInPost")
 
   - name: Forgejo failed login straight to it (with a port)
     inputs:
@@ -384,9 +472,28 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["source.ip"]), "127.0.0.1")
-              assert_eq!(get!(., ["source.port"]), 44330)
-              assert_eq!(get!(., ["event.reason"]), "password mismatch")
+              assert_eq!(."source.ip", "127.0.0.1")
+              assert_eq!(."source.port", 44330)
+              assert_eq!(."event.reason", "password mismatch")
+
+  - name: "format mismatch: a dated Forgejo line without its <file>:<line>:<function>()"
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/10/14 12:00:20 [W] Failed authentication attempt for admin from 192.168.50.88: user does not exist",
+            "timestamp": "2026-10-14T12:00:20Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "forgejo.service", "PRIORITY": "4"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "forgejo.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "format_mismatch")
 
   - name: a Proxmox host's failed login (pvedaemon)
     inputs:
@@ -407,18 +514,18 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "pvedaemon.log")
-              assert_eq!(get!(., ["event.provider"]), "pvedaemon")
-              assert_eq!(get!(., ["event.action"]), "login")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["event.category"]), ["authentication"])
-              assert_eq!(get!(., ["event.reason"]), "no such user ('admin@pve')")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.66")
-              assert_eq!(get!(., ["user.name"]), "admin")
-              assert_eq!(get!(., ["user.domain"]), "pve")
-              assert_eq!(get!(., ["related.ip"]), ["192.168.50.66"])
-              assert_eq!(get!(., ["host.hostname"]), "prx-999")
-              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(."event.dataset", "pvedaemon.log")
+              assert_eq!(."event.provider", "pvedaemon")
+              assert_eq!(."event.action", "login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.reason", "no such user ('admin@pve')")
+              assert_eq!(."source.ip", "192.168.50.66")
+              assert_eq!(."user.name", "admin")
+              assert_eq!(."user.domain", "pve")
+              assert_eq!(."related.ip", ["192.168.50.66"])
+              assert_eq!(."host.hostname", "prx-999")
+              assert_eq!(."log.level", "error")
 
   - name: a Proxmox host's login (pvedaemon, a real line)
     inputs:
@@ -437,12 +544,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "pvedaemon.log")
-              assert_eq!(get!(., ["event.action"]), "login")
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["user.name"]), "root")
-              assert_eq!(get!(., ["user.domain"]), "pam")
-              assert_eq!(get!(., ["related.user"]), ["root"])
+              assert_eq!(."event.dataset", "pvedaemon.log")
+              assert_eq!(."event.action", "login")
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."user.name", "root")
+              assert_eq!(."user.domain", "pam")
+              assert_eq!(."related.user", ["root"])
               assert!(!exists(."source.ip"))
               assert!(!exists(."event.reason"))
 
@@ -462,13 +569,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "pvedaemon.log")
-              assert_eq!(get!(., ["event.action"]), "vncshell")
-              assert_eq!(get!(., ["event.category"]), ["process"])
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["Task.Id"]), "UPID:prx-999:0019BC92:03BF8AEC:6AD143A5:vncshell::root@pam:")
-              assert_eq!(get!(., ["user.name"]), "root")
-              assert_eq!(get!(., ["user.domain"]), "pam")
+              assert_eq!(."event.dataset", "pvedaemon.log")
+              assert_eq!(."event.action", "vncshell")
+              assert_eq!(."event.category", ["process"])
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."Task.Id", "UPID:prx-999:0019BC92:03BF8AEC:6AD143A5:vncshell::root@pam:")
+              assert_eq!(."user.name", "root")
+              assert_eq!(."user.domain", "pam")
               assert!(!exists(."Task.Target"))
               assert!(!exists(."event.outcome"))
 
@@ -488,8 +595,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.type"]), ["end"])
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."event.type", ["end"])
+              assert_eq!(."event.outcome", "success")
               assert!(!exists(."error.message"))
 
   - name: a Proxmox task that failed (a scheduled backup, not a real line)
@@ -508,12 +615,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "pvescheduler.log")
-              assert_eq!(get!(., ["event.action"]), "vzdump")
-              assert_eq!(get!(., ["Task.Target"]), "101")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["error.message"]), "job errors")
-              assert_eq!(get!(., ["user.name"]), "root")
+              assert_eq!(."event.dataset", "pvescheduler.log")
+              assert_eq!(."event.action", "vzdump")
+              assert_eq!(."Task.Target", "101")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."error.message", "job errors")
+              assert_eq!(."user.name", "root")
 
   - name: a Proxmox task that ended with warnings succeeded (not a real line)
     inputs:
@@ -530,8 +637,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "qmstart")
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."event.action", "qmstart")
+              assert_eq!(."event.outcome", "success")
               assert!(!exists(."error.message"))
 
   - name: a Proxmox line that's neither a login nor a task
@@ -549,7 +656,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "pveproxy.log")
+              assert_eq!(."event.dataset", "pveproxy.log")
               assert!(!exists(."event.action"))
               assert!(!exists(."user.name"))
 
@@ -570,7 +677,33 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "journald.log")
-              assert_eq!(get!(., ["log.syslog.appname"]), "corosync")
-              assert_eq!(get!(., ["host.hostname"]), "prx-001")
+              assert_eq!(."event.dataset", "journald.log")
+              assert_eq!(."log.syslog.appname", "corosync")
+              assert_eq!(."host.hostname", "prx-001")
               assert_eq!(._msg, "  [KNET  ] link: host: 4 link: 0 is down")
+
+  - name: an entry the journal remap failed on is kept, its message, unit and machine
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "message": "something", "@timestamp": "2026-10-14T12:00:00Z", "timestamp": t'2026-10-14T12:00:01Z',
+            "X-Forwarded-For": "203.0.113.9, 192.168.111.201", "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "cron.service",
+            "metadata": {"dropped": {"component_id": "journald", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "journald.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.message", "boom")
+              assert_eq!(._msg, "something")
+              assert_eq!(._time, "2026-10-14T12:00:00Z")
+              assert_eq!(."Systemd.Unit", "cron.service")
+              # The VM's own address: the last X-Forwarded-For entry.
+              assert_eq!(."host.ip", "192.168.111.201")
+              assert_eq!(."host.hostname", "prx-999-srv-runner-001")
+              assert!(!exists(._HOSTNAME))

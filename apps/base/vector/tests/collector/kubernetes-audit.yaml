@@ -1,4 +1,4 @@
-# Unit tests for config/collector/kubernetes-audit.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/kubernetes-audit.yaml.
 tests:
   - name: an audit log line that isn't JSON is kept
     inputs:
@@ -12,30 +12,17 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "{\"auditID\":\"a3\",\"verb\":\"ge")
-              assert_eq!(get!(., ["host.hostname"]), "cp-1")
-              assert_eq!(get!(., ["event.dataset"]), "kubernetes.audit")
-              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
-              assert_eq!(get!(., ["error.type"]), "remap_error")
-              assert!(contains(string!(get!(., ["error.message"])), "parse_json"))
-              assert_eq!(get!(., ["ecs.version"]), "9.5.0")
-              assert!(is_timestamp(get!(., ["event.ingested"])))
-              assert!(is_timestamp(get!(., ["event.created"])))
+              assert_eq!(."host.hostname", "cp-1")
+              assert_eq!(."event.dataset", "kubernetes.audit")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."event.provider", "kube-apiserver")
+              assert_eq!(."error.type", "remap_error")
+              assert!(contains(string!(."error.message"), "parse_json"))
+              assert_eq!(."ecs.version", "9.5.0")
+              assert!(is_timestamp(."event.ingested"))
+              assert!(is_timestamp(."event.created"))
 
-  - name: a parsed audit event is an event
-    inputs:
-      - insert_at: events
-        type: vrl
-        source: |
-          . = {"message": "{\"auditID\":\"a4\",\"verb\":\"get\",\"user\":{\"username\":\"admin\"},\"sourceIPs\":[\"192.168.111.254\"],\"stageTimestamp\":\"2026-10-13T12:00:00.000000Z\"}"}
-    outputs:
-      - extract_from: final
-        conditions:
-          - type: vrl
-            source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert!(!exists(."error.type"))
-
-  - name: audit event
+  - name: audit event, allowed, its fields as Elastic's
     inputs:
       - insert_at: events
         type: vrl
@@ -48,42 +35,43 @@ tests:
             source: |
               assert_eq!(._msg, "get /api/v1/namespaces/default/secrets/x?resourceVersion=0 200 by admin")
               assert_eq!(._time, "2026-10-13T12:00:00.000000Z")
-              assert_eq!(get!(., ["event.id"]), "a1")
-              assert_eq!(get!(., ["event.start"]), "2026-10-13T11:59:59.990000Z")
-              assert_eq!(get!(., ["event.end"]), "2026-10-13T12:00:00.000000Z")
-              assert_eq!(get!(., ["url.original"]), "/api/v1/namespaces/default/secrets/x?resourceVersion=0")
-              assert_eq!(get!(., ["url.path"]), "/api/v1/namespaces/default/secrets/x")
-              assert_eq!(get!(., ["url.query"]), "resourceVersion=0")
-              assert_eq!(get!(., ["http.response.status_code"]), 200)
+              assert_eq!(."event.id", "a1")
+              assert_eq!(."event.start", "2026-10-13T11:59:59.990000Z")
+              assert_eq!(."event.end", "2026-10-13T12:00:00.000000Z")
+              assert_eq!(."url.original", "/api/v1/namespaces/default/secrets/x?resourceVersion=0")
+              assert_eq!(."url.path", "/api/v1/namespaces/default/secrets/x")
+              assert_eq!(."url.query", "resourceVersion=0")
+              assert_eq!(."http.response.status_code", 200)
               assert!(!exists(."error.message"))
-              assert_eq!(get!(., ["event.dataset"]), "kubernetes.audit")
-              assert_eq!(get!(., ["event.provider"]), "kube-apiserver")
-              assert_eq!(get!(., ["ecs.version"]), "9.5.0")
-              assert!(is_timestamp(get!(., ["event.created"])))
-              assert_eq!(get!(., ["host.hostname"]), "cp-1")
-              assert_eq!(get!(., ["host.name"]), "cp-1.hirednoobs.com")
-              assert_eq!(get!(., ["source.ip"]), "192.168.111.254")
-              assert_eq!(get!(., ["client.ip"]), "192.168.111.254")
-              assert_eq!(get!(., ["related.ip"]), ["192.168.111.254"])
-              assert_eq!(get!(., ["user.name"]), "admin")
-              assert_eq!(get!(., ["user.id"]), "u-1")
-              assert_eq!(get!(., ["related.user"]), ["admin", "u-1"])
-              assert_eq!(get!(., ["user.group.name"]), ["system:masters", "system:authenticated"])
-              assert_eq!(get!(., ["user_agent.original"]), "kubectl/v1.37.0")
-              assert_eq!(get!(., ["event.action"]), "get")
+              assert_eq!(."event.dataset", "kubernetes.audit")
+              assert_eq!(."event.provider", "kube-apiserver")
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."ecs.version", "9.5.0")
+              assert!(is_timestamp(."event.created"))
+              assert_eq!(."host.hostname", "cp-1")
+              assert_eq!(."host.name", "cp-1.hirednoobs.com")
+              assert_eq!(."source.ip", "192.168.111.254")
+              assert_eq!(."client.ip", "192.168.111.254")
+              assert_eq!(."related.ip", ["192.168.111.254"])
+              assert_eq!(."user.name", "admin")
+              assert_eq!(."user.id", "u-1")
+              assert_eq!(."related.user", ["admin", "u-1"])
+              assert_eq!(."user.group.name", ["system:masters", "system:authenticated"])
+              assert_eq!(."user_agent.original", "kubectl/v1.37.0")
+              assert_eq!(."event.action", "get")
               # The authorizer's decision, as Elastic's.
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."event.outcome", "success")
               # The object, as Elastic's.
-              assert_eq!(get!(., ["orchestrator.type"]), "kubernetes")
-              assert_eq!(get!(., ["orchestrator.resource.type"]), "secrets")
-              assert_eq!(get!(., ["orchestrator.namespace"]), "default")
-              assert_eq!(get!(., ["orchestrator.resource.name"]), "x")
-              assert_eq!(get!(., ["orchestrator.api_version"]), "v1")
+              assert_eq!(."orchestrator.type", "kubernetes")
+              assert_eq!(."orchestrator.resource.type", "secrets")
+              assert_eq!(."orchestrator.namespace", "default")
+              assert_eq!(."orchestrator.resource.name", "x")
+              assert_eq!(."orchestrator.api_version", "v1")
               # The rest, capitalised; Kubernetes' own maps keep their keys.
-              assert_eq!(get!(., ["Orchestrator.Audit.Level"]), "Metadata")
-              assert_eq!(get!(., ["Orchestrator.Audit.Stage"]), "ResponseComplete")
-              assert_eq!(get!(., ["Orchestrator.Audit.Annotations"]), {"authorization.k8s.io/decision": "allow", "authorization.k8s.io/reason": ""})
-              assert_eq!(get!(., ["Orchestrator.Audit.UserExtra"]), {"authentication.kubernetes.io/credential-id": ["X509SHA256=ab"]})
+              assert_eq!(."Orchestrator.Audit.Level", "Metadata")
+              assert_eq!(."Orchestrator.Audit.Stage", "ResponseComplete")
+              assert_eq!(."Orchestrator.Audit.Annotations", {"authorization.k8s.io/decision": "allow", "authorization.k8s.io/reason": ""})
+              assert_eq!(."Orchestrator.Audit.UserExtra", {"authentication.kubernetes.io/credential-id": ["X509SHA256=ab"]})
               # Moved, or the audit event's own type.
               for_each(["auditID", "requestURI", "requestReceivedTimestamp", "stageTimestamp", "responseStatus", "objectRef", "sourceIPs", "verb", "userAgent", "user", "kind", "apiVersion", "level", "stage", "annotations"]) -> |_i, k| {
                 assert!(get!(., [k]) == null, "still there: " + k)
@@ -92,7 +80,7 @@ tests:
               for_each(keys(.)) -> |_i, k| {
                 assert!(starts_with(k, "_") || match(k, r'^[A-Z]') || includes(["ecs", "event", "url", "http", "host", "source", "client", "related", "user", "user_agent", "orchestrator"], split(k, ".")[0]), "not ECS: " + k)
               }
-              assert!(!exists(.objectRef))
+              assert!(!exists(."error.type"))
 
   - name: audit event, refused
     inputs:
@@ -105,11 +93,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["user.name"]), "system:serviceaccount:default:x")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."user.name", "system:serviceaccount:default:x")
               assert!(!exists(.user.username))
-              assert_eq!(get!(., ["http.response.status_code"]), 403)
-              assert!(get!(., ["orchestrator.namespace"]) == null)
+              assert_eq!(."http.response.status_code", 403)
+              assert!(!exists(."orchestrator.namespace"))
 
   - name: audit event refused by Pod Security
     inputs:
@@ -122,16 +110,16 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["error.message"]), "pods \"debug\" is forbidden: violates PodSecurity \"restricted:latest\"")
-              assert_eq!(get!(., ["http.response.status_code"]), 403)
+              assert_eq!(."error.message", "pods \"debug\" is forbidden: violates PodSecurity \"restricted:latest\"")
+              assert_eq!(."http.response.status_code", 403)
               # RBAC allowed it; Pod Security refused it afterwards.
-              assert_eq!(get!(., ["event.outcome"]), "success")
+              assert_eq!(."event.outcome", "success")
               # Its status and reason have no ECS field.
-              assert_eq!(get!(., ["Orchestrator.Audit.ResponseStatus.Status"]), "Failure")
-              assert_eq!(get!(., ["Orchestrator.Audit.ResponseStatus.Reason"]), "Forbidden")
-              assert!(get!(., ["Orchestrator.Audit.ResponseStatus.Metadata"]) == null)
+              assert_eq!(."Orchestrator.Audit.ResponseStatus.Status", "Failure")
+              assert_eq!(."Orchestrator.Audit.ResponseStatus.Reason", "Forbidden")
+              assert!(!exists(."Orchestrator.Audit.ResponseStatus.Metadata"))
               # The request body keeps its keys.
-              assert_eq!(get!(., ["Orchestrator.Audit.RequestObject"]), {"kind": "Pod", "spec": {"hostNetwork": true, "containers": [{"name": "debug", "image": "busybox"}]}})
+              assert_eq!(."Orchestrator.Audit.RequestObject", {"kind": "Pod", "spec": {"hostNetwork": true, "containers": [{"name": "debug", "image": "busybox"}]}})
 
   - name: audit event through a proxy keeps sourceIPs
     inputs:
@@ -144,13 +132,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
-              assert_eq!(get!(., ["Orchestrator.Audit.SourceIPs"]), ["192.168.50.140", "10.244.0.1"])
-              assert_eq!(get!(., ["related.ip"]), ["192.168.50.140", "10.244.0.1"])
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert_eq!(."Orchestrator.Audit.SourceIPs", ["192.168.50.140", "10.244.0.1"])
+              assert_eq!(."related.ip", ["192.168.50.140", "10.244.0.1"])
               assert!(!exists(.sourceIPs))
               assert!(!exists(.user))
               # No decision annotation: no outcome.
-              assert!(get!(., ["event.outcome"]) == null)
+              assert!(!exists(."event.outcome"))
 
   - name: audit event on a subresource of a grouped API, impersonated
     inputs:
@@ -163,12 +151,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["orchestrator.api_version"]), "apps/v1")
-              assert_eq!(get!(., ["orchestrator.resource.id"]), "d-1")
-              assert_eq!(get!(., ["Orchestrator.Resource.ApiGroup"]), "apps")
-              assert_eq!(get!(., ["Orchestrator.Resource.Subresource"]), "scale")
-              assert_eq!(get!(., ["Orchestrator.Resource.ResourceVersion"]), "42")
-              assert_eq!(get!(., ["Orchestrator.Audit.ImpersonatedUser.Username"]), "system:serviceaccount:homepage:default")
-              assert_eq!(get!(., ["Orchestrator.Audit.ImpersonatedUser.Groups"]), ["system:serviceaccounts"])
+              assert_eq!(."orchestrator.api_version", "apps/v1")
+              assert_eq!(."orchestrator.resource.id", "d-1")
+              assert_eq!(."Orchestrator.Resource.ApiGroup", "apps")
+              assert_eq!(."Orchestrator.Resource.Subresource", "scale")
+              assert_eq!(."Orchestrator.Resource.ResourceVersion", "42")
+              assert_eq!(."Orchestrator.Audit.ImpersonatedUser.Username", "system:serviceaccount:homepage:default")
+              assert_eq!(."Orchestrator.Audit.ImpersonatedUser.Groups", ["system:serviceaccounts"])
               assert!(!exists(.impersonatedUser))
               assert!(!exists(.objectRef))

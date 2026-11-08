@@ -33,4 +33,4 @@ Both are fetched when the aggregator starts and every 6 hours after that, and Ve
 
 ## Tests
 
-``apps/base/vector/tests/`` has unit tests for each source, a file per source under the side that parses it. CI runs them when ``apps/base/vector/`` changes. ``tests/collector/pipeline.yaml`` says how to run them locally.
+``apps/base/vector/tests/`` has unit tests for each source, a file per source under the side that parses it. CI runs them when ``apps/base/vector/`` changes. ``tests/README.md`` says how to run them locally.

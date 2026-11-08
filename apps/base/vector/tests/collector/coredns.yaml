@@ -1,4 +1,4 @@
-# Unit tests for config/collector/coredns.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/coredns.yaml.
 tests:
   - name: CoreDNS failed query (the sample)
     inputs:
@@ -15,22 +15,22 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "coredns.log")
-              assert_eq!(get!(., ["log.level"]), "error")
-              assert_eq!(get!(., ["log.logger"]), "plugin/errors")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."event.dataset", "coredns.log")
+              assert_eq!(."log.level", "error")
+              assert_eq!(."log.logger", "plugin/errors")
+              assert_eq!(."event.outcome", "failure")
               # The first number is the response code (plugin/errors), by its name.
-              assert_eq!(get!(., ["dns.response_code"]), "SERVFAIL")
-              assert!(get!(., ["event.count"]) == null)
-              assert_eq!(get!(., ["dns.question.name"]), "pihole.hirednoobs.com")
-              assert_eq!(get!(., ["dns.question.type"]), "AAAA")
-              assert_eq!(get!(., ["error.message"]), "read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
-              assert_eq!(get!(., ["destination.ip"]), "169.254.116.108")
-              assert_eq!(get!(., ["destination.port"]), 53)
-              assert_eq!(get!(., ["related.ip"]), ["169.254.116.108"])
-              assert_eq!(get!(., ["event.category"]), ["network"])
-              assert_eq!(get!(., ["event.type"]), ["protocol"])
-              assert_eq!(get!(., ["network.protocol"]), "dns")
+              assert_eq!(."dns.response_code", "SERVFAIL")
+              assert!(!exists(."Dns.ErrorCount"))
+              assert_eq!(."dns.question.name", "pihole.hirednoobs.com")
+              assert_eq!(."dns.question.type", "AAAA")
+              assert_eq!(."error.message", "read udp 10.244.0.16:48741->169.254.116.108:53: i/o timeout")
+              assert_eq!(."destination.ip", "169.254.116.108")
+              assert_eq!(."destination.port", 53)
+              assert_eq!(."related.ip", ["169.254.116.108"])
+              assert_eq!(."event.category", ["network"])
+              assert_eq!(."event.type", ["protocol"])
+              assert_eq!(."network.protocol", "dns")
 
   - name: CoreDNS consolidated errors line
     inputs:
@@ -47,11 +47,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["Dns.ErrorCount"]), 3)
-              assert_eq!(get!(., ["error.message"]), "^read udp .* i/o timeout$")
-              assert!(get!(., ["dns.response_code"]) == null)
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."Dns.ErrorCount", 3)
+              assert_eq!(."error.message", "^read udp .* i/o timeout$")
+              assert!(!exists(."dns.response_code"))
 
   - name: CoreDNS response code with no name stays a number
     inputs:
@@ -68,8 +68,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["dns.response_code"]), "23")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
+              assert_eq!(."dns.response_code", "23")
+              assert_eq!(."event.outcome", "failure")
 
   - name: CoreDNS other plugin line
     inputs:
@@ -86,8 +86,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["log.logger"]), "plugin/reload")
+              assert_eq!(."log.level", "info")
+              assert_eq!(."log.logger", "plugin/reload")
               assert!(!exists(."dns.question.name"))
 
   - name: "format mismatch: CoreDNS errors line that isn't a query"
@@ -105,8 +105,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
-              assert_eq!(get!(., ["log.level"]), "error")
+              assert_eq!(."error.type", "format_mismatch")
+              assert_eq!(."log.level", "error")
 
   - name: "format mismatch: CoreDNS bracketed line without a level"
     inputs:
@@ -123,7 +123,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["error.message"]), "no [<LEVEL>] prefix")
+              assert_eq!(."error.message", "no [<LEVEL>] prefix")
 
   - name: CoreDNS banner line is fine
     inputs:
@@ -140,4 +140,4 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")

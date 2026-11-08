@@ -1,4 +1,4 @@
-# Unit tests for config/collector/grafana.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/grafana.yaml.
 tests:
   - name: Grafana request, a logged-in user
     inputs:
@@ -15,26 +15,26 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "grafana.access")
-              assert_eq!(get!(., ["event.provider"]), "grafana")
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.dataset", "grafana.access")
+              assert_eq!(."event.provider", "grafana")
+              assert_eq!(."event.kind", "event")
               assert!(!includes(array(.tags) ?? [], "generic"))
-              assert_eq!(get!(., ["event.category"]), ["web"])
-              assert_eq!(get!(., ["event.type"]), ["access"])
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["http.request.method"]), "POST")
-              assert_eq!(get!(., ["url.path"]), "/api/ds/query")
-              assert_eq!(get!(., ["http.response.status_code"]), 200)
-              assert_eq!(get!(., ["http.response.body.bytes"]), 1532)
-              assert_eq!(get!(., ["http.request.referrer"]), "https://grafana.hirednoobs.com/d/abc/overview")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(."event.category", ["web"])
+              assert_eq!(."event.type", ["access"])
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."http.request.method", "POST")
+              assert_eq!(."url.path", "/api/ds/query")
+              assert_eq!(."http.response.status_code", 200)
+              assert_eq!(."http.response.body.bytes", 1532)
+              assert_eq!(."http.request.referrer", "https://grafana.hirednoobs.com/d/abc/overview")
+              assert_eq!(."source.ip", "192.168.50.140")
               assert!(!exists(."source.port"))
-              assert_eq!(get!(., ["event.duration"]), 3284000)
-              assert_eq!(get!(., ["user.id"]), "2")
-              assert_eq!(get!(., ["related.user"]), ["2"])
-              assert_eq!(get!(., ["organization.id"]), "1")
-              assert_eq!(get!(., ["Http.Route"]), "/api/ds/query")
-              assert_eq!(get!(., ["Http.Response.StatusSource"]), "server")
+              assert_eq!(."event.duration", 3284000)
+              assert_eq!(."user.id", "2")
+              assert_eq!(."related.user", ["2"])
+              assert_eq!(."organization.id", "1")
+              assert_eq!(."Http.Route", "/api/ds/query")
+              assert_eq!(."Http.Response.StatusSource", "server")
               for_each(["method", "path", "status", "remote_addr", "time_ms", "duration", "size", "referer", "userId", "orgId", "handler", "status_source", "t"]) -> |_i, k| {
                 assert!(get!(., [k]) == null, "still there: " + k)
               }
@@ -55,10 +55,10 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "grafana.access")
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["source.ip"]), "2001:db8::1")
-              assert_eq!(get!(., ["source.port"]), 51234)
+              assert_eq!(."event.dataset", "grafana.access")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."source.ip", "2001:db8::1")
+              assert_eq!(."source.port", 51234)
               assert!(!exists(."user.id"))
               assert!(!exists(."organization.id"))
               assert!(!exists(."http.request.referrer"))
@@ -81,9 +81,13 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "monitoring.grafana")
+              assert_eq!(."event.dataset", "monitoring.grafana")
               assert_eq!(.tags, ["generic"])
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")
+              assert_eq!(."log.level", "info")
+              assert_eq!(."log.logger", "cleanup")
+              assert_eq!(._time, t'2026-10-15T08:00:00.123Z')
+              assert!(!exists(.t))
 
   - name: "format mismatch: Grafana Request Completed without a status"
     inputs:
@@ -100,8 +104,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "pipeline_error")
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "format_mismatch")
               assert_eq!(.method, "GET")
 
   - name: Grafana request through the Gateway, a duration in microseconds (the sample)
@@ -119,11 +123,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "grafana.access")
-              assert_eq!(get!(., ["http.response.status_code"]), 302)
-              assert_eq!(get!(., ["event.outcome"]), "success")
-              assert_eq!(get!(., ["source.ip"]), "10.244.1.207")
-              assert_eq!(get!(., ["event.duration"]), 80779)
-              assert_eq!(get!(., ["http.response.body.bytes"]), 29)
-              assert_eq!(get!(., ["Http.Route"]), "/")
+              assert_eq!(."event.dataset", "grafana.access")
+              assert_eq!(."http.response.status_code", 302)
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."source.ip", "10.244.1.207")
+              assert_eq!(."event.duration", 80779)
+              assert_eq!(."http.response.body.bytes", 29)
+              assert_eq!(."Http.Route", "/")
               assert_eq!(._time, t'2026-10-15T08:06:04.553164445Z')

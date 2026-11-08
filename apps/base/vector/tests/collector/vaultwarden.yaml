@@ -1,4 +1,4 @@
-# Unit tests for config/collector/vaultwarden.yaml (how to run them: tests/collector/pipeline.yaml).
+# Unit tests for config/collector/vaultwarden.yaml.
 tests:
   - name: Vaultwarden failed login
     inputs:
@@ -15,14 +15,33 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.dataset"]), "vaultwarden.log")
-              assert_eq!(get!(., ["log.level"]), "error")
-              assert_eq!(get!(., ["log.logger"]), "vaultwarden::api::identity")
-              assert_eq!(get!(., ["event.action"]), "password-login")
-              assert_eq!(get!(., ["event.type"]), ["start"])
-              assert_eq!(get!(., ["event.outcome"]), "failure")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
-              assert_eq!(get!(., ["user.name"]), "bob@example.com")
+              assert_eq!(."event.dataset", "vaultwarden.log")
+              assert_eq!(."log.level", "error")
+              assert_eq!(."log.logger", "vaultwarden::api::identity")
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."event.type", ["start"])
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert_eq!(."user.name", "bob@example.com")
+
+  - name: Vaultwarden failed login without a username
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[2026-10-13 12:20:02.123][vaultwarden::api::identity][ERROR] Username or password is incorrect. Try again. IP: 192.168.50.140. Username: .",
+            "timestamp": t'2026-10-13T12:20:02.124Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "vaultwarden", "pod_name": "vaultwarden-0", "container_name": "vaultwarden"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert!(!exists(."user.name"))
 
   - name: Vaultwarden WebSocket line (the sample)
     inputs:
@@ -39,8 +58,8 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["log.level"]), "info")
-              assert_eq!(get!(., ["source.ip"]), "192.168.50.140")
+              assert_eq!(."log.level", "info")
+              assert_eq!(."source.ip", "192.168.50.140")
               assert!(!exists(."event.action"))
 
   - name: "format mismatch: Vaultwarden bracketed line without its prefix"
@@ -58,7 +77,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["error.type"]), "format_mismatch")
+              assert_eq!(."error.type", "format_mismatch")
 
   - name: Vaultwarden banner line is fine
     inputs:
@@ -75,7 +94,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")
 
   - name: Vaultwarden error's cause line is fine
     inputs:
@@ -92,4 +111,4 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")

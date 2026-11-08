@@ -1,7 +1,6 @@
-# Unit tests for config/aggregator/threat-intel.yaml (how to run them: tests/collector/pipeline.yaml),
-# run from tests/ so threat/indicators.csv is the made-up indicators there: bad.example.com
-# (ThreatFox), malware.example.net (URLhaus), 198.51.100.66 (in both), and 192.0.2.0/24 and
-# 2001:db8:dead::/48 (Spamhaus DROP).
+# Unit tests for config/aggregator/threat-intel.yaml. threat/indicators.csv's made-up indicators:
+# bad.example.com (ThreatFox), malware.example.net (URLhaus), 198.51.100.66 (in both), and
+# 192.0.2.0/24 and 2001:db8:dead::/48 (Spamhaus DROP).
 tests:
   - name: a LAN device looking up a known-bad domain, end to end
     inputs:
@@ -17,16 +16,16 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dns-query")
-              assert_eq!(get!(., ["threat.enrichments.matched.type"]), "enrichment")
-              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["bad.example.com"])
-              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["dns.question.name"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.type"]), ["domain-name"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["ThreatFox"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.description"]), ["Vidar (botnet_cc)"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.confidence"]), ["High"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.first_seen"]), ["2026-10-17T18:05:48Z"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.reference"]), ["https://threatfox.abuse.ch/ioc/1/"])
+              assert_eq!(."event.action", "dns-query")
+              assert_eq!(."threat.enrichments.matched.type", "enrichment")
+              assert_eq!(."threat.enrichments.matched.atomic", ["bad.example.com"])
+              assert_eq!(."threat.enrichments.matched.field", ["dns.question.name"])
+              assert_eq!(."threat.enrichments.indicator.type", ["domain-name"])
+              assert_eq!(."threat.enrichments.indicator.provider", ["ThreatFox"])
+              assert_eq!(."threat.enrichments.indicator.description", ["Vidar (botnet_cc)"])
+              assert_eq!(."threat.enrichments.indicator.confidence", ["High"])
+              assert_eq!(."threat.enrichments.indicator.first_seen", ["2026-10-17T18:05:48Z"])
+              assert_eq!(."threat.enrichments.indicator.reference", ["https://threatfox.abuse.ch/ioc/1/"])
 
   - name: an answer resolving to an address in both feeds, and its name in one
     inputs:
@@ -42,11 +41,11 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "dns-reply")
-              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["dns.question.name", "dns.resolved_ip", "dns.resolved_ip"])
-              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["malware.example.net", "198.51.100.66", "198.51.100.66"])
+              assert_eq!(."event.action", "dns-reply")
+              assert_eq!(."threat.enrichments.matched.field", ["dns.question.name", "dns.resolved_ip", "dns.resolved_ip"])
+              assert_eq!(."threat.enrichments.matched.atomic", ["malware.example.net", "198.51.100.66", "198.51.100.66"])
               # The two rows for the address come in no particular order.
-              providers = array!(get!(., ["threat.enrichments.indicator.provider"]))
+              providers = array!(."threat.enrichments.indicator.provider")
               assert_eq!(length(providers), 3)
               assert_eq!(providers[0], "URLhaus")
               assert!(includes(providers, "ThreatFox"))
@@ -65,9 +64,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.action"]), "drop")
-              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["destination.ip", "destination.ip"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.type"]), ["ipv4-addr", "ipv4-addr"])
+              assert_eq!(."event.action", "drop")
+              assert_eq!(."threat.enrichments.matched.field", ["destination.ip", "destination.ip"])
+              assert_eq!(."threat.enrichments.indicator.type", ["ipv4-addr", "ipv4-addr"])
 
   - name: a name in another case still matches
     inputs:
@@ -81,7 +80,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["bad.example.com"])
+              assert_eq!(."threat.enrichments.matched.atomic", ["bad.example.com"])
 
   - name: nothing known gets no threat fields
     inputs:
@@ -95,7 +94,7 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["event.kind"]), "event")
+              assert_eq!(."event.kind", "event")
               assert!(!exists(."threat.enrichments.matched.atomic"))
               assert!(!exists(."threat.enrichments.indicator.provider"))
 
@@ -111,9 +110,9 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["bad.example.com"])
-              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["dns.question.name"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["ThreatFox"])
+              assert_eq!(."threat.enrichments.matched.atomic", ["bad.example.com"])
+              assert_eq!(."threat.enrichments.matched.field", ["dns.question.name"])
+              assert_eq!(."threat.enrichments.indicator.provider", ["ThreatFox"])
 
   - name: a listed domain's parent isn't a match
     inputs:
@@ -141,12 +140,12 @@ tests:
         conditions:
           - type: vrl
             source: |
-              assert_eq!(get!(., ["threat.enrichments.matched.field"]), ["source.ip", "destination.ip"])
-              assert_eq!(get!(., ["threat.enrichments.matched.atomic"]), ["192.0.2.0/24", "2001:db8:dead::/48"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.type"]), ["ipv4-addr", "ipv6-addr"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.provider"]), ["Spamhaus", "Spamhaus"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.description"]), ["DROP SBL000001 (192.0.2.0/24)", "DROP SBL000002 (2001:db8:dead::/48)"])
-              assert_eq!(get!(., ["threat.enrichments.indicator.reference"]), ["https://check.spamhaus.org/sbl/query/SBL000001", "https://check.spamhaus.org/sbl/query/SBL000002"])
+              assert_eq!(."threat.enrichments.matched.field", ["source.ip", "destination.ip"])
+              assert_eq!(."threat.enrichments.matched.atomic", ["192.0.2.0/24", "2001:db8:dead::/48"])
+              assert_eq!(."threat.enrichments.indicator.type", ["ipv4-addr", "ipv6-addr"])
+              assert_eq!(."threat.enrichments.indicator.provider", ["Spamhaus", "Spamhaus"])
+              assert_eq!(."threat.enrichments.indicator.description", ["DROP SBL000001 (192.0.2.0/24)", "DROP SBL000002 (2001:db8:dead::/48)"])
+              assert_eq!(."threat.enrichments.indicator.reference", ["https://check.spamhaus.org/sbl/query/SBL000001", "https://check.spamhaus.org/sbl/query/SBL000002"])
 
   - name: an address next to a listed network isn't a match
     inputs:
