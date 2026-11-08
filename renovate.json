@@ -127,6 +127,95 @@
       "description": "Unbound's version and the image's build (1.26.2-0), not the -quic variant: Docker versioning only compares tags with the same build, as a compatibility suffix",
       "matchPackageNames": ["madnuttah/unbound"],
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)$"
+    },
+    {
+      "description": "Checks before and after merging, every PR first, then the component's own (prBodyNotes add up across rules)",
+      "matchPackageNames": ["*"],
+      "prBodyNotes": ["After merging: `flux get kustomizations -A` all Ready once Flux has applied it, `deployment status <namespace>` for the pods it rolled, and no new KubePodCrashLooping, KubePodNotReady or FluxResourceNotReady."]
+    },
+    {
+      "matchPackageNames": ["longhorn"],
+      "prBodyNotes": ["Before: Grafana Storage → Longhorn shows no degraded or faulted volumes and every node schedulable (`kubectl -n longhorn-system get volumes.longhorn.io,nodes.longhorn.io`), then `deployment longhorn_backup`. After: the same, and each volume's engine moving to the new version (`kubectl -n longhorn-system get volumes.longhorn.io -o custom-columns=NAME:.metadata.name,IMAGE:.status.currentImage`)."]
+    },
+    {
+      "matchPackageNames": ["fluxcd/flux2"],
+      "prBodyNotes": ["After: `flux check`, `flux get all -A` Ready, Grafana Flux → Flux Cluster Stats, and Flux's commit status on the next merge in Forgejo."]
+    },
+    {
+      "matchPackageNames": ["cert-manager", "/^quay\\.io/jetstack/"],
+      "prBodyNotes": ["After: `kubectl get certificates -A` all Ready, Grafana Platform → Cert-manager, CertificateNotReady quiet."]
+    },
+    {
+      "matchPackageNames": ["external-secrets", "ghcr.io/external-secrets/external-secrets"],
+      "prBodyNotes": ["After: `kubectl get externalsecrets -A` all SecretSynced, Grafana Platform → External Secrets Operator, ExternalSecretNotSynced quiet."]
+    },
+    {
+      "matchPackageNames": ["/envoyproxy/gateway/"],
+      "prBodyNotes": ["Before and after: Grafana Gateway → Envoy Gateway Global and Envoy Global. After: `kubectl get gateway,httproute -A` Programmed and Accepted, the sites load and an Authelia login works, Grafana Services → Blackbox Exporter probes up (ProbeFailed, GatewayBackendErrors quiet)."]
+    },
+    {
+      "matchPackageNames": ["kube-vip", "plndr/kube-vip"],
+      "prBodyNotes": ["After: the LoadBalancer Services keep their IPs (`kubectl get svc -A | grep LoadBalancer`), and the Gateway and Pi-hole's DNS answer on them."]
+    },
+    {
+      "matchPackageNames": ["timberio/vector", "vectordotdev/vector", "docker.io/library/alpine", "docker.io/library/python"],
+      "prBodyNotes": ["After: Grafana Monitoring → Log pipeline: every source still arriving, no errors or drops; LogPipelineErrors, VectorSendFailing, VectorSinkStalled and VectorGeoDataMissing quiet."]
+    },
+    {
+      "matchPackageNames": ["victoriametrics/victoria-metrics", "victoriametrics/vmagent", "victoriametrics/vmalert"],
+      "prBodyNotes": ["After: Grafana Monitoring → VictoriaMetrics, vmagent and vmalert: ingestion steady, targets up (TargetDown quiet), rules evaluating without errors; Watchdog still reaching healthchecks.io."]
+    },
+    {
+      "matchPackageNames": ["victoriametrics/victoria-logs"],
+      "prBodyNotes": ["After: Grafana Monitoring → VictoriaLogs and Log pipeline: ingestion steady, and Gateway → Gateway logs loads."]
+    },
+    {
+      "matchPackageNames": ["grafana/grafana", "VictoriaMetrics/victorialogs-datasource", "grafana/business-text"],
+      "prBodyNotes": ["After: log in through Authelia, open Overview → Homelab overview and Gateway → Gateway logs (the VictoriaLogs plugin); no OOMKilled restarts (`deployment status monitoring`)."]
+    },
+    {
+      "matchPackageNames": ["rabbitmq"],
+      "prBodyNotes": ["Before a minor version: `rabbitmq list_feature_flags` all enabled (else `rabbitmq enable_feature_flag all`). After: Grafana Services → RabbitMQ-Overview with 3 nodes, `rabbitmq diag metadata_store_status`, contentbot still consuming; after a minor version, `rabbitmq enable_feature_flag all` again."]
+    },
+    {
+      "matchPackageNames": ["redis", "oliver006/redis_exporter"],
+      "prBodyNotes": ["After: Grafana Services → Redis with one master and both replicas in sync (`redis SENTINEL master redis`); RedisNoMaster and RedisReplicaNotSyncing quiet."]
+    },
+    {
+      "matchPackageNames": ["falco", "falcosecurity/falco"],
+      "prBodyNotes": ["After: `deployment status falco` with a pod on every node, Grafana Security → Security overview still showing events, FalcoDroppingEvents and FalcoAlertsLost quiet."]
+    },
+    {
+      "matchPackageNames": ["authelia/authelia", "lldap/lldap", "ghostunnel/ghostunnel"],
+      "prBodyNotes": ["After: a login to a protected app (Grafana) through Authelia, end to end; Grafana Services → Authelia; LldapDirectoryDrift quiet."]
+    },
+    {
+      "matchPackageNames": ["pihole/pihole", "madnuttah/unbound"],
+      "prBodyNotes": ["After: names resolve from a LAN client, Grafana Services → Blackbox Exporter's DNS probes up (DnsProbeFailed and PiholeMetricsMissing quiet)."]
+    },
+    {
+      "matchPackageNames": ["prom/alertmanager"],
+      "prBodyNotes": ["After: AlertmanagerNotificationsFailing quiet, and Watchdog still reaching healthchecks.io."]
+    },
+    {
+      "matchPackageNames": ["prometheus-blackbox-exporter", "prom/blackbox-exporter"],
+      "prBodyNotes": ["After: Grafana Services → Blackbox Exporter with every probe up."]
+    },
+    {
+      "matchPackageNames": ["prom/node-exporter", "kube-state-metrics", "registry.k8s.io/kube-state-metrics/kube-state-metrics"],
+      "prBodyNotes": ["After: Grafana Hosts → Node Exporter Full and the Kubernetes / Views dashboards fill for every node, Security → Vulnerabilities still lists the images."]
+    },
+    {
+      "matchPackageNames": ["metrics-server", "registry.k8s.io/metrics-server/metrics-server", "ghcr.io/alex1989hu/kubelet-serving-cert-approver"],
+      "prBodyNotes": ["After: `kubectl top nodes` works, and `kubectl get csr` has none left Pending (the kubelets' serving certificates)."]
+    },
+    {
+      "matchPackageNames": ["registry.k8s.io/kubectl"],
+      "prBodyNotes": ["After: Kubernetes events still arrive in VictoriaLogs (`event.dataset:kubernetes.event`)."]
+    },
+    {
+      "matchPackageNames": ["rsyslog/rsyslog"],
+      "prBodyNotes": ["After: the LAN's syslog still arrives (Grafana Network fills with the router's lines)."]
     }
   ]
 }
