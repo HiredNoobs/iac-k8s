@@ -24,6 +24,25 @@ tests:
               assert_eq!(."source.ip", "192.168.50.140")
               assert_eq!(."user.name", "bob@example.com")
 
+  - name: Vaultwarden failed login without a username
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[2026-10-13 12:20:02.123][vaultwarden::api::identity][ERROR] Username or password is incorrect. Try again. IP: 192.168.50.140. Username: .",
+            "timestamp": t'2026-10-13T12:20:02.124Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "vaultwarden", "pod_name": "vaultwarden-0", "container_name": "vaultwarden"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "password-login")
+              assert_eq!(."source.ip", "192.168.50.140")
+              assert!(!exists(."user.name"))
+
   - name: Vaultwarden WebSocket line (the sample)
     inputs:
       - insert_at: pods

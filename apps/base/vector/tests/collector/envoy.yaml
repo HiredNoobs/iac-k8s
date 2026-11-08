@@ -162,6 +162,45 @@ tests:
               assert!(!exists(."url.query"))
               assert_eq!(."url.path", "/")
 
+  - name: Envoy access log line, an upstream TLS failure
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"GET nas.hirednoobs.com/ 503 4ms\",\"start_time\":\"2026-10-13T12:00:00.000Z\",\"method\":\"GET\",\"response_code\":\"503\",\"response_flags\":\"UF\",\"response_code_details\":\"upstream_reset_before_response_started{remote_connection_failure}\",\"upstream_transport_failure_reason\":\"TLS_error:|268435581:SSL routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED:TLS_error_end\",\"connection_termination_details\":\"-\",\"downstream_remote_address\":\"192.168.50.10:51300\"}",
+            "timestamp": t'2026-10-13T12:00:00.005Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy", "pod_node_name": "worker-4"}
+          }
+    outputs:
+      - extract_from: envoy
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."Proxy.ResponseFlags", ["UF"])
+              assert_eq!(."Proxy.UpstreamTransportFailureReason", "TLS_error:|268435581:SSL routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED:TLS_error_end")
+              assert!(!exists(."Proxy.ConnectionTerminationDetails"))
+
+  - name: Envoy access log line, a connection the RBAC filter closed
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"- - 0 0ms\",\"start_time\":\"2026-10-13T12:00:00.000Z\",\"response_code\":\"0\",\"response_code_details\":\"-\",\"connection_termination_details\":\"rbac_access_denied_matched_policy[none]\",\"downstream_remote_address\":\"203.0.113.9:51301\"}",
+            "timestamp": t'2026-10-13T12:00:00.001Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "envoy-gateway", "pod_name": "envoy-public-1", "container_name": "envoy", "pod_node_name": "worker-4"}
+          }
+    outputs:
+      - extract_from: envoy
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.outcome", "unknown")
+              assert_eq!(."Proxy.ConnectionTerminationDetails", "rbac_access_denied_matched_policy[none]")
+              assert!(!exists(."event.reason"))
+
   - name: Envoy's own log line
     inputs:
       - insert_at: pods

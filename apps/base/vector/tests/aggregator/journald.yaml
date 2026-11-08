@@ -140,6 +140,51 @@ tests:
               assert_eq!(."source.ip", "192.168.50.67")
               assert_eq!(."user.name", "root")
 
+  - name: sshd failed login, a wrong password
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "Failed password for root from 192.168.50.66 port 40022 ssh2",
+            "timestamp": "2026-10-14T12:00:02Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "ssh_login")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."event.reason", "failed password")
+              assert_eq!(."Ssh.Method", "password")
+              assert_eq!(."user.name", "root")
+              assert_eq!(."source.ip", "192.168.50.66")
+              assert_eq!(."source.port", 40022)
+
+  - name: sshd's PAM line for a wrong password
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=192.168.50.66  user=root",
+            "timestamp": "2026-10-14T12:00:02Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "ssh.service", "SYSLOG_IDENTIFIER": "sshd-session", "PRIORITY": "5"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "sshd.log")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.action", "authentication_failure")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."source.ip", "192.168.50.66")
+              assert_eq!(."user.name", "root")
+
   - name: sudo command (the command is the process, sudo its parent)
     inputs:
       - insert_at: journald
@@ -191,6 +236,27 @@ tests:
               assert_eq!(."user.name", "eve")
               assert_eq!(."Terminal.Name", "pts/1")
               assert_eq!(."log.level", "critical")
+
+  - name: sudo's PAM line for a wrong password
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "pam_unix(sudo:auth): authentication failure; logname=eve uid=1001 euid=0 tty=/dev/pts/1 ruser=eve rhost=  user=eve",
+            "timestamp": "2026-10-14T12:00:02Z", "X-Forwarded-For": "192.168.111.201",
+            "_HOSTNAME": "prx-999-srv-runner-001", "SYSLOG_IDENTIFIER": "sudo", "PRIORITY": "5"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "sudo.log")
+              assert_eq!(."event.category", ["authentication"])
+              assert_eq!(."event.action", "authentication_failure")
+              assert_eq!(."event.outcome", "failure")
+              assert_eq!(."user.name", "eve")
 
   - name: Vault audit response with the root token
     inputs:
@@ -292,6 +358,28 @@ tests:
               assert!(!exists(."Secrets.Audit.Response".Data))
               assert_eq!(."event.action", "read")
 
+  - name: Vault audit, a delete request by an OIDC user (the token's email)
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"auth\":{\"display_name\":\"oidc-alice\",\"policies\":[\"admin\"],\"metadata\":{\"email\":\"alice@example.com\",\"role\":\"admin\"}},\"request\":{\"id\":\"r-5\",\"operation\":\"delete\",\"path\":\"labv2/metadata/production/old\",\"remote_address\":\"192.168.50.140\",\"remote_port\":51004},\"time\":\"2026-10-14T12:00:00Z\",\"type\":\"request\"}",
+            "timestamp": "2026-10-14T12:00:00Z", "X-Forwarded-For": "192.168.111.202",
+            "_HOSTNAME": "prx-999-srv-vault-001", "_SYSTEMD_UNIT": "vault.service", "PRIORITY": "6"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "delete")
+              assert_eq!(."event.type", ["info", "end"])
+              assert_eq!(."user.name", "oidc-alice")
+              assert_eq!(."user.email", "alice@example.com")
+              # A request: its outcome is the response's.
+              assert!(!exists(."event.outcome"))
+
   - name: Vault's own line
     inputs:
       - insert_at: journald
@@ -387,6 +475,25 @@ tests:
               assert_eq!(."source.ip", "127.0.0.1")
               assert_eq!(."source.port", 44330)
               assert_eq!(."event.reason", "password mismatch")
+
+  - name: "format mismatch: a dated Forgejo line without its <file>:<line>:<function>()"
+    inputs:
+      - insert_at: journald
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/10/14 12:00:20 [W] Failed authentication attempt for admin from 192.168.50.88: user does not exist",
+            "timestamp": "2026-10-14T12:00:20Z", "X-Forwarded-For": "192.168.111.200",
+            "_HOSTNAME": "prx-999-srv-git-001", "_SYSTEMD_UNIT": "forgejo.service", "PRIORITY": "4"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "forgejo.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "format_mismatch")
 
   - name: a Proxmox host's failed login (pvedaemon)
     inputs:
@@ -574,3 +681,29 @@ tests:
               assert_eq!(."log.syslog.appname", "corosync")
               assert_eq!(."host.hostname", "prx-001")
               assert_eq!(._msg, "  [KNET  ] link: host: 4 link: 0 is down")
+
+  - name: an entry the journal remap failed on is kept, its message, unit and machine
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "message": "something", "@timestamp": "2026-10-14T12:00:00Z", "timestamp": t'2026-10-14T12:00:01Z',
+            "X-Forwarded-For": "203.0.113.9, 192.168.111.201", "_HOSTNAME": "prx-999-srv-runner-001", "_SYSTEMD_UNIT": "cron.service",
+            "metadata": {"dropped": {"component_id": "journald", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "journald.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.message", "boom")
+              assert_eq!(._msg, "something")
+              assert_eq!(._time, "2026-10-14T12:00:00Z")
+              assert_eq!(."Systemd.Unit", "cron.service")
+              # The VM's own address: the last X-Forwarded-For entry.
+              assert_eq!(."host.ip", "192.168.111.201")
+              assert_eq!(."host.hostname", "prx-999-srv-runner-001")
+              assert!(!exists(._HOSTNAME))

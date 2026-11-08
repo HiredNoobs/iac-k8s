@@ -625,6 +625,31 @@ tests:
               assert!(!exists(."Firewall.TcpFlags"))
               assert!(!exists(."source.port"))
 
+  - name: router firewall accept, DNS from the LAN out through the VPN (IN= empty)
+    inputs:
+      - insert_at: syslog
+        type: vrl
+        source: |
+          . = {
+            "message": "<4>Oct 16 15:41:12 RT-BE86U-FFA0-1F4D20D-C kernel: ACCEPT IN= OUT=wgc1 SRC=192.168.50.56 DST=1.1.1.1 LEN=60 TOS=0x00 PREC=0x00 TTL=63 ID=4711 DF PROTO=UDP SPT=53124 DPT=53 LEN=40",
+            "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:41:12.001+01:00", "transport": "imudp"
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "accept")
+              assert_eq!(."event.type", ["connection", "allowed"])
+              assert_eq!(."observer.egress.interface.name", "wgc1")
+              # The router logs some forwarded traffic without its interface: none, not "".
+              assert!(!exists(."observer.ingress.interface.name"))
+              assert_eq!(."source.ip", "192.168.50.56")
+              assert_eq!(."destination.ip", "1.1.1.1")
+              assert_eq!(."destination.port", 53)
+              assert_eq!(."network.transport", "udp")
+              assert!(!exists(."source.mac"))
+
   - name: a kernel line that isn't the firewall's stays plain
     inputs:
       - insert_at: syslog
@@ -639,3 +664,27 @@ tests:
               assert!(!exists(."event.action"))
               assert!(!exists(."source.ip"))
               assert_eq!(._msg, "br0: port 3(eth3) entered forwarding state")
+
+  - name: a line the syslog remap failed on is kept as rsyslog sent it
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "message": "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: something",
+            "timestamp": t'2026-10-16T15:40:02.500Z', "fromhost_ip": "192.168.111.1", "received": "2026-10-16T16:40:02.4+01:00",
+            "metadata": {"dropped": {"component_id": "syslog", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "syslog.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.type", "remap_error")
+              assert_eq!(."error.message", "boom")
+              assert_eq!(._msg, "<30>Oct 16 15:40:02 RT-BE86U-FFA0-1F4D20D-C dnsmasq[2101]: something")
+              assert_eq!(._time, t'2026-10-16T15:40:02.500Z')
+              assert_eq!(."host.ip", "192.168.111.1")
+              assert!(!exists(.fromhost_ip))

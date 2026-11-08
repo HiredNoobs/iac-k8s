@@ -446,3 +446,25 @@ tests:
               assert_eq!(."event.dataset", "talos.log")
               assert_eq!(."host.name", "cp-1.hirednoobs.com")
               assert_eq!(._time, t'2026-10-15T12:00:01Z')
+
+  - name: a line the Talos remap failed on is kept, the node's
+    inputs:
+      - insert_at: unparsed
+        type: vrl
+        source: |
+          . = {
+            "msg": "hello", "talos-service": "machined", "timestamp": t'2026-10-15T12:00:02.5Z',
+            "metadata": {"dropped": {"component_id": "talos", "message": "boom", "reason": "error"}}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "talos.log")
+              assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."error.message", "boom")
+              assert_eq!(._msg, "hello")
+              assert_eq!(._time, t'2026-10-15T12:00:02.5Z')
+              assert_eq!(."host.hostname", "cp-1")
+              assert!(!exists(."talos-service"))

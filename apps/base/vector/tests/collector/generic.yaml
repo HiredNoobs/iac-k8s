@@ -301,6 +301,26 @@ tests:
               assert_eq!(.concurrent, "2")
               assert!(!exists(."Storage.Volume.Name"))
 
+  - name: logfmt line of a Longhorn engine
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-e-0] time=\"2026-10-15T00:00:32Z\" level=info msg=\"Snapshot created\"",
+            "timestamp": t'2026-10-15T08:00:00.500Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "instance-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "Snapshot created")
+              assert_eq!(."Storage.Volume.Name", "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53")
+              assert_eq!(."Storage.Engine.Name", "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-e-0")
+              assert!(!exists(."Storage.Replica.Name"))
+
   - name: Python logging line (the contentbot sample)
     inputs:
       - insert_at: pods

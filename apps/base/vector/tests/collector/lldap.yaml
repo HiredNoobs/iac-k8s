@@ -101,6 +101,45 @@ tests:
               assert_eq!(."group.name", "extra")
               assert!(!exists(."user.name"))
 
+  - name: lldap-bootstrap created a user
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "User \"alice\" successfully created",
+            "timestamp": t'2026-10-13T09:17:01.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-bootstrap-29340000-abcde", "container_name": "bootstrap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.action", "user-created")
+              assert_eq!(."event.type", ["user", "creation"])
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."user.name", "alice")
+
+  - name: lldap-bootstrap's warning
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[WARNING] User \"bob\" is not declared in config files",
+            "timestamp": t'2026-10-13T09:17:01.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "lldap", "pod_name": "lldap-bootstrap-29340000-abcde", "container_name": "bootstrap"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "lldap.bootstrap")
+              assert_eq!(."log.level", "warning")
+              assert!(!exists(."event.action"))
+
   - name: "format mismatch: lldap timestamped line without a level"
     inputs:
       - insert_at: pods

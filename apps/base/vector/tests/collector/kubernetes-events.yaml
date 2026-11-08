@@ -95,6 +95,27 @@ tests:
               assert!(!exists(."container.name"))
               assert!(!exists(."host.hostname"))
 
+  - name: Kubernetes event from the kubelet without source.host, on a pod's volume, a related object
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"apiVersion\":\"v1\",\"eventTime\":\"2026-10-14T10:00:00.000000Z\",\"involvedObject\":{\"apiVersion\":\"v1\",\"fieldPath\":\"spec.volumes{config}\",\"kind\":\"Pod\",\"name\":\"app-1\",\"namespace\":\"homepage\",\"uid\":\"p-2\"},\"kind\":\"Event\",\"message\":\"MountVolume.SetUp failed for volume \\\"config\\\"\",\"metadata\":{\"name\":\"app-1.18a\",\"namespace\":\"homepage\",\"uid\":\"e-4\"},\"reason\":\"FailedMount\",\"related\":{\"kind\":\"Node\",\"name\":\"worker-2\"},\"reportingComponent\":\"kubelet\",\"reportingInstance\":\"worker-2\",\"source\":{},\"type\":\"Warning\"}",
+            "timestamp": t'2026-10-14T10:00:00.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              # The kubelet that reported it.
+              assert_eq!(."host.hostname", "worker-2")
+              assert_eq!(."Orchestrator.Resource.FieldPath", "spec.volumes{config}")
+              assert!(!exists(."container.name"))
+              assert_eq!(."Orchestrator.Event.Related", {"kind": "Node", "name": "worker-2"})
+
   - name: kubectl's own message isn't an event
     inputs:
       - insert_at: pods
@@ -114,6 +135,26 @@ tests:
               assert_eq!(."event.kind", "event")
               assert_eq!(."host.hostname", "worker-1")
               assert!(!exists(."orchestrator.type"))
+
+  - name: kubectl's own klog line has its level
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "W1014 09:31:00.000000       1 reflector.go:561] k8s.io/client-go/tools/cache/reflector.go: watch of *v1.Event ended with: an error on the server",
+            "timestamp": t'2026-10-14T09:31:00.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "kubectl", "pod_name": "events-1", "container_name": "events", "pod_node_name": "worker-1"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.dataset", "kubectl.log")
+              assert_eq!(."log.level", "warning")
+              assert_eq!(."log.origin.file.name", "reflector.go")
+              assert_eq!(."log.origin.file.line", 561)
 
   - name: "format mismatch: JSON from kubectl that isn't an event"
     inputs:

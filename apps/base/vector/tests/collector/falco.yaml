@@ -152,6 +152,25 @@ tests:
               }
               assert!(!exists(.output_fields))
 
+  - name: Falco alert on a path, without fd.type
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"message\":\"x\",\"priority\":\"Warning\",\"rule\":\"Write below etc\",\"source\":\"syscall\",\"tags\":[\"filesystem\"],\"output_fields\":{\"fd.name\":\"/etc/passwd\"}}",
+            "timestamp": t'2026-10-13T08:20:41.200Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "falco", "pod_name": "falco-x", "container_name": "falco"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."file.path", "/etc/passwd")
+              assert!(!exists(."file.type"))
+              assert!(!exists(."Sensor.Fields.fd.name"))
+
   - name: Falco critical alert with a sub-technique and a two-word tactic
     inputs:
       - insert_at: pods

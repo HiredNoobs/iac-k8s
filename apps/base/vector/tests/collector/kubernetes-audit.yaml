@@ -15,6 +15,7 @@ tests:
               assert_eq!(."host.hostname", "cp-1")
               assert_eq!(."event.dataset", "kubernetes.audit")
               assert_eq!(."event.kind", "pipeline_error")
+              assert_eq!(."event.provider", "kube-apiserver")
               assert_eq!(."error.type", "remap_error")
               assert!(contains(string!(."error.message"), "parse_json"))
               assert_eq!(."ecs.version", "9.5.0")

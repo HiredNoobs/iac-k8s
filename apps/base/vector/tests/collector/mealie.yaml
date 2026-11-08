@@ -22,6 +22,7 @@ tests:
               assert_eq!(."source.ip", "10.244.1.1")
               assert_eq!(."source.port", 48410)
               assert_eq!(."http.response.status_code", 200)
+              assert_eq!(."event.outcome", "success")
               assert_eq!(."http.request.method", "GET")
               assert_eq!(."http.version", "1.1")
               assert_eq!(."url.path", "/api/app/about")

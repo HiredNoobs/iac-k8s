@@ -182,6 +182,25 @@ tests:
             source: |
               assert_eq!(._msg, "[1,2,3]")
 
+  - name: pod JSON line with log as its message
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "{\"log\":\"hello\",\"stream_name\":\"main\"}",
+            "timestamp": t'2026-10-13T11:00:00.000Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "a", "pod_name": "b", "container_name": "c"}
+          }
+    outputs:
+      - extract_from: pods
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "hello")
+              assert!(!exists(.log))
+              assert_eq!(.stream_name, "main")
+
   - name: common fields on a pod's line, level normalised
     inputs:
       - insert_at: pods

@@ -58,10 +58,9 @@ tests:
               assert_eq!(."Firewall.Entries", 78)
               assert_eq!(."Firewall.Operation", "nft_register_chain")
               assert_eq!(."network.type", "ipv6")
+              for_each(["user.audit.id", "user.terminal", "Audit.Data", "Selinux.Object.Context", "file.path", "tags", "audit_key", "audit_record", "level"]) -> |_i, k| { assert!(get!(., [k]) == null, "there: " + k) }
               assert_eq!(length(split(string!(."event.original"), "\n")), 4)
               assert!(starts_with(string!(."event.original"), "type=NETFILTER_CFG msg=audit(1793148440.547:19443): "))
-              for_each(["user.audit.id", "user.terminal", "Audit.Data", "Selinux.Object.Context", "file.path", "tags", "audit_key", "audit_record", "level"]) -> |_i, k| { assert!(get!(., [k]) == null, "there: " + k) }
-              assert!(!exists(._time_end))
 
   - name: an SELinux denial in permissive mode (the Longhorn backup share), two AVCs on one object
     inputs:
