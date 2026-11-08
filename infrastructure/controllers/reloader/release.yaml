@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: reloader
-      version: "2.2.18"
+      version: "2.2.19"
       sourceRef:
         kind: HelmRepository
         name: stakater
@@ -19,8 +19,8 @@ spec:
       # Only the digest is used once it's set, the tag says which version it is.
       repository: stakater/reloader
       # update-pins: image=stakater/reloader
-      tag: v1.4.22
-      digest: sha256:96cc6bad219032f01a795803f23093ee0277b9308999ec4ce25a8382a22910df
+      tag: v1.4.23
+      digest: sha256:e9dba79a047aa6a2ad538b53165a45c429f187aab4acaad8e43439a7b43a2753
     reloader:
       # Restarts by changing a pod template annotation rather than adding env vars to the
       # containers, which stays out of the way of Flux's manifests.
