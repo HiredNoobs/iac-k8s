@@ -1,6 +1,6 @@
 # Every Kustomization in flux-system (they all apply iac-k8s), one status per Kustomization.
 # Info events too, so a successful apply shows as a success, not only failures.
-apiVersion: notification.toolkit.fluxcd.io/v1beta3
+apiVersion: notification.toolkit.fluxcd.io/v1
 kind: Alert
 metadata:
   name: forgejo-commit-status
