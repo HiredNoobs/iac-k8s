@@ -1,6 +1,6 @@
 # Posts each Kustomization's result as a commit status on iac-k8s in Forgejo. The token is read
 # when an event is sent, so a missing or rotated secret doesn't need a restart.
-apiVersion: notification.toolkit.fluxcd.io/v1beta3
+apiVersion: notification.toolkit.fluxcd.io/v1
 kind: Provider
 metadata:
   name: forgejo

@@ -21,8 +21,8 @@ env:
   FLUX_CRD_SCHEMAS_SHA256: "a1d64309d0965ef681f161ce2d28a1a58aa78239d6f5e94ea6e556b5674cfefb"
   # Kubernetes' schemas at a fixed commit (kubeconform's default follows master). By hand, with
   # kubernetes_version in iac-homelab.
-  KUBERNETES_VERSION: "1.37.0"
-  KUBERNETES_SCHEMAS_COMMIT: "8df8a883b68a24a104b4a9e43c1288090ae60b3b"
+  KUBERNETES_VERSION: "1.37.2"
+  KUBERNETES_SCHEMAS_COMMIT: "c416d7b0da0751bd8ebe5be4fa4c8e8274e3bbe2"
   # The controllers' CRD bundles, same version as their HelmRelease (infrastructure/controllers),
   # looked up from the same chart so Renovate groups them.
   # renovate: datasource=helm depName=external-secrets registryUrl=https://charts.external-secrets.io
