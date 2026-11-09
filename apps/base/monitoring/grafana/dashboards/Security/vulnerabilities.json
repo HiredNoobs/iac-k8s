@@ -874,6 +874,7 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "displayName": "${__field.labels.target}",
           "unit": "short",
           "decimals": 0,
           "color": {
@@ -2284,6 +2285,7 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "displayName": "${__field.labels.cwe} ${__field.labels.cwe_name}",
           "unit": "short",
           "decimals": 0,
           "color": {
