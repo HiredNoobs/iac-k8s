@@ -104,7 +104,7 @@
     {
       "matchPackageNames": ["fluxcd/flux2"],
       "groupName": "flux",
-      "prBodyNotes": ["Bump `FLUX_VERSION` in tools-bin's `context-setup` to the same version."]
+      "prBodyNotes": ["[tools-bin's PR](https://github.com/HiredNoobs/tools-bin/pulls?q=is%3Apr+fluxcd%2Fflux2) bumps the CLI (`FLUX_VERSION` in `context-setup`): merge it with this one."]
     },
     {
       "description": "Longhorn only upgrades one minor version at a time",
