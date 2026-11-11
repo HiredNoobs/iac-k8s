@@ -377,6 +377,7 @@ groups:
             /dev/<disk>, and which VMs and Longhorn disks are on it. Trigger: none safe;
             logger -t smartd -p daemon.crit "Device: /dev/sdz [SAT], 8 Currently unreadable
             (pending) sectors" on a host (a test line, no disk involved).
+          tested: "2026-11-11"
 
       # The kernel killing a process because the whole machine ran out of memory (not a container
       # at its own limit, "Memory cgroup out of memory"). On a host it's usually a VM's qemu.
@@ -427,6 +428,7 @@ groups:
             while a host reboots for more than a few minutes. Trigger: systemctl stop corosync
             on one host for 6 minutes, then start it (its /etc/pve is read-only meanwhile, its
             VMs keep running).
+          tested: "2026-11-09"
 
       # Without quorum a host's /etc/pve is read-only: no starting, stopping, migrating or
       # changing guests there (the running ones carry on). Corosync also logs this briefly while
@@ -452,3 +454,4 @@ groups:
             (CorosyncLinkDown). Trigger: none safe; logger -t corosync "[QUORUM] This node is
             within the non-primary component and will NOT provide any services." on a host
             (a test line).
+          tested: "2026-11-11"
