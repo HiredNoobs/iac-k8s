@@ -197,6 +197,7 @@ groups:
             a chart's). Trigger: kubectl -n homepage create deployment policy-test
             --image=busybox:1.37 --replicas=0 (fails both policies, also raises
             KubeWorkloadChangeOutsideFlux), then delete it.
+          tested: "2026-11-11"
 
       - alert: KubeForbiddenBurst
         expr: >-

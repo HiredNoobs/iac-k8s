@@ -87,6 +87,7 @@ groups:
         annotations:
           summary: Container OOM killed ({{ $labels.namespace }}/{{ $labels.pod }})
           description: "Container {{ $labels.container }} of {{ $labels.namespace }}/{{ $labels.pod }} was killed for running out of memory (its limit)."
+          tested: "2026-11-11"
 
       - alert: KubeDeploymentReplicasMismatch
         expr: 'kube_deployment_spec_replicas != kube_deployment_status_replicas_available'
@@ -129,6 +130,7 @@ groups:
         annotations:
           summary: Job failed ({{ $labels.namespace }}/{{ $labels.job_name }})
           description: "{{ $labels.namespace }}/{{ $labels.job_name }} failed, see its pods' logs (kubectl -n {{ $labels.namespace }} logs job/{{ $labels.job_name }})."
+          tested: "2026-11-11"
 
       # A CronJob whose latest finished run failed, by start time; a run still going doesn't
       # count. Each run is a new Job and a failure deletes the previous failed one, so a per-Job
