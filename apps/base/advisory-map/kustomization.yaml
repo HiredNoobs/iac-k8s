@@ -2,7 +2,8 @@
 # as metrics for vmagent (its advisory-map job). The VMs' Debian packages come from iac-homelab's
 # package-versions, everything else through config/mapping.toml. Advisories are downloaded whole
 # (the Debian Security Tracker, the CVE List from GitHub, OSV's bucket, CISA's KEV) and matched
-# here: nothing about the lab is sent out. Plain manifests, the app has no chart.
+# here; fixes are the mapped projects' releases, their tags looked up by name. Nothing about what's
+# installed is sent out. Plain manifests, the app has no chart.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: advisory-map

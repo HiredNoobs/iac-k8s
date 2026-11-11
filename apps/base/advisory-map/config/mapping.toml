@@ -7,6 +7,10 @@
 # appVersion where the images can't say it: charts that run them by digest alone (cert-manager,
 # reloader; update-pins.sh keeps their images at the chart's appVersion), or many images for one
 # product (Longhorn). Their images regex covers what they run.
+#
+# Fixes are releases: an image's tags in the registry it's pulled from (a fix is one that can be
+# pulled), Kubernetes by Talos' kubelet image, Talos and the VMs' binaries by their git tags.
+# release_regex picks the variant an image runs (distroless, alpine, ...).
 
 [images]
 query = "kube_pod_container_info"
@@ -24,6 +28,7 @@ ecosystem = "Go"
 package = "github.com/siderolabs/talos"
 version_label = "version_id"
 kind = "talos"
+releases = "git:https://github.com/siderolabs/talos.git"
 images = '^ghcr\.io/siderolabs/'
 
 [[software]]
@@ -35,6 +40,7 @@ package = "k8s.io/kubernetes"
 version_label = "kubelet_version"
 target_labels = ["node"]
 kind = "kubernetes"
+releases = "registry:ghcr.io/siderolabs/kubelet"
 images = '^registry\.k8s\.io/(kube-apiserver|kube-controller-manager|kube-scheduler|kube-proxy):'
 
 [[software]]
@@ -44,6 +50,7 @@ product = "kubelet"
 version_label = "kubelet_version"
 target_labels = ["node"]
 kind = "kubernetes"
+releases = "registry:ghcr.io/siderolabs/kubelet"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?coredns/coredns:.*"}'
@@ -55,6 +62,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:registry.k8s.io/coredns/coredns"
 
 # kubectl's own vulnerabilities are usually filed under Kubernetes, whose server-side ones don't apply.
 [[software]]
@@ -65,6 +73,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:registry.k8s.io/kubectl"
 
 # -----------------------------------------------------
 # Helm releases
@@ -79,6 +88,7 @@ package = "github.com/cert-manager/cert-manager"
 version_label = "chart_app_version"
 target_labels = ["exported_namespace", "name"]
 kind = "helm"
+releases = "registry:quay.io/jetstack/cert-manager-controller"
 images = '^quay\.io/jetstack/cert-manager-'
 
 [[software]]
@@ -88,6 +98,7 @@ product = "longhorn"
 version_label = "chart_app_version"
 target_labels = ["exported_namespace", "name"]
 kind = "helm"
+releases = "registry:docker.io/longhornio/longhorn-manager"
 images = '^(docker\.io/)?longhornio/'
 
 [[software]]
@@ -97,6 +108,7 @@ package = "github.com/stakater/Reloader"
 version_label = "chart_app_version"
 target_labels = ["exported_namespace", "name"]
 kind = "helm"
+releases = "registry:docker.io/stakater/reloader"
 images = '(^|/)stakater/reloader(:|$)'
 
 # -----------------------------------------------------
@@ -113,6 +125,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:ghcr.io/external-secrets/external-secrets"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?envoyproxy/gateway:.*"}'
@@ -124,6 +137,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/envoyproxy/gateway"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?envoyproxy/envoy:.*"}'
@@ -135,6 +149,8 @@ version_label = "image_spec"
 version_regex = ':(?:distroless-)?v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/envoyproxy/envoy"
+release_regex = '^distroless-v(\d+\.\d+\.\d+)$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/source-controller:.*"}'
@@ -146,6 +162,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:ghcr.io/fluxcd/source-controller"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/kustomize-controller:.*"}'
@@ -157,6 +174,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:ghcr.io/fluxcd/kustomize-controller"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/helm-controller:.*"}'
@@ -166,6 +184,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:ghcr.io/fluxcd/helm-controller"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?fluxcd/notification-controller:.*"}'
@@ -177,6 +196,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:ghcr.io/fluxcd/notification-controller"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?plndr/kube-vip:.*"}'
@@ -186,6 +206,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/plndr/kube-vip"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?metrics-server/metrics-server:.*"}'
@@ -195,6 +216,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:registry.k8s.io/metrics-server/metrics-server"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?kube-state-metrics/kube-state-metrics:.*"}'
@@ -204,6 +226,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:registry.k8s.io/kube-state-metrics/kube-state-metrics"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?alex1989hu/kubelet-serving-cert-approver:.*"}'
@@ -215,6 +238,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:ghcr.io/alex1989hu/kubelet-serving-cert-approver"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?falcosecurity/falco:.*"}'
@@ -224,6 +248,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/falcosecurity/falco"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?victoriametrics/(victoria-metrics|vmagent|vmalert):.*"}'
@@ -235,6 +260,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/victoriametrics/victoria-metrics"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?victoriametrics/victoria-logs:.*"}'
@@ -246,6 +272,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/victoriametrics/victoria-logs"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
@@ -257,6 +284,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/grafana/grafana"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
@@ -266,6 +294,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/grafana/grafana"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?grafana/grafana:.*"}'
@@ -275,6 +304,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/grafana/grafana"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?prom/alertmanager:.*"}'
@@ -286,6 +316,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/prom/alertmanager"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?prom/node-exporter:.*"}'
@@ -295,6 +326,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/prom/node-exporter"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?prom/blackbox-exporter:.*"}'
@@ -304,6 +336,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/prom/blackbox-exporter"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?ghostunnel/ghostunnel:.*"}'
@@ -313,6 +346,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/ghostunnel/ghostunnel"
+release_regex = '^v(\d+\.\d+\.\d+)-distroless$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?authelia/authelia:.*"}'
@@ -324,6 +359,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/authelia/authelia"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?lldap/lldap:.*"}'
@@ -333,6 +369,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/lldap/lldap"
+release_regex = '^v(\d+\.\d+\.\d+)-alpine-rootless$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?vaultwarden/server:.*"}'
@@ -342,6 +380,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/vaultwarden/server"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?vaultwarden/server:.*"}'
@@ -351,6 +390,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/vaultwarden/server"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?mealie:.*"}'
@@ -360,6 +400,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/hkotel/mealie"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?mealie:.*"}'
@@ -369,6 +410,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/hkotel/mealie"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?mealie:.*"}'
@@ -378,6 +420,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/hkotel/mealie"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?gethomepage/homepage:.*"}'
@@ -387,6 +430,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/gethomepage/homepage"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?redis:.*"}'
@@ -396,6 +440,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/redis"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?oliver006/redis_exporter:.*"}'
@@ -407,6 +452,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/oliver006/redis_exporter"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?rabbitmq:.*"}'
@@ -416,6 +462,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/rabbitmq"
+release_regex = '^(\d+\.\d+\.\d+)-management$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?rabbitmqoperator/messaging-topology-operator:.*"}'
@@ -427,6 +475,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/rabbitmqoperator/messaging-topology-operator"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?unbound:.*"}'
@@ -436,6 +485,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/madnuttah/unbound"
+release_regex = '^(\d+\.\d+\.\d+)-\d+$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?unbound:.*"}'
@@ -445,6 +496,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/madnuttah/unbound"
+release_regex = '^(\d+\.\d+\.\d+)-\d+$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?timberio/vector:.*"}'
@@ -454,6 +507,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/timberio/vector"
+release_regex = '^(\d+\.\d+\.\d+)-distroless-static$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?python:.*"}'
@@ -463,6 +518,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/python"
+release_regex = '^(\d+\.\d+\.\d+)-alpine3\.\d+$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?python:.*"}'
@@ -472,6 +529,8 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^-@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/python"
+release_regex = '^(\d+\.\d+\.\d+)-alpine3\.\d+$'
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?hirednoobs/contentbot:.*"}'
@@ -481,6 +540,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/hirednoobs/contentbot"
 
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?hirednoobs/advisory-map:.*"}'
@@ -490,6 +550,7 @@ version_label = "image_spec"
 version_regex = ':v?([0-9][^@]*)'
 target_labels = ["namespace", "container"]
 kind = "container"
+releases = "registry:docker.io/hirednoobs/advisory-map"
 
 # -----------------------------------------------------
 # The VMs (iac-homelab's package-versions)
@@ -502,12 +563,14 @@ product = "vault"
 ecosystem = "Go"
 package = "github.com/hashicorp/vault"
 kind = "vm-binary"
+releases = "git:https://github.com/hashicorp/vault.git"
 
 [[software]]
 query = 'vm_binary_info{binary="forgejo"}'
 vendor = "forgejo"
 product = "forgejo"
 kind = "vm-binary"
+releases = "git:https://codeberg.org/forgejo/forgejo.git"
 
 [[software]]
 query = 'dpkg_package_info{package="vector"}'
@@ -515,12 +578,14 @@ vendor = "vectordotdev"
 product = "vector"
 version_regex = '([0-9][^-]*)'
 kind = "vm-package"
+releases = "git:https://github.com/vectordotdev/vector.git"
 
 [[software]]
 query = 'node_exporter_build_info{instance=~"prx-999-.*"}'
 ecosystem = "Go"
 package = "github.com/prometheus/node_exporter"
 kind = "vm-binary"
+releases = "git:https://github.com/prometheus/node_exporter.git"
 
 # -----------------------------------------------------
 # The Proxmox hosts (iac-homelab's proxmox.yml)
@@ -531,3 +596,4 @@ query = 'node_exporter_build_info{instance=~"prx-\\d+"}'
 ecosystem = "Go"
 package = "github.com/prometheus/node_exporter"
 kind = "host-binary"
+releases = "git:https://github.com/prometheus/node_exporter.git"
