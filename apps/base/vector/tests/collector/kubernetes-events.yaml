@@ -39,7 +39,7 @@ tests:
               assert_eq!(."host.hostname", "worker-3")
               assert_eq!(."host.name", "worker-3.hirednoobs.com")
               assert_eq!(.kubernetes.node.name, "worker-1")
-              for_each(["apiVersion", "kind", "metadata", "involvedObject", "reason", "type", "source", "firstTimestamp", "lastTimestamp", "count", "reportingComponent", "reportingInstance"]) -> |_i, k| {
+              for_each(["object", "apiVersion", "kind", "metadata", "involvedObject", "reason", "type", "source", "firstTimestamp", "lastTimestamp", "count", "reportingComponent", "reportingInstance"]) -> |_i, k| {
                 assert!(get!(., [k]) == null, "still there: " + k)
               }
               assert!(!exists(."Orchestrator.Resource.FieldPath"))
