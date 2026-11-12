@@ -15,10 +15,12 @@ The table is replaced whole (os.replace), as Vector reloads it when it changes (
 import csv
 import ipaddress
 import json
+import logging
 import os
-import sys
 import urllib.request
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 
 TI_DIR = os.environ.get("TI_DIR", "/var/lib/vector/threat")
 ABUSECH_AUTH_KEY = os.environ.get("ABUSECH_AUTH_KEY", "")
@@ -137,7 +139,7 @@ def spamhaus_drop(url):
             continue
         network = ipaddress.ip_network(record["cidr"], strict=False)
         if network.prefixlen not in PREFIXES[network.version]:
-            print(f"{url}: {network} is outside the prefix lengths looked up, it can't match", file=sys.stderr)
+            log.warning(f"{url}: {network} is outside the prefix lengths looked up, it can't match")
             continue
         sbl = record.get("sblid", "")
         rows.append({
@@ -185,16 +187,16 @@ def main():
             if not rows:
                 raise ValueError("no indicators in it")
             write_csv(cached, rows)
-            print(f"{name}: {len(rows)} indicators")
+            log.info(f"{name}: {len(rows)} indicators")
         except Exception as error:  # Any failure: keep the last good copy.
             error = redact(str(error))
             if os.path.exists(cached):
                 rows = read_csv(cached)
                 age = datetime.fromtimestamp(os.path.getmtime(cached)).strftime("%Y-%m-%d %H:%M")
-                print(f"{name}: can't fetch it ({error}), keeping {len(rows)} from {age}")
+                log.warning(f"{name}: can't fetch it ({error}), keeping {len(rows)} from {age}")
             else:
                 rows = []
-                print(f"{name}: can't fetch it ({error}), and no copy: matching nothing from it", file=sys.stderr)
+                log.error(f"{name}: can't fetch it ({error}), and no copy: matching nothing from it")
         table.extend(rows)
 
     # One row per value and provider: find_enrichment_table_records returns each match.
@@ -202,8 +204,13 @@ def main():
     for row in table:
         unique.setdefault((row["value"], row["provider"]), row)
     write_csv(os.path.join(TI_DIR, "indicators.csv"), list(unique.values()))
-    print(f"indicators.csv: {len(unique)} rows")
+    log.info(f"indicators.csv: {len(unique)} rows")
 
 
 if __name__ == "__main__":
+    # As our Python apps log: when, level, where in the code, what.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(filename)s:%(funcName)s():L%(lineno)d] %(message)s",
+    )
     main()

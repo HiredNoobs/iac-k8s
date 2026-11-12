@@ -25,6 +25,16 @@ else
   previous=$(printf '%d-%02d' "$year" $((num - 1)))
 fi
 
+# "<UTC time> <LEVEL> <message>": our scripts' log format.
+log() {
+  level=$1
+  shift
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $level $*"
+}
+log_info() { log INFO "$@"; }
+log_warning() { log WARNING "$@"; }
+log_error() { log ERROR "$@"; }
+
 # byte <n>...: those bytes. str <s>: s as an MMDB string (its type and length, then the text).
 byte() {
   for b; do printf %b "\\0$(printf %03o "$((b))")"; done
@@ -67,7 +77,7 @@ fetch() {
   have=$(cat "$dir/$name.month" 2>/dev/null || true)
   for m in "$month" "$previous"; do
     if [ "$have" = "$m" ]; then
-      echo "$name: $m, up to date"
+      log_info "$name: $m, up to date"
       return 0
     fi
     # A step at a time, each failure with its exit code and message (137: killed, out of memory).
@@ -75,35 +85,37 @@ fetch() {
     rc=0
     out=$(wget -q -T 60 -O "$dir/$name.gz" "$url/$edition-$m.mmdb.gz" 2>&1) || rc=$?
     if [ "$rc" -ne 0 ]; then
-      echo "$name: $m: download failed (exit $rc): $out"
+      # Not a warning yet: a new month is out a few days in, and the run's outcome below says
+      # whether it kept an older copy.
+      log_info "$name: $m: download failed (exit $rc): $out"
       continue
     fi
     out=$(gunzip -c "$dir/$name.gz" 2>&1 > "$dir/$name.tmp") || rc=$?
     if [ "$rc" -ne 0 ]; then
-      echo "$name: $m: unpacking failed (exit $rc): $out"
+      log_warning "$name: $m: unpacking failed (exit $rc): $out"
       continue
     fi
     # The smallest, ASN, is about 9 MB: anything under 1 MB isn't the database.
     size=$(wc -c < "$dir/$name.tmp")
     if [ "$size" -lt 1000000 ]; then
-      echo "$name: $m: only $size bytes"
+      log_warning "$name: $m: only $size bytes"
       continue
     fi
     mv "$dir/$name.tmp" "$dir/$name.mmdb"
     rm -f "$dir/$name.gz"
     echo "$m" > "$dir/$name.month"
-    echo "$name: downloaded $m ($size bytes)"
+    log_info "$name: downloaded $m ($size bytes)"
     return 0
   done
   rm -f "$dir/$name.gz" "$dir/$name.tmp"
   if [ "$have" != none ] && [ -s "$dir/$name.mmdb" ]; then
-    echo "$name: keeping ${have:-an older copy}"
+    log_warning "$name: keeping ${have:-an older copy}"
     return 0
   fi
   empty "$dir/$name.tmp"
   mv "$dir/$name.tmp" "$dir/$name.mmdb"
   echo none > "$dir/$name.month"
-  echo "$name: no data, starting without it" >&2
+  log_error "$name: no data, starting without it"
 }
 
 fetch dbip-city-lite city

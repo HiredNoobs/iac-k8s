@@ -13,14 +13,20 @@ transforms:
   #                components, cert-manager)
   #   slog text    "YYYY/MM/DD hh:mm:ss LEVEL <message> key=value ..." (kube-vip, Longhorn)
   #   logfmt       "time=... level=... msg=... key=value ..." (logrus: Longhorn), optionally after
-  #                Longhorn's "[<volume>-r-<id>] " or "[<volume>-e-<id>] " (a replica's or an
-  #                engine's line, as Storage.Volume.Name and Storage.Replica.Name or
-  #                Storage.Engine.Name)
-  #   Python       "<date> <time>,<ms> LEVEL [<file>:<function>():L<line>] <message>" (contentbot)
-  #   Pi-hole      "<date> <time> <zone> [<pid>/T<thread>] LEVEL: <message>" (FTL), or
-  #                "<date> <time> <zone> <program>: <message>"
+  #                "[<name>] ": Longhorn's "<volume>-r-<id>" or "<volume>-e-<id>" (a replica's or
+  #                an engine's line, as Storage.Volume.Name and Storage.Replica.Name or
+  #                Storage.Engine.Name), any other name as process.name (longhorn-instance-manager)
+  #   Python       "<date> <time>,<ms> LEVEL [<file>:<function>():L<line>] <message>" (contentbot,
+  #                advisory-map)
+  #   script       "<date>T<time>Z LEVEL <message>" (our shell scripts: Pi-hole's sync-lists,
+  #                vector-aggregator's refresh)
+  #   Pi-hole      "<date> <time> <zone> [<pid>M|<pid>/T<thread>] LEVEL: <message>" (FTL; M its
+  #                main thread), or "<date> <time> <zone> <program>: <message>"
   #   RabbitMQ     "<date> <time>+00:00 [level] <<erlang pid>> <message>", the Erlang process as
   #                process.thread.name (a lightweight process, the nearest ECS field)
+  #   access log   '<ip> - <user> [<time>] "<method> <target> HTTP/<version>" <status> <bytes>
+  #                "<referrer>" "<user agent>"' (the combined log format: Longhorn's API), as
+  #                Elastic's web server access logs (nginx, apache); no level, as theirs
   generic:
     type: remap
     inputs: [by_source._unmatched]
@@ -104,20 +110,24 @@ transforms:
 
         if !found {
           body = line
-          storage = {}
-          prefix, err = parse_regex(line, r'^\[(?P<volume>[a-z0-9-]+)-(?P<kind>[re])-(?P<id>[0-9a-f]+)\] (?P<rest>.*)$')
+          named = {}
+          prefix, err = parse_regex(line, r'^\[(?P<name>[\w.-]+)\] (?P<rest>.*)$')
           if err == null {
             body = string!(prefix.rest)
-            storage."Storage.Volume.Name" = prefix.volume
-            name = string!(prefix.volume) + "-" + string!(prefix.kind) + "-" + string!(prefix.id)
-            if prefix.kind == "r" { storage."Storage.Replica.Name" = name } else { storage."Storage.Engine.Name" = name }
+            instance, err = parse_regex(string!(prefix.name), r'^(?P<volume>[a-z0-9-]+)-(?P<kind>[re])-[0-9a-f]+$')
+            if err == null {
+              named."Storage.Volume.Name" = instance.volume
+              if instance.kind == "r" { named."Storage.Replica.Name" = prefix.name } else { named."Storage.Engine.Name" = prefix.name }
+            } else {
+              named."process.name" = prefix.name
+            }
           }
           if match(body, r'^[\w.]+=') && match(body, r'(?:^|\s)msg=') {
             pairs, err = parse_logfmt(body)
             if err == null && is_string(pairs.msg) {
               found = true
               message = string!(pairs.msg)
-              fields = merge(fields, storage)
+              fields = merge(fields, named)
               fields = merge(fields, remove!(pairs, ["msg"]))
               if is_string(fields.file) {
                 loc, err = parse_regex(string!(fields.file), r'^(?P<file>[^:\s]+):(?P<line>\d+)$')
@@ -155,7 +165,16 @@ transforms:
         }
 
         if !found {
-          ftl, err = parse_regex(line, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [A-Z]+ (?:\[(?P<pid>\d+)(?:/T(?P<thread>\d+))?\] (?P<level>[A-Z]+): |(?P<program>[\w.-]+): )(?P<message>.*)$')
+          script, err = parse_regex(line, r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ (?P<level>DEBUG|INFO|WARNING|ERROR) (?P<message>.*)$')
+          if err == null {
+            found = true
+            fields.level = script.level
+            message = string!(script.message)
+          }
+        }
+
+        if !found {
+          ftl, err = parse_regex(line, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [A-Z]+ (?:\[(?P<pid>\d+)(?:M|/T(?P<thread>\d+))?\] (?P<level>[A-Z]+): |(?P<program>[\w.-]+): )(?P<message>.*)$')
           if err == null {
             found = true
             message = string!(ftl.message)
@@ -173,6 +192,29 @@ transforms:
             fields.level = rabbit.level
             fields."process.thread.name" = rabbit.pid
             message = string!(rabbit.message)
+          }
+        }
+
+        if !found {
+          access, err = parse_regex(line, r'^(?P<ip>[0-9a-fA-F.:]+) \S+ (?P<user>\S+) \[[^\]]+\] "(?P<method>[A-Z]+) (?P<target>\S+) HTTP/(?P<version>[0-9.]+)" (?P<code>\d{3}) (?P<bytes>\d+|-) "(?P<referrer>[^"]*)" "(?P<agent>[^"]*)"$')
+          if err == null {
+            found = true
+            fields."event.category" = ["web"]
+            fields."event.type" = ["access"]
+            fields."source.ip" = access.ip
+            if access.user != "-" { fields."user.name" = access.user }
+            fields."http.request.method" = access.method
+            fields."http.version" = access.version
+            code = to_int!(access.code)
+            fields."http.response.status_code" = code
+            fields."event.outcome" = if code < 400 { "success" } else { "failure" }
+            if access.bytes != "-" { fields."http.response.body.bytes" = to_int!(access.bytes) }
+            if !includes(["", "-"], access.referrer) { fields."http.request.referrer" = access.referrer }
+            if !includes(["", "-"], access.agent) { fields."user_agent.original" = access.agent }
+            fields."url.original" = access.target
+            parts = split(string!(access.target), "?", limit: 2)
+            fields."url.path" = parts[0]
+            if length(parts) > 1 { fields."url.query" = parts[1] }
           }
         }
 
