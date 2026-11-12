@@ -21,8 +21,9 @@ transforms:
     source: |
       # The event out of its change (pods.yaml found no message beside type and object).
       if is_object(.object) {
+        event = object!(del(.object))
         del(.type)
-        . = merge(., object!(del(.object)))
+        . = merge(., event)
         if is_string(.message) { ._msg = del(.message) }
       }
       %dataset = "kubernetes.event"
