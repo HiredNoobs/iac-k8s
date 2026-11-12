@@ -10,6 +10,8 @@ spec:
   task: backup
   cron: "0 3 * * *"
   retain: 5
+  # No age limit, Longhorn's default: written out, its webhook has nothing to add on Flux's dry-runs.
+  retainAge: 0s
   concurrency: 2
   groups:
     - default
