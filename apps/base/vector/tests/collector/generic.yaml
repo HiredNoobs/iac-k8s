@@ -321,6 +321,33 @@ tests:
               assert_eq!(."Storage.Engine.Name", "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-e-0")
               assert!(!exists(."Storage.Replica.Name"))
 
+  - name: logfmt line behind a process's name (the instance-manager sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "[longhorn-instance-manager] time=\"2026-11-12T03:00:12.345678901Z\" level=info msg=\"Purging snapshots\" func=\"proxy.(*Proxy).SnapshotPurge\" file=\"snapshot.go:211\" dataEngine=DATA_ENGINE_V1 engineFrontendName= engineName=pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-e-0 serviceURL=\"10.244.3.17:10010\" volumeName=pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53",
+            "timestamp": t'2026-11-12T03:00:12.400Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "instance-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."log.level", "info")
+              assert_eq!(._msg, "Purging snapshots")
+              assert_eq!(._time, t'2026-11-12T03:00:12.345678901Z')
+              assert_eq!(."process.name", "longhorn-instance-manager")
+              assert!(!exists(."Storage.Volume.Name"))
+              assert_eq!(."log.origin.function", "proxy.(*Proxy).SnapshotPurge")
+              assert_eq!(."log.origin.file.name", "snapshot.go")
+              assert_eq!(."log.origin.file.line", 211)
+              assert_eq!(.volumeName, "pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53")
+              assert_eq!(.serviceURL, "10.244.3.17:10010")
+              assert_eq!(.tags, ["generic"])
+
   - name: Python logging line (the contentbot sample)
     inputs:
       - insert_at: pods
@@ -342,6 +369,47 @@ tests:
               assert_eq!(."log.origin.function", "_receive_packet")
               assert_eq!(."log.origin.file.line", 433)
 
+  - name: Python logging line (the advisory-map sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-11-12 12:03:50,972 INFO [osv.py:refresh():L214] osv: 1243 records of mapped packages",
+            "timestamp": t'2026-11-12T12:03:51.000Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "advisory-map", "pod_name": "x-1", "container_name": "advisory-map"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."log.level", "info")
+              assert_eq!(._msg, "osv: 1243 records of mapped packages")
+              assert_eq!(."log.origin.file.name", "osv.py")
+              assert_eq!(."log.origin.function", "refresh")
+              assert_eq!(."log.origin.file.line", 214)
+
+  - name: script line (the Pi-hole sync-lists sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-11-12T12:00:00Z WARNING https://example.com/list.txt failed to download, using the cached copy (1200 domains).",
+            "timestamp": t'2026-11-12T12:00:00.300Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "pihole", "pod_name": "x-1", "container_name": "sync-lists"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."log.level", "warning")
+              assert_eq!(._msg, "https://example.com/list.txt failed to download, using the cached copy (1200 domains).")
+              assert_eq!(._time, t'2026-11-12T12:00:00.300Z')
+              assert_eq!(.tags, ["generic"])
+
   - name: Pi-hole FTL line (the sample)
     inputs:
       - insert_at: pods
@@ -361,6 +429,26 @@ tests:
               assert_eq!(._msg, "Size of /etc/pihole/pihole-FTL.db is 0.36 MB, deleted 0 of 4907 rows")
               assert_eq!(."process.pid", 184)
               assert_eq!(."process.thread.id", 186)
+
+  - name: Pi-hole FTL line from its main thread (the sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026-11-12 00:00:01.123 GMT [188M] INFO: Updating long-term database to version 21",
+            "timestamp": t'2026-11-12T00:00:01.200Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "pihole", "pod_name": "x-1", "container_name": "pihole"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."log.level", "info")
+              assert_eq!(._msg, "Updating long-term database to version 21")
+              assert_eq!(."process.pid", 188)
+              assert!(!exists(."process.thread.id"))
 
   - name: Pi-hole's other programs' lines (the cron sample)
     inputs:
@@ -400,6 +488,40 @@ tests:
               assert_eq!(."process.thread.name", "0.428328.0")
               assert_eq!(._msg, "Successfully set permissions for user 'contentbot' in virtual host '/' to '.*', '.*', '.*'")
               assert_eq!(."event.original", "2026-10-14 10:43:46.799992+00:00 [info] <0.428328.0> Successfully set permissions for user 'contentbot' in virtual host '/' to '.*', '.*', '.*'")
+
+  - name: access log line (the longhorn-manager sample)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "10.244.3.17 - - [12/Nov/2026:03:00:05 +0000] \"POST /v1/volumes/pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53?action=snapshotCRList HTTP/1.1\" 200 1543 \"\" \"Go-http-client/1.1\"",
+            "timestamp": t'2026-11-12T03:00:05.100Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."event.category", ["web"])
+              assert_eq!(."event.type", ["access"])
+              assert_eq!(."event.outcome", "success")
+              assert_eq!(."source.ip", "10.244.3.17")
+              assert_eq!(."related.ip", ["10.244.3.17"])
+              assert_eq!(."http.request.method", "POST")
+              assert_eq!(."http.version", "1.1")
+              assert_eq!(."http.response.status_code", 200)
+              assert_eq!(."http.response.body.bytes", 1543)
+              assert_eq!(."user_agent.original", "Go-http-client/1.1")
+              assert_eq!(."url.original", "/v1/volumes/pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53?action=snapshotCRList")
+              assert_eq!(."url.path", "/v1/volumes/pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53")
+              assert_eq!(."url.query", "action=snapshotCRList")
+              assert!(!exists(."http.request.referrer"))
+              assert!(!exists(."user.name"))
+              assert!(!exists(."log.level"))
+              assert!(!exists(."event.original"))
+              assert_eq!(.tags, ["generic"])
 
   - name: a line in none of the formats is left as it is (the homepage banner)
     inputs:

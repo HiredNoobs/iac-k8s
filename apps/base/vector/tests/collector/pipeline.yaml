@@ -664,3 +664,15 @@ tests:
               assert_eq!(."Orchestrator.Resource.ResourceVersion", "10822581")
               assert!(!exists(.eventInvolvedObject))
               assert_eq!(._msg, "Reconciliation finished in 1.59713407s, next run in 10m0s")
+
+  - name: blank text lines are dropped, colour codes and spaces only too
+    no_outputs_from: [pod_lines]
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "  \u{1b}[0m \t",
+            "timestamp": t'2026-11-12T00:00:00.500Z', "stream": "stdout",
+            "kubernetes": {"pod_namespace": "pihole", "pod_name": "x-1", "container_name": "unbound"}
+          }

@@ -80,11 +80,17 @@ transforms:
       # When Vector read it (_time is when it happened, or was written).
       ."event.created" = now()
 
+  # Not blank text lines (a banner's spacing, ...): nothing in them.
+  pod_lines:
+    type: filter
+    inputs: [pods]
+    condition: '%text != true || strip_whitespace(string(._msg) ?? "") != ""'
+
   # Each source with its own fields to its remap (by namespace and container, which the pod can't
   # choose), the rest to generic (generic.yaml).
   by_source:
     type: route
-    inputs: [pods]
+    inputs: [pod_lines]
     route:
       envoy: .kubernetes.namespace == "envoy-gateway" && .kubernetes.container.name == "envoy"
       authelia: .kubernetes.namespace == "authelia" && .kubernetes.container.name == "authelia"
