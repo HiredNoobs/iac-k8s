@@ -232,3 +232,13 @@ transforms:
           }
         }
       }
+
+  # Routine lines that say nothing to act on, by source and message: kube-vip's "(svcs) deleted"
+  # for every Service it doesn't announce, each time it re-checks them all. Its LoadBalancer IPs'
+  # own changes are other lines (new leader, adding VIP, ...).
+  generic_kept:
+    type: filter
+    inputs: [generic]
+    condition: |
+      !(.kubernetes.namespace == "kube-vip" && .kubernetes.container.name == "kube-vip" &&
+        starts_with(string(._msg) ?? "", "(svcs) deleted \"service name\"="))

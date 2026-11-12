@@ -11,7 +11,7 @@ transforms:
   # The parsed lines, for the common fields. Not envoy's: the aggregator's (envoy.yaml).
   to_ecs:
     type: filter
-    inputs: [generic, authelia_kept, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, talos_kept, talos_audit]
+    inputs: [generic_kept, authelia_kept, falco, lldap, vaultwarden, coredns, mealie, grafana, ghostunnel, kubectl, talos_kept, talos_audit]
     condition: "true"
 
   # The audit events are ECS already (kubernetes-audit.yaml).
