@@ -241,7 +241,8 @@ scrape_configs:
       - labels: { __param_module: https }
         targets:
           - https://auth.hirednoobs.com/
-          - https://grafana.hirednoobs.com/
+          # Its health check: / goes through the OAuth auto-login to Authelia's portal.
+          - https://grafana.hirednoobs.com/api/health
           - https://lldap.hirednoobs.com/
           - https://mealie.hirednoobs.com/
           - https://vaultwarden.hirednoobs.com/
