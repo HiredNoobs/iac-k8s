@@ -454,7 +454,7 @@
       "type": "timeseries",
       "title": "Delay by dataset prefix, average",
       "id": 19,
-      "description": "How long lines took on average to leave Vector (event.ingested minus _time). Above the 95th percentile: a few lines very late. By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
+      "description": "How long lines took on average to leave Vector (event.ingested minus _time). Above the 95th percentile: a few lines very late. Up to 10 s for a container that was quiet: Vector checks a log file with nothing new for 10 s only every 10 s (about 5 s on average for a sparse one). By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"
@@ -507,7 +507,7 @@
       "type": "timeseries",
       "title": "Delay by dataset prefix, 95th percentile",
       "id": 18,
-      "description": "How long 95% of the lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too. By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
+      "description": "How long 95% of the lines took to leave Vector (event.ingested minus _time). A source whose clock is wrong shows here too. About 10 s for pods that log sparsely: Vector checks a log file with nothing new for 10 s only every 10 s. By the part of event.dataset before the dot: the app for parsed logs (talos, envoy, vault), the namespace for other pods.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "victorialogs"

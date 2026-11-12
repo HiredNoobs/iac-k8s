@@ -1,5 +1,5 @@
 # One watcher: two would log every event twice. The image is kubectl alone (no shell), so the
-# arguments are kubectl's. jsonpath={@} prints each event as one line of JSON.
+# arguments are kubectl's. jsonpath={@} prints each change as one line of JSON.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,6 +37,8 @@ spec:
             - events
             - --all-namespaces
             - --watch-only
+            # Each line says whether it's a new, changed or deleted event.
+            - --output-watch-events
             - --output=jsonpath={@}{"\n"}
             # Its discovery cache, on the writable /tmp.
             - --cache-dir=/tmp/kube-cache
