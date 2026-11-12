@@ -59,9 +59,13 @@ LISTS_FAILED=0
 # Helper functions
 # -----------------------------------------------------
 
+# "<UTC time> <LEVEL> <message>": our scripts' log format.
 function log {
-  echo "$(date '+%Y-%m-%dT%H:%M:%S') $*"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') $1 ${*:2}"
 }
+function log_info { log INFO "$@"; }
+function log_warning { log WARNING "$@"; }
+function log_error { log ERROR "$@"; }
 
 # Usage: api <method> <path> [json body]
 # API_TIMEOUT can be set for long running calls.
@@ -155,7 +159,7 @@ function sync_adlists {
 
   while IFS= read -r address; do
     [[ -n "$address" ]] || continue
-    log "Adding block list $address"
+    log_info "Adding block list $address"
     api POST "/lists?type=block" "$(jq -n --arg address "$address" --arg comment "$COMMENT" \
       '{address: $address, comment: $comment, enabled: true}')" > /dev/null || return 1
     LISTS_CHANGED=1
@@ -163,7 +167,7 @@ function sync_adlists {
 
   while IFS= read -r address; do
     [[ -n "$address" ]] || continue
-    log "Removing block list $address"
+    log_info "Removing block list $address"
     api DELETE "/lists/$(uri "$address")?type=block" > /dev/null || return 1
     LISTS_CHANGED=1
   done <<< "$(only_in "$current" "$wanted")"
@@ -183,14 +187,14 @@ function sync_domains {
 
   while IFS= read -r domain; do
     [[ -n "$domain" ]] || continue
-    log "Adding $type ($kind) $domain"
+    log_info "Adding $type ($kind) $domain"
     api POST "/domains/$type/$kind" "$(jq -n --arg domain "$domain" --arg comment "$COMMENT" \
       '{domain: $domain, comment: $comment, enabled: true}')" > /dev/null || return 1
   done <<< "$(only_in "$wanted" "$current")"
 
   while IFS= read -r domain; do
     [[ -n "$domain" ]] || continue
-    log "Removing $type ($kind) $domain"
+    log_info "Removing $type ($kind) $domain"
     api DELETE "/domains/$type/$kind/$(uri "$domain")" > /dev/null || return 1
   done <<< "$(only_in "$current" "$wanted")"
 }
@@ -208,17 +212,17 @@ function download_lists {
     if [[ -f "$file" ]] && (( $(date +%s) - $(stat -c %Y "$file") < DOWNLOAD_INTERVAL )); then
       continue
     elif [[ -z "$ABUSECH_AUTH_KEY" ]]; then
-      log "WARNING: no ABUSECH_AUTH_KEY, can't download $url."
+      log_warning "No ABUSECH_AUTH_KEY, can't download $url."
     elif error=$(curl -fsS --max-time 300 -o "$file.tmp" "${url//"$KEY_PLACEHOLDER"/"$ABUSECH_AUTH_KEY"}" 2>&1) &&
          [[ -s "$file.tmp" ]]; then
-      cmp -s "$file.tmp" "$file" || { touch "$CHANGED_FILE"; log "Downloaded $url, it changed."; }
+      cmp -s "$file.tmp" "$file" || { touch "$CHANGED_FILE"; log_info "Downloaded $url, it changed."; }
       mv "$file.tmp" "$file"
     else
       rm -f "$file.tmp"
       # Without the key, should curl's error name the URL.
       error="${error//"$ABUSECH_AUTH_KEY"/<ABUSECH_AUTH_KEY>}"
       [[ -f "$file" ]] && kept="keeping the last copy" || kept="Pi-hole has nothing for it"
-      log "WARNING: downloading $url failed (${error:-empty}), $kept."
+      log_warning "Downloading $url failed (${error:-empty}), $kept."
     fi
   done <<< "$(downloaded)"
 }
@@ -244,13 +248,13 @@ function failed_lists {
 function update_gravity {
   local output started
 
-  log "Updating gravity..."
+  log_info "Updating gravity..."
   started=$(date +%s)
   output=$(API_TIMEOUT=900 api POST /action/gravity) || return 1
 
   # Without the colour codes.
   sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' <<< "$output" | grep '✗' | while IFS= read -r line; do
-    log "gravity: ${line#"${line%%[![:space:]]*}"}"
+    log_warning "gravity: ${line#"${line%%[![:space:]]*}"}"
   done
 
   wait_for_reload "$started"
@@ -263,7 +267,7 @@ function wait_for_reload {
 
   until (( $(api GET /stats/summary | jq -r '.gravity.last_update // 0') >= $1 )); do
     if (( $(date +%s) >= deadline )); then
-      log "WARNING: Pi-hole hasn't reloaded the lists yet, the counts below may be the old ones."
+      log_warning "Pi-hole hasn't reloaded the lists yet, the counts below may be the old ones."
       return 0
     fi
     sleep 2
@@ -278,19 +282,19 @@ function report_lists {
     [[ -n "$address" ]] || continue
     total=$(( total + number ))
     case "$status" in
-      4) log "WARNING: $address failed to download, it blocks nothing." ;;
-      3) log "WARNING: $address failed to download, using the cached copy ($number domains)." ;;
+      4) log_warning "$address failed to download, it blocks nothing." ;;
+      3) log_warning "$address failed to download, using the cached copy ($number domains)." ;;
       *)
         if (( number == 0 )); then
-          log "WARNING: $address is empty."
+          log_warning "$address is empty."
         else
-          log "$address: $number domains."
+          log_info "$address: $number domains."
         fi
         ;;
     esac
   done <<< "$(list_status)"
 
-  log "Gravity updated, $total domains on the block lists."
+  log_info "Gravity updated, $total domains on the block lists."
 }
 
 function sync {
@@ -300,7 +304,7 @@ function sync {
   download_lists
 
   if ! login; then
-    log "Failed to log in to the Pi-hole API."
+    log_error "Failed to log in to the Pi-hole API."
     return 1
   fi
 
@@ -320,7 +324,7 @@ function sync {
   if (( LISTS_CHANGED )) || [[ -n "$failed" ]] || [[ -f "$CHANGED_FILE" ]] ||
      { [[ -n "$(desired adlists.txt)" ]] && (( blocked <= 0 )); }; then
     if (( ! LISTS_CHANGED )) && [[ -n "$failed" ]] && (( blocked > 0 )); then
-      log "Retrying the block lists that block nothing: $(paste -sd' ' <<< "$failed")"
+      log_info "Retrying the block lists that block nothing: $(paste -sd' ' <<< "$failed")"
     fi
     if ! update_gravity; then
       logout
@@ -389,9 +393,9 @@ function push_metrics {
   fi
 
   if [[ -z "$error" ]]; then
-    [[ -n "$PUSH_ERROR" ]] && log "Pushing metrics works again."
+    [[ -n "$PUSH_ERROR" ]] && log_info "Pushing metrics works again."
   elif [[ "$error" != "$PUSH_ERROR" ]]; then
-    log "$error, retrying every ${CHECK_INTERVAL}s."
+    log_error "$error, retrying every ${CHECK_INTERVAL}s."
   fi
   PUSH_ERROR="$error"
 }
@@ -404,7 +408,7 @@ function checksum {
 # Main
 # -----------------------------------------------------
 
-log "Waiting for the Pi-hole API..."
+log_info "Waiting for the Pi-hole API..."
 until curl -s -o /dev/null --max-time 5 "$API/auth"; do
   sleep 2
 done
@@ -430,17 +434,17 @@ while true; do
         delay="${RETRY_DELAYS[retries]:-$RESYNC_INTERVAL}"
         next_retry=$(( now + delay ))
         retries=$(( retries + 1 ))
-        log "Retrying the failed block lists in ${delay}s."
+        log_info "Retrying the failed block lists in ${delay}s."
       else
         retries=0
       fi
 
       if [[ ! -f "$READY_FILE" ]]; then
         touch "$READY_FILE"
-        log "Initial sync complete."
+        log_info "Initial sync complete."
       fi
     else
-      log "Sync failed, retrying in ${CHECK_INTERVAL}s."
+      log_error "Sync failed, retrying in ${CHECK_INTERVAL}s."
     fi
   fi
 
