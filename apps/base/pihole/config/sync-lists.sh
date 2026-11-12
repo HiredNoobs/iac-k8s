@@ -408,6 +408,10 @@ function checksum {
 # Main
 # -----------------------------------------------------
 
+# PID 1 ignores SIGTERM without a trap: the pod would stay for its grace period after FTL has
+# stopped, with its LoadBalancer IP still pointing here.
+trap 'exit 0' TERM
+
 log_info "Waiting for the Pi-hole API..."
 until curl -s -o /dev/null --max-time 5 "$API/auth"; do
   sleep 2
@@ -449,5 +453,7 @@ while true; do
   fi
 
   push_metrics
-  sleep "$CHECK_INTERVAL"
+  # In the background, so SIGTERM ends the wait at once (a foreground sleep runs to its end first).
+  sleep "$CHECK_INTERVAL" &
+  wait $!
 done
