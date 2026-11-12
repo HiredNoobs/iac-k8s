@@ -233,12 +233,22 @@ transforms:
         }
       }
 
-  # Routine lines that say nothing to act on, by source and message: kube-vip's "(svcs) deleted"
-  # for every Service it doesn't announce, each time it re-checks them all. Its LoadBalancer IPs'
-  # own changes are other lines (new leader, adding VIP, ...).
+  # Routine lines that say nothing to act on, by source and message, so anything else from the
+  # same app still comes through:
+  # - kube-vip's "(svcs) deleted" for every Service it doesn't announce, each time it re-checks
+  #   them all. Its LoadBalancer IPs' own changes are other lines (new leader, adding VIP, ...).
+  # - Longhorn's webhook putting the longhorn.io finalizer back on Longhorn's own objects (its
+  #   service account's updates; other patches, and anyone else's, stay), and the API server's
+  #   warning that Longhorn still reads v1 Endpoints (Longhorn's to change).
   generic_kept:
     type: filter
     inputs: [generic]
     condition: |
-      !(.kubernetes.namespace == "kube-vip" && .kubernetes.container.name == "kube-vip" &&
-        starts_with(string(._msg) ?? "", "(svcs) deleted \"service name\"="))
+      namespace = .kubernetes.namespace
+      msg = string(._msg) ?? ""
+      kube_vip = (namespace == "kube-vip" && .kubernetes.container.name == "kube-vip" &&
+        starts_with(msg, "(svcs) deleted \"service name\"="))
+      finalizer = (starts_with(msg, "Request (user: system:serviceaccount:longhorn-system:longhorn-service-account, ") &&
+        ends_with(msg, "operation: UPDATE) patchOps: [{\"op\": \"replace\", \"path\": \"/metadata/finalizers\", \"value\": [\"longhorn.io\"]}]"))
+      endpoints = starts_with(msg, "Warning: v1 Endpoints is deprecated in ")
+      !(kube_vip || (namespace == "longhorn-system" && (finalizer || endpoints)))

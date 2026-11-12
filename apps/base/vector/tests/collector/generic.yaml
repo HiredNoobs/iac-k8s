@@ -86,7 +86,26 @@ tests:
               assert_eq!(._msg, "k8s.io/client-go: failed to list")
               assert_eq!(."log.origin.file.line", 561)
 
-  - name: klog client-go warning is a warning (the longhorn-manager sample)
+  - name: klog client-go warning is a warning (the longhorn-manager format, not a real line)
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "I1015 00:00:23.342226       1 warnings.go:107] \"Warning: spec.template.spec.containers[0].env[0]: hides previous definition\"",
+            "timestamp": t'2026-10-15T08:00:00.500Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(."log.level", "warning")
+              assert_eq!(._msg, "Warning: spec.template.spec.containers[0].env[0]: hides previous definition")
+
+  - name: the API server's warning that Longhorn reads v1 Endpoints isn't kept (the longhorn-manager sample)
+    no_outputs_from: [generic_kept]
     inputs:
       - insert_at: pods
         type: vrl
@@ -97,11 +116,10 @@ tests:
             "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "longhorn-manager"}
           }
     outputs:
-      - extract_from: final
+      - extract_from: generic
         conditions:
           - type: vrl
             source: |
-              assert_eq!(."log.level", "warning")
               assert_eq!(._msg, "Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice")
 
   - name: zap console line with logger, caller and fields (the Envoy Gateway sample)
@@ -254,6 +272,41 @@ tests:
           - type: vrl
             source: |
               assert_eq!(._msg, "(svcs) deleted \"service name\"=talos-logs")
+
+  - name: Longhorn's webhook putting its finalizer back on its own object isn't kept
+    no_outputs_from: [generic_kept]
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "time=\"2026-11-12T13:00:00.123456789Z\" level=info msg=\"Request (user: system:serviceaccount:longhorn-system:longhorn-service-account, longhorn.io/v1beta2, Kind=BackupVolume, namespace: longhorn-system, name: pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-6f8a1c2e, operation: UPDATE) patchOps: [{\\\"op\\\": \\\"replace\\\", \\\"path\\\": \\\"/metadata/finalizers\\\", \\\"value\\\": [\\\"longhorn.io\\\"]}]\" func=\"admission.(*Handler).admit\" file=\"admission.go:115\" service=admissionWebhook",
+            "timestamp": t'2026-11-12T13:00:00.500Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: generic
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "Request (user: system:serviceaccount:longhorn-system:longhorn-service-account, longhorn.io/v1beta2, Kind=BackupVolume, namespace: longhorn-system, name: pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-6f8a1c2e, operation: UPDATE) patchOps: [{\"op\": \"replace\", \"path\": \"/metadata/finalizers\", \"value\": [\"longhorn.io\"]}]")
+
+  - name: Longhorn's webhook patching someone else's object is kept
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "time=\"2026-11-12T13:00:00.123456789Z\" level=info msg=\"Request (user: system:serviceaccount:flux-system:kustomize-controller, longhorn.io/v1beta2, Kind=BackupVolume, namespace: longhorn-system, name: pvc-3aa517c6-d71d-49d1-b523-29aebecd2d53-6f8a1c2e, operation: UPDATE) patchOps: [{\\\"op\\\": \\\"replace\\\", \\\"path\\\": \\\"/metadata/finalizers\\\", \\\"value\\\": [\\\"longhorn.io\\\"]}]\" func=\"admission.(*Handler).admit\" file=\"admission.go:115\" service=admissionWebhook",
+            "timestamp": t'2026-11-12T13:00:00.500Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "x-1", "container_name": "longhorn-manager"}
+          }
+    outputs:
+      - extract_from: final
+        conditions:
+          - type: vrl
+            source: |
+              assert!(starts_with(string!(._msg), "Request (user: system:serviceaccount:flux-system:kustomize-controller, "))
 
   - name: Go slog text line without pairs
     inputs:

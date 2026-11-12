@@ -53,6 +53,10 @@ spec:
                   key: GRAFANA_ADMIN_PASS
             - name: GF_LOG_CONSOLE_FORMAT
               value: json
+            # The plugin update checker's feature flag lookups (info), and unified search's
+            # manifest watcher, which warns on every poll that it found no manifests.
+            - name: GF_LOG_FILTERS
+              value: plugins.update.checker:warn search-manifest-watcher:error
             - name: GF_SERVER_PROTOCOL
               value: https
             - name: GF_SERVER_HTTP_PORT

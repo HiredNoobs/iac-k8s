@@ -407,13 +407,13 @@ tests:
               assert!(!exists(."error.message"))
               assert_eq!(.err, {"code": 5})
 
-  - name: client-go warning (the Longhorn sample)
+  - name: client-go warning (the Longhorn format, not a real line)
     inputs:
       - insert_at: pods
         type: vrl
         source: |
           . = {
-            "message": "Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice",
+            "message": "Warning: spec.template.spec.containers[0].env[0]: hides previous definition",
             "timestamp": t'2026-10-13T08:00:00.000Z', "stream": "stderr",
             "kubernetes": {"pod_namespace": "longhorn-system", "pod_name": "longhorn-manager-1", "container_name": "longhorn-manager"}
           }
