@@ -236,6 +236,25 @@ tests:
               assert_eq!(.device, "/dev/sdb")
               assert_eq!(."error.message", "exit status 4")
 
+  - name: kube-vip's "(svcs) deleted" for a Service it doesn't announce isn't kept
+    no_outputs_from: [generic_kept]
+    inputs:
+      - insert_at: pods
+        type: vrl
+        source: |
+          . = {
+            "message": "2026/11/12 13:00:00 INFO (svcs) deleted \"service name\"=talos-logs",
+            "timestamp": t'2026-11-12T13:00:00.500Z', "stream": "stderr",
+            "kubernetes": {"pod_namespace": "kube-vip", "pod_name": "x-1", "container_name": "kube-vip"}
+          }
+    outputs:
+      # Parsed (slog quotes the key with a space, so the pair stays in the message), then dropped.
+      - extract_from: generic
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(._msg, "(svcs) deleted \"service name\"=talos-logs")
+
   - name: Go slog text line without pairs
     inputs:
       - insert_at: pods
