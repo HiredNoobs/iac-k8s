@@ -58,6 +58,8 @@ spec:
       # node at a time: attached, healthy volumes live (no detach), detached ones offline. A
       # failed one keeps its old engine and is retried. 0 (the default) leaves it to the UI.
       concurrentAutomaticEngineUpgradePerNodeLimit: 1
+      # One replica rebuild per node at a time (the default is 5), to limit their disk writes.
+      concurrentReplicaRebuildPerNodeLimit: 1
     # The default StorageClass, longhorn. longhorn-single (one copy) is in
     # infrastructure/configs/longhorn.
     persistence:
