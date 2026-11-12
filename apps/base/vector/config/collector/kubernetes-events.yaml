@@ -1,15 +1,30 @@
+# Kubernetes events, from kubectl's watch (apps/base/kubectl): one JSON line per change to an
+# event, {"type": "ADDED" | "MODIFIED" | "DELETED" | "ERROR", "object": <the event>}.
+
 transforms:
-  # Kubernetes events, one JSON line each from kubectl's watch (apps/base/kubectl): what happened
-  # (reason, message, Normal or Warning) to which object, by which component, how many times.
-  # Elastic's Kubernetes integration keeps them all under its own kubernetes.event.*; here ECS's
-  # fields where there's one (the object as orchestrator.*, as the audit log's), custom fields for
-  # the rest.
+  # Not deletions: the API server deletes each event an hour after its last change (its event
+  # TTL), so a deletion only repeats what was logged then.
+  kubectl_changes:
+    type: filter
+    inputs: [by_source.kubectl]
+    condition: .type != "DELETED"
+
+  # What happened (reason, message, Normal or Warning) to which object, by which component, how
+  # many times. Elastic's Kubernetes integration keeps them all under its own kubernetes.event.*;
+  # here ECS's fields where there's one (the object as orchestrator.*, as the audit log's), custom
+  # fields for the rest.
   kubectl:
     type: remap
-    inputs: [by_source.kubectl]
+    inputs: [kubectl_changes]
     drop_on_error: true
     reroute_dropped: true
     source: |
+      # The event out of its change (pods.yaml found no message beside type and object).
+      if is_object(.object) {
+        del(.type)
+        . = merge(., object!(del(.object)))
+        if is_string(.message) { ._msg = del(.message) }
+      }
       %dataset = "kubernetes.event"
       if .kind != "Event" || !is_object(.involvedObject) {
         # kubectl's own messages (an error, a warning) aren't events.

@@ -16,6 +16,8 @@ sources:
     # Without a checkpoint (first start), from now rather than every file on the node. Files
     # found later (new pods, rotations) are read from their start.
     read_from: end
+    # Looks for new files every 5 s rather than once a minute.
+    glob_minimum_cooldown_ms: 5000
 
 transforms:
   pods:

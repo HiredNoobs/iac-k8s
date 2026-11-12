@@ -136,6 +136,9 @@ sinks:
       ca_file: /etc/vector/tls/ca.crt
       crt_file: /etc/vector/tls/tls.crt
       key_file: /etc/vector/tls/tls.key
+    # A batch goes after at most 0.1 s (Vector's default 1 s): the hop adds no more than that.
+    batch:
+      timeout_secs: 0.1
     # On the node's disk while the aggregator is down (one replica). When full, newer lines
     # are dropped rather than holding up every other pod's logs behind them.
     buffer:
