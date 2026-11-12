@@ -37,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: contentbot
-          image: hirednoobs/contentbot:4.0.0-rc3@sha256:c01e89387a64e5d79a1a42ddbe70d3a0d13da7b9e969f58018f406dcd4371291
+          image: hirednoobs/contentbot:4.0.0-rc4@sha256:03b8142ae881facf68247e6e76a36f1dc176652aa6fa960b953b61ec534c6686
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -50,6 +50,9 @@ spec:
               value: DOCKER
             - name: LOG_LEVEL
               value: INFO
+            # The Socket.IO client logs every PING and PONG at INFO.
+            - name: ENGINEIO_LOG_LEVEL
+              value: WARNING
             - name: CONFIG_PATH
               value: /etc/contentbot/contentbot.conf
             - name: SECRETS_PATH
