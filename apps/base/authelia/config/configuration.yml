@@ -85,6 +85,11 @@ identity_providers:
         algorithm: 'RS256'
         use: 'sig'
         key: {{ secret "/secrets/oidc-jwks-key" | mindent 10 "|" | msquote }}
+    # Refresh tokens for a week (the default is 90 minutes), so an idle session lasts overnight.
+    lifespans:
+      custom:
+        long_refresh:
+          refresh_token: '1w'
     clients:
       # https://www.authelia.com/integration/openid-connect/clients/mealie/
       - client_id: 'mealie'
@@ -121,7 +126,8 @@ identity_providers:
         redirect_uris:
           - 'https://grafana.hirednoobs.com/login/generic_oauth'
         # offline_access: Grafana ends its session when the access token expires (1h) unless it
-        # can refresh it.
+        # can refresh it. Authelia asks for consent whenever it issues a refresh token.
+        lifespan: 'long_refresh'
         scopes:
           - 'openid'
           - 'email'
