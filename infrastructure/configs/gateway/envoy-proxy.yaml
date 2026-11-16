@@ -1,7 +1,8 @@
 # How Envoy Gateway runs the Gateway's proxy (pods in envoy-gateway). Its LoadBalancer IP is
 # announced by kube-vip. externalTrafficPolicy: Local keeps the client IP (Authelia, logs) and
 # only announces the IP from a node with a ready Envoy pod. The replicas are on different Proxmox
-# hosts (zones), so losing one moves the IP to the other's node.
+# hosts (zones), so losing one moves the IP to the other's node. Node drains (Talos upgrades)
+# take one replica at a time (envoyPDB, in envoy-gateway with the pods), the other keeps serving.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
@@ -35,6 +36,8 @@ spec:
               memory: 128Mi
             limits:
               memory: 512Mi
+      envoyPDB:
+        maxUnavailable: 1
   # Access logs to stdout (collected by Vector into VictoriaLogs), as JSON: Envoy Gateway's
   # default fields (EnvoyJSONLogFields in internal/xds/translator/accesslog.go, v1.9.2) plus
   # message, a one-line summary, which becomes the log's _msg (without it VictoriaLogs shows
