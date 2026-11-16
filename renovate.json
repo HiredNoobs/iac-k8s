@@ -84,6 +84,10 @@
       "groupName": "external-secrets"
     },
     {
+      "matchPackageNames": ["quay.io/cilium/charts/cilium"],
+      "groupName": "cilium"
+    },
+    {
       "matchPackageNames": ["/envoyproxy/gateway/"],
       "groupName": "envoy-gateway",
       "prBodyNotes": ["Also check the Gateway API version the chart installs and bump `GATEWAY_API_VERSION` and its checksum in lint.yml by hand."]
