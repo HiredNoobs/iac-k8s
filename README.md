@@ -21,7 +21,7 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. Then ``rabbitmq-topology`` (``apps/<cluster>/rabbitmq-topology``), RabbitMQ's users and permissions: the Topology Operator's webhook rejects them until ``apps``' ExternalSecrets have created their Secrets. |
 | ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn, metrics-server, kubelet-serving-cert-approver. |
 | ``infrastructure/operators/`` | Controllers whose manifests need the other controllers' CRDs (cert-manager Certificates for their webhooks): RabbitMQ's Topology Operator. |
-| ``infrastructure/configs/`` | Cluster-wide config: the admission policies, CoreDNS' disruption budget, and config using the controllers' CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway). |
+| ``infrastructure/configs/`` | Cluster-wide config: the admission policies, CoreDNS' disruption budget, and config using the controllers' CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway, the controllers' network policies). |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
 | ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. Subdirectories are separate Flux Kustomizations (``rabbitmq-topology``). |
 
@@ -33,6 +33,7 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 - Upstream Helm charts as a ``HelmRelease`` at an exact chart version, Kustomize manifests otherwise. Images pinned by digest.
 - No secrets in git. One ``ExternalSecret`` per app from Vault (``labv2/production/<app>``), see [Adding an app](docs/apps.md).
 - Placement with replicas, ``topologySpreadConstraints`` on ``topology.kubernetes.io/zone``, PDBs and resource requests. ``nodeSelector`` only for hardware (the Longhorn disk), no stack labels.
+- A network policy per namespace: connections to its pods are dropped except from what it lists. An app's is its ``network-policy.yaml`` (see [Adding an app](docs/apps.md#network-policy)), the controllers' are in ``infrastructure/configs/network-policies`` (``CiliumNetworkPolicy`` where kube-apiserver calls them: it runs on the host network, which only Cilium's entities select).
 - Upstream release manifests (no chart) are vendored unmodified, with their URL and checksum in the kustomization, and changed with patches.
 - Namespaces enforce the ``restricted`` pod security standard (``pod-security.kubernetes.io/enforce``), or ``baseline``/``privileged`` with a comment saying what needs it.
 - Pods that don't use the Kubernetes API set ``automountServiceAccountToken: false``.
@@ -43,7 +44,7 @@ Clusters are named after their tools-bin context with a ``-`` (``production.core
 
 | Page | Covers |
 | --- | --- |
-| [Adding an app](docs/apps.md) | Its secrets (an ExternalSecret from Vault) and its route (an HTTPRoute, Authelia, HTTPS backends). |
+| [Adding an app](docs/apps.md) | Its secrets (an ExternalSecret from Vault), its route (an HTTPRoute, Authelia, HTTPS backends) and its network policy. |
 | [Flux](docs/flux.md) | The bootstrap, commit statuses on Forgejo, upgrading Flux. |
 | [Logging](docs/logging.md) | Vector's collectors and aggregator, where each log source comes from, its geo data and threat intel. |
 | [Rebuilding a cluster](docs/rebuild.md) | Flux on a new cluster, the Vault secrets it needs, restoring the volumes from Longhorn's backups. |

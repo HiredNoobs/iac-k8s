@@ -1,0 +1,11 @@
+# Only kube-apiserver reaches metrics-server (the metrics.k8s.io APIService).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress
+  namespace: metrics-server
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - kube-apiserver

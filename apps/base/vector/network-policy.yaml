@@ -1,0 +1,44 @@
+# Who reaches Vector: its own pods (the collectors send to the aggregator), rsyslog (syslog), the
+# Gateway's Envoy (journald from the VMs) and vmagent. Talos' logs come from the node itself to
+# its collector, which Cilium always allows. Every other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    # The namespace's own pods.
+    - from:
+        - podSelector: {}
+    - from:
+        # rsyslog, forwarding the LAN's syslog.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rsyslog
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rsyslog
+      ports:
+        - port: syslog
+    - from:
+        # The Gateway's Envoy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: public
+      ports:
+        - port: journald
+    - from:
+        # vmagent, scraping metrics.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: http-metrics

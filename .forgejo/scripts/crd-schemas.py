@@ -18,20 +18,23 @@ import sys
 import yaml
 
 
-def strict(schema: dict) -> None:
+def strict(schema: dict, branch: bool = False) -> None:
     if not isinstance(schema, dict):
         return
 
-    if "properties" in schema and not schema.get("x-kubernetes-preserve-unknown-fields"):
+    # A branch of allOf/anyOf/oneOf/not constrains its parent's fields (Cilium's policies: one of
+    # endpointSelector or nodeSelector), closing it would reject every other field of the parent.
+    if not branch and "properties" in schema and not schema.get("x-kubernetes-preserve-unknown-fields"):
         schema.setdefault("additionalProperties", False)
 
     for child in schema.get("properties", {}).values():
         strict(child)
-    for keyword in ("items", "additionalProperties", "not"):
+    for keyword in ("items", "additionalProperties"):
         strict(schema.get(keyword))
+    strict(schema.get("not"), branch=True)
     for keyword in ("allOf", "anyOf", "oneOf"):
         for child in schema.get(keyword, []):
-            strict(child)
+            strict(child, branch=True)
 
 
 def main() -> None:

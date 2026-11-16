@@ -1,0 +1,15 @@
+# Syslog from anywhere: the LAN's devices send to its LoadBalancer IP. The port only, a LAN
+# client's address isn't a pod's. Every other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - port: syslog-udp
+          protocol: UDP
+        - port: syslog-tcp
+          protocol: TCP

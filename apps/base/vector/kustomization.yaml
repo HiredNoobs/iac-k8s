@@ -5,6 +5,7 @@ kind: Kustomization
 namespace: vector
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - certificate.yaml
   - rbac.yaml
   - external-secret.yaml

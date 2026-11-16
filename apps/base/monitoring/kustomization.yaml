@@ -17,6 +17,7 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - repository.yaml
   - security-policy.yaml
   - grafana

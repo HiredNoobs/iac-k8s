@@ -10,6 +10,7 @@ kind: Kustomization
 namespace: rabbitmq
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - external-secret.yaml
   - certificate.yaml
   - statefulset.yaml

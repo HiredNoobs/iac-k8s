@@ -1,0 +1,30 @@
+# Only the Gateway's Envoy (the portal and the SecurityPolicies' ext auth) and vmagent reach
+# Authelia, every other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # The Gateway's Envoy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: public
+      ports:
+        - port: https
+    - from:
+        # vmagent, scraping metrics.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: http-metrics

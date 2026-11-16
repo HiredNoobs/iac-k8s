@@ -1,0 +1,34 @@
+# Who reaches Redis: its own pods (replication, Sentinel), contentbot and vmagent. Every other
+# connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    # The namespace's own pods.
+    - from:
+        - podSelector: {}
+    - from:
+        # contentbot, through Sentinel to the primary.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: contentbot
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: contentbot
+      ports:
+        - port: redis-tls
+        - port: sentinel-tls
+    - from:
+        # vmagent, scraping metrics.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: http-metrics

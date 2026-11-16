@@ -1,0 +1,11 @@
+# Only kube-apiserver reaches cert-manager (its webhook, which checks and converts its resources).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress
+  namespace: cert-manager
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - kube-apiserver

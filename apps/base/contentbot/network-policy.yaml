@@ -1,0 +1,9 @@
+# Nothing connects to contentbot (it only connects out: CyTube, Redis, RabbitMQ), so every
+# connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]

@@ -1,0 +1,9 @@
+# Nothing connects to the kubelet serving certificate approver, it only uses the Kubernetes API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+  namespace: kubelet-serving-cert-approver
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
