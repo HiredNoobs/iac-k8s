@@ -21,7 +21,7 @@ The ``flux`` CLI on the management VM (installed by tools-bin's ``context-setup`
 | ``clusters/<cluster>/apps.yaml`` | ``apps`` (``apps/<cluster>``), once the infrastructure is ready. Then ``rabbitmq-topology`` (``apps/<cluster>/rabbitmq-topology``), RabbitMQ's users and permissions: the Topology Operator's webhook rejects them until ``apps``' ExternalSecrets have created their Secrets. |
 | ``infrastructure/controllers/`` | Cluster controllers: ESO, Reloader, cert-manager, kube-vip, Envoy Gateway, Longhorn, metrics-server, kubelet-serving-cert-approver. |
 | ``infrastructure/operators/`` | Controllers whose manifests need the other controllers' CRDs (cert-manager Certificates for their webhooks): RabbitMQ's Topology Operator. |
-| ``infrastructure/configs/`` | Cluster-wide config: the admission policies, and config using the controllers' CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway). |
+| ``infrastructure/configs/`` | Cluster-wide config: the admission policies, CoreDNS' disruption budget, and config using the controllers' CRDs (ClusterSecretStore, ClusterIssuer, StorageClasses, the Gateway). |
 | ``apps/base/<app>/`` | One app: namespace, HelmRelease or manifests, ExternalSecret. |
 | ``apps/<cluster>/`` | The apps a cluster runs, plus patches for that cluster. Subdirectories are separate Flux Kustomizations (``rabbitmq-topology``). |
 

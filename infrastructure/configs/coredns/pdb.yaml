@@ -1,0 +1,13 @@
+# CoreDNS comes from Talos (its manifests, two replicas), this budget doesn't. Node drains (Talos
+# upgrades) take one replica at a time: draining a node holding both would otherwise stop cluster
+# DNS until they're running elsewhere.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: coredns
+  namespace: kube-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: kube-dns
