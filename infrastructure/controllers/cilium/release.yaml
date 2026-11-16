@@ -1,0 +1,132 @@
+# The cluster's network (CNI), replacing Talos' Flannel: pod addresses, NetworkPolicy and, once
+# the migration from Flannel is finished, Services in place of kube-proxy. Until then it runs
+# beside Flannel with the migration values below: a node moves to Cilium when it's labelled
+# io.cilium.migration/cilium-default=true (selected by the cilium-default CiliumNodeConfig, applied
+# by hand for the migration), its agent restarted and the node rebooted.
+#
+# The images come from the chart, pinned by digest (image.useDigest, the chart's default): bump
+# the chart (repository.yaml) to change them. Cilium's CRDs are created by its operator, not by
+# the chart. Flux doesn't roll back or uninstall on a failure (no remediation) and never prunes
+# it: either would leave the cluster without a network, and Flux itself without the API.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cilium
+  namespace: kube-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  interval: 1h
+  # A values change restarts the agents one node at a time, Helm waits for all of them.
+  timeout: 15m
+  chartRef:
+    kind: OCIRepository
+    name: cilium
+  install:
+    remediation:
+      retries: 0
+  upgrade:
+    remediation:
+      retries: 0
+  values:
+    # -----------------------------------------------------
+    # Talos
+    # -----------------------------------------------------
+    # KubePrism (Talos' API load balancer on every node), so the agents reach the API without a
+    # Service network.
+    k8sServiceHost: localhost
+    k8sServicePort: 7445
+    securityContext:
+      capabilities:
+        # The chart's defaults without SYS_MODULE, which Talos refuses.
+        ciliumAgent: [CHOWN, KILL, NET_ADMIN, NET_RAW, IPC_LOCK, SYS_ADMIN, SYS_RESOURCE, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+        cleanCiliumState: [NET_ADMIN, SYS_ADMIN, SYS_RESOURCE]
+    # Talos mounts cgroup2 and bpffs itself.
+    cgroup:
+      autoMount:
+        enabled: false
+      hostRoot: /sys/fs/cgroup
+
+    # -----------------------------------------------------
+    # Pod network
+    # -----------------------------------------------------
+    # A /24 per node from 10.245.0.0/16 (handed out by the operator), over VXLAN on port 8473.
+    # Both differ from Flannel's (10.244.0.0/16, port 4789), so the two networks can run side by
+    # side during the migration.
+    ipam:
+      mode: cluster-pool
+      operator:
+        clusterPoolIPv4PodCIDRList: ["10.245.0.0/16"]
+    routingMode: tunnel
+    tunnelProtocol: vxlan
+    tunnelPort: 8473
+
+    # -----------------------------------------------------
+    # Agents and operator
+    # -----------------------------------------------------
+    # A values change restarts the agents (one node at a time) and the operator.
+    rollOutCiliumPods: true
+    updateStrategy:
+      rollingUpdate:
+        maxUnavailable: 1
+    # On a small test cluster: ~100-130Mi after a restart, ~400Mi after a node boots (~200Mi of
+    # it file cache, reclaimed before an OOM kill). The limit covers the startup peak.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+    operator:
+      rollOutPods: true
+      # One: while it's away (a drain moves it), the agents keep their nodes' address ranges and
+      # pods keep running. A new node waits for its range.
+      replicas: 1
+      # Workers only: the chart's default tolerations include the control plane's taint.
+      # not-ready lets it start before any node has a network (the chart adds Cilium's own
+      # agent-not-ready taint).
+      tolerations:
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 256Mi
+      # Migration: pods still on Flannel's network move when their node is drained, not before.
+      unmanagedPodWatcher:
+        restart: false
+
+    # -----------------------------------------------------
+    # Lean: no Envoy (no L7 policy), no Hubble relay or UI. Hubble prints dropped and audited
+    # flows to the agents' log, one JSON line each, which Vector collects.
+    # -----------------------------------------------------
+    envoy:
+      enabled: false
+    l7Proxy: false
+    hubble:
+      enabled: true
+      relay:
+        enabled: false
+      ui:
+        enabled: false
+      export:
+        static:
+          enabled: true
+          filePath: stdout
+          allowList:
+            - '{"verdict":["DROPPED","AUDIT"]}'
+
+    # -----------------------------------------------------
+    # Migration from Flannel: kube-proxy still handles Services, a node keeps Flannel's CNI config
+    # until the cilium-default CiliumNodeConfig selects it, no policy is enforced, and host
+    # traffic goes through iptables while both networks share the nodes. Replaced by
+    # kubeProxyReplacement: true and bpf.masquerade: true once every node is on Cilium.
+    # -----------------------------------------------------
+    kubeProxyReplacement: false
+    cni:
+      customConf: true
+    policyEnforcementMode: never
+    bpf:
+      hostLegacyRouting: true
