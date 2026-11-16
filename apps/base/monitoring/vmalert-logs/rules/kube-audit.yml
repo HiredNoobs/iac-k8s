@@ -221,12 +221,14 @@ groups:
             can-i --list --as=system:serviceaccount:homepage:default, then a loop of kubectl
             get secrets -A --as=system:serviceaccount:homepage:default.
 
-      # The nodes and mgmt (192.168.111.0/24) and pods (10.244.0.0/16) are the only clients, plus
-      # loopback: the control planes' kubelets talk to their own kube-apiserver over ::1.
+      # The nodes and mgmt (192.168.111.0/24) and pods (Flannel's 10.244.0.0/16 and Cilium's
+      # 10.245.0.0/16) are the only clients, plus loopback: the control planes' kubelets talk to
+      # their own kube-apiserver over ::1.
       - alert: KubeAPIUnexpectedSource
         expr: >-
           {event.dataset="kubernetes.audit"}
           -source.ip:ipv4_range("192.168.111.0/24") -source.ip:ipv4_range("10.244.0.0/16")
+          -source.ip:ipv4_range("10.245.0.0/16")
           -source.ip:ipv4_range("127.0.0.0/8") -source.ip:="::1"
           | copy user.name as user, source.ip as remote_ip
           | stats by (user, remote_ip) count() as requests
