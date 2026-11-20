@@ -1,6 +1,7 @@
 # advisory-map (apps/base/advisory-map), from its own metrics (vmagent's advisory-map job). A feed
 # that stops refreshing or a match that stops succeeding leaves the Vulnerabilities dashboard
-# showing the last findings, with nothing on it saying they're old.
+# showing the last findings, with nothing on it saying they're old; a verdicts document that isn't
+# valid drops its verdicts just as quietly.
 groups:
   - name: advisory-map
     interval: 60s
@@ -48,3 +49,22 @@ groups:
             The error: kubectl -n advisory-map logs deploy/advisory-map | grep 'match failed'
             (usually VictoriaMetrics unreachable, or a mapping query it refuses). Trigger: set
             PROMETHEUS_URL to an unreachable URL and restart the pod; it fires 15 minutes later.
+
+      # A verdicts document that isn't valid OpenVEX (a hand edit gone wrong, a file from elsewhere)
+      # is left out whole: its verdicts stop applying and their findings show as unassessed again.
+      - alert: AdvisoryVexDocumentInvalid
+        expr: advisory_map_vex_invalid_documents > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: advisory-map is leaving out verdicts documents that aren't valid
+          description: >-
+            {{ $value }} document(s) in advisory-map's VEX_DIR aren't valid OpenVEX, so their
+            verdicts are ignored: the findings they covered show as unassessed on the
+            Vulnerabilities dashboard.
+          runbook: >-
+            Which and why: kubectl -n advisory-map logs deploy/advisory-map | grep 'VEX document'.
+            Fix the file in /vex, or move it out (kubectl -n advisory-map exec deploy/advisory-map
+            -- ls /vex). Trigger: kubectl -n advisory-map exec deploy/advisory-map -- sh -c 'echo
+            x > /vex/broken.json'; it fires 15 minutes later.

@@ -13,3 +13,19 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+# The verdicts on the findings (VEX_DIR): OpenVEX documents written by `advisory-map vex`, their
+# archive, and the fingerprints that tell when a verdict expires. Kilobytes, but they're judgements
+# made by hand: nothing can fetch them again, so Longhorn's nightly backup is all there is.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: advisory-map-vex
+  labels:
+    app.kubernetes.io/name: advisory-map
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
