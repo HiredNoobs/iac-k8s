@@ -32,8 +32,8 @@ env:
   CERT_MANAGER_VERSION: "1.21.3"
   CERT_MANAGER_CRDS_SHA256: "29810b2a84c8ee0731a79679ee1dfd7e93cd750eb0244542eec47fa8700f2749"
   # renovate: datasource=docker depName=docker.io/envoyproxy/gateway-helm extractVersion=^v(?<version>.+)$
-  ENVOY_GATEWAY_VERSION: "1.9.3"
-  ENVOY_GATEWAY_CRDS_SHA256: "b339119f8f3a4046688fc96837b4129553f42c9998976913ef9dff25694d85cc"
+  ENVOY_GATEWAY_VERSION: "1.10.0"
+  ENVOY_GATEWAY_CRDS_SHA256: "c3cdee42c9224968d2d3174da16cdb3260711b15355be651fe7b25031e4006b5"
   # The Gateway API version Envoy Gateway's chart installs (experimental channel). By hand, with
   # Envoy Gateway's PR.
   GATEWAY_API_VERSION: "1.6.1"
