@@ -1,7 +1,7 @@
 {
   "uid": "security-vulnerabilities",
   "title": "Vulnerabilities",
-  "description": "CVEs that apply to what's running (advisory-map): applications, Talos, Kubernetes and the VMs' Debian packages, with known-exploited ones flagged and the weaknesses (CWEs) they're instances of.",
+  "description": "CVEs that apply to what's running (advisory-map): applications, Talos, Kubernetes and the VMs' Debian packages, with known-exploited ones flagged and the weaknesses (CWEs) they're instances of, and the verdicts on them.",
   "tags": [
     "security"
   ],
@@ -157,6 +157,34 @@
         "sort": 1
       },
       {
+        "name": "assessment",
+        "label": "Assessment",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(advisory_map_vulnerability_info, assessment)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "definition": "label_values(advisory_map_vulnerability_info, assessment)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 1
+      },
+      {
         "name": "kev",
         "label": "Exploited",
         "type": "custom",
@@ -250,7 +278,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"critical\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"critical\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -313,7 +341,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"high\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"high\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -376,7 +404,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"medium\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"medium\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -439,7 +467,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"low\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{severity=\"low\", status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -502,7 +530,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -565,7 +593,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{status!~\"fix-available|unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{status!~\"fix-available|unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -628,7 +656,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -691,7 +719,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{status=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{status=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})) or vector(0)",
           "instant": true
         }
       ],
@@ -754,7 +782,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (severity) (count by (cve, severity) (advisory_map_vulnerability_info{status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (severity) (count by (cve, severity) (advisory_map_vulnerability_info{status!=\"unconfirmed\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}))",
           "legendFormat": "{{severity}}"
         }
       ],
@@ -867,7 +895,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(count by (target) (count by (target, cve) (advisory_map_vulnerability_info{status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})))",
+          "expr": "sort_desc(count by (target) (count by (target, cve) (advisory_map_vulnerability_info{status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})))",
           "instant": true,
           "legendFormat": "{{target}}"
         }
@@ -900,6 +928,397 @@
     },
     {
       "type": "row",
+      "title": "Verdicts",
+      "id": 30,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "To assess",
+      "id": 31,
+      "description": "Findings (a CVE on one target) without a verdict that holds: none made, or one that expired. Add them with advisory-map vex in its pod (deployment.yaml says how).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(advisory_map_vulnerability_info{assessment=~\"unassessed|expired\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Expired",
+      "id": 32,
+      "description": "Findings whose verdict no longer holds: their advisories changed what they say of how or where it's exploited, or CISA's KEV added the CVE since.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(advisory_map_vulnerability_info{assessment=\"expired\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Affected",
+      "id": 33,
+      "description": "Findings judged exploitable here, each with what to do about it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(advisory_map_vulnerability_info{assessment=\"affected\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Not affected",
+      "id": 34,
+      "description": "Findings judged not exploitable here: the vulnerable code isn't present or reached, or something mitigates it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(advisory_map_vulnerability_info{assessment=\"not_affected\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unmatched statements",
+      "id": 35,
+      "description": "Verdicts that apply to no finding: the CVE fixed, or the installation gone. advisory-map vex prune archives them.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "advisory_map_vex_unmatched_statements or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Invalid documents",
+      "id": 36,
+      "description": "Verdicts documents left out, not valid OpenVEX: their verdicts don't apply (AdvisoryVexDocumentInvalid). The reason is in the app's log.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "advisory_map_vex_invalid_documents or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "0",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "row",
       "title": "Software",
       "id": 12,
       "collapsed": false,
@@ -907,7 +1326,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 18
       },
       "panels": []
     },
@@ -924,7 +1343,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 19
       },
       "targets": [
         {
@@ -933,7 +1352,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(advisory_map_vulnerability_info{source=\"osv\", target_kind!=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}, \"record\", \"https://osv.dev/vulnerability/$1\", \"cve\", \"(.+)\") or label_replace(advisory_map_vulnerability_info{source=\"cve.org\", target_kind!=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}, \"record\", \"https://www.cve.org/CVERecord?id=$1\", \"cve\", \"(.+)\")",
+          "expr": "label_replace(advisory_map_vulnerability_info{source=\"osv\", target_kind!=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}, \"record\", \"https://osv.dev/vulnerability/$1\", \"cve\", \"(.+)\") or label_replace(advisory_map_vulnerability_info{source=\"cve.org\", target_kind!=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}, \"record\", \"https://www.cve.org/CVERecord?id=$1\", \"cve\", \"(.+)\")",
           "instant": true,
           "format": "table"
         }
@@ -949,6 +1368,8 @@
                 "kev",
                 "kev_ransomware",
                 "status",
+                "assessment",
+                "justification",
                 "target_kind",
                 "target",
                 "namespace",
@@ -971,15 +1392,17 @@
               "kev": 2,
               "kev_ransomware": 3,
               "status": 4,
-              "target_kind": 5,
-              "target": 6,
-              "namespace": 7,
-              "package": 8,
-              "installed_version": 9,
-              "fixed_version": 10,
-              "source": 11,
-              "severity_source": 12,
-              "record": 13
+              "target_kind": 7,
+              "target": 8,
+              "namespace": 9,
+              "package": 10,
+              "installed_version": 11,
+              "fixed_version": 12,
+              "source": 13,
+              "severity_source": 14,
+              "record": 15,
+              "assessment": 5,
+              "justification": 6
             },
             "renameByName": {
               "cve": "CVE",
@@ -995,7 +1418,9 @@
               "fixed_version": "Fixed in",
               "source": "Source",
               "severity_source": "Severity from",
-              "record": "record"
+              "record": "record",
+              "assessment": "Assessment",
+              "justification": "Justification"
             }
           }
         }
@@ -1252,6 +1677,79 @@
                 "value": true
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Assessment"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "unassessed": {
+                        "color": "transparent",
+                        "index": 0,
+                        "text": "unassessed"
+                      },
+                      "expired": {
+                        "color": "orange",
+                        "index": 1,
+                        "text": "expired"
+                      },
+                      "affected": {
+                        "color": "red",
+                        "index": 2,
+                        "text": "affected"
+                      },
+                      "not_affected": {
+                        "color": "green",
+                        "index": 3,
+                        "text": "not affected"
+                      },
+                      "fixed": {
+                        "color": "green",
+                        "index": 4,
+                        "text": "fixed"
+                      },
+                      "under_investigation": {
+                        "color": "blue",
+                        "index": 5,
+                        "text": "investigating"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -1278,7 +1776,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 31
       },
       "panels": []
     },
@@ -1295,7 +1793,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 27
+        "y": 32
       },
       "targets": [
         {
@@ -1314,7 +1812,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1324,7 +1822,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1334,7 +1832,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1344,7 +1842,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}))",
           "instant": true,
           "format": "table"
         },
@@ -1354,7 +1852,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}))",
+          "expr": "count by (target) (count by (target, cve) (advisory_map_vulnerability_info{target_kind=\"debian-package\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}))",
           "instant": true,
           "format": "table"
         }
@@ -1606,7 +2104,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 27
+        "y": 32
       },
       "targets": [
         {
@@ -1615,7 +2113,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})",
           "instant": true,
           "format": "table"
         },
@@ -1625,7 +2123,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (target, package, installed_version) ((advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"low\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 1) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"medium\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 2) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 3) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0 + 4) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"} * 0))",
+          "expr": "max by (target, package, installed_version) ((advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"low\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"} * 0 + 1) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"medium\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"} * 0 + 2) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"high\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"} * 0 + 3) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", severity=\"critical\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"} * 0 + 4) or (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"} * 0))",
           "instant": true,
           "format": "table"
         },
@@ -1635,7 +2133,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", status=\"fix-available\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})",
           "instant": true,
           "format": "table"
         },
@@ -1645,7 +2143,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (target, package, installed_version) (advisory_map_vulnerability_info{target_kind=\"debian-package\", kev=\"true\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})",
           "instant": true,
           "format": "table"
         }
@@ -1874,7 +2372,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 40
       },
       "targets": [
         {
@@ -1883,7 +2381,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count by (cve, severity, package, fixed_version, status, kev, kev_ransomware) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})",
+          "expr": "count by (cve, severity, package, fixed_version, status, kev, kev_ransomware, assessment, justification) (advisory_map_vulnerability_info{target_kind=\"debian-package\", source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})",
           "instant": true,
           "format": "table"
         }
@@ -1899,6 +2397,8 @@
                 "kev",
                 "kev_ransomware",
                 "status",
+                "assessment",
+                "justification",
                 "package",
                 "fixed_version",
                 "Value"
@@ -1915,9 +2415,11 @@
               "kev": 2,
               "kev_ransomware": 3,
               "status": 4,
-              "package": 5,
-              "fixed_version": 6,
-              "Value": 7
+              "package": 7,
+              "fixed_version": 8,
+              "Value": 9,
+              "assessment": 5,
+              "justification": 6
             },
             "renameByName": {
               "cve": "CVE",
@@ -1927,7 +2429,9 @@
               "status": "Status",
               "package": "Source package",
               "fixed_version": "Fixed in",
-              "Value": "Hosts"
+              "Value": "Hosts",
+              "assessment": "Assessment",
+              "justification": "Justification"
             }
           }
         }
@@ -2172,6 +2676,79 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Assessment"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "unassessed": {
+                        "color": "transparent",
+                        "index": 0,
+                        "text": "unassessed"
+                      },
+                      "expired": {
+                        "color": "orange",
+                        "index": 1,
+                        "text": "expired"
+                      },
+                      "affected": {
+                        "color": "red",
+                        "index": 2,
+                        "text": "affected"
+                      },
+                      "not_affected": {
+                        "color": "green",
+                        "index": 3,
+                        "text": "not affected"
+                      },
+                      "fixed": {
+                        "color": "green",
+                        "index": 4,
+                        "text": "fixed"
+                      },
+                      "under_investigation": {
+                        "color": "blue",
+                        "index": 5,
+                        "text": "investigating"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -2198,7 +2775,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 52
       },
       "panels": []
     },
@@ -2215,7 +2792,7 @@
         "h": 10,
         "w": 4,
         "x": 0,
-        "y": 48
+        "y": 53
       },
       "targets": [
         {
@@ -2224,7 +2801,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(count by (cve) (advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}) unless on (cve) advisory_map_vulnerability_cwe_info) or vector(0)",
+          "expr": "count(count by (cve) (advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}) unless on (cve) advisory_map_vulnerability_cwe_info) or vector(0)",
           "instant": true
         }
       ],
@@ -2269,7 +2846,7 @@
         "h": 10,
         "w": 10,
         "x": 4,
-        "y": 48
+        "y": 53
       },
       "targets": [
         {
@@ -2278,7 +2855,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sort_desc(topk(15, count by (cwe, cwe_name) (advisory_map_vulnerability_cwe_info{cwe=~\"$cwe\"} and on (cve) advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"})))",
+          "expr": "sort_desc(topk(15, count by (cwe, cwe_name) (advisory_map_vulnerability_cwe_info{cwe=~\"$cwe\"} and on (cve) advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"})))",
           "instant": true,
           "legendFormat": "{{cwe}} {{cwe_name}}"
         }
@@ -2322,7 +2899,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 48
+        "y": 53
       },
       "targets": [
         {
@@ -2331,7 +2908,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(label_replace(label_replace(advisory_map_vulnerability_cwe_info{cwe=~\"$cwe\"} * on (cve) group_left () count by (cve) (advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\"}), \"definition\", \"https://cwe.mitre.org/data/definitions/$1.html\", \"cwe\", \"CWE-(\\\\d+)\"), \"record\", \"https://www.cve.org/CVERecord?id=$1\", \"cve\", \"(CVE-.+)\"), \"record\", \"https://osv.dev/vulnerability/$1\", \"cve\", \"(GHSA-.+)\")",
+          "expr": "label_replace(label_replace(label_replace(advisory_map_vulnerability_cwe_info{cwe=~\"$cwe\"} * on (cve) group_left () count by (cve) (advisory_map_vulnerability_info{source=~\"$source\", target_kind=~\"$target_kind\", target=~\"$target\", severity=~\"$severity\", status=~\"$status\", kev=~\"$kev\", assessment=~\"$assessment\"}), \"definition\", \"https://cwe.mitre.org/data/definitions/$1.html\", \"cwe\", \"CWE-(\\\\d+)\"), \"record\", \"https://www.cve.org/CVERecord?id=$1\", \"cve\", \"(CVE-.+)\"), \"record\", \"https://osv.dev/vulnerability/$1\", \"cve\", \"(GHSA-.+)\")",
           "instant": true,
           "format": "table"
         }
@@ -2475,7 +3052,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 63
       },
       "panels": []
     },
@@ -2492,7 +3069,7 @@
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 59
+        "y": 64
       },
       "targets": [
         {
@@ -2556,7 +3133,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 59
+        "y": 64
       },
       "targets": [
         {
@@ -2619,7 +3196,7 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 59
+        "y": 64
       },
       "targets": [
         {
@@ -2682,7 +3259,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 59
+        "y": 64
       },
       "targets": [
         {
@@ -2745,7 +3322,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 59
+        "y": 64
       },
       "targets": [
         {
@@ -2808,7 +3385,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 63
+        "y": 68
       },
       "targets": [
         {
@@ -2881,7 +3458,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 63
+        "y": 68
       },
       "targets": [
         {

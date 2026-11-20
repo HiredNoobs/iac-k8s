@@ -26,6 +26,7 @@ Longhorn backs up every volume to ``cifs://192.168.111.6/longhorn-backups`` each
 | ``data-authelia-0`` | ``authelia`` | 2FA registrations, consents. Encrypted with ``AUTHELIA_STORAGE_ENCRYPTION_KEY``: Vault's must be the one it was written with. | Yes. |
 | ``mealie-data`` | ``mealie`` | Recipes. | Yes. |
 | ``data-lldap-0`` | ``lldap`` | Users and groups. Its hourly bootstrap recreates what's in git (``apps/base/lldap/bootstrap``) with Vault's passwords, anything made only in the UI needs the backup. Password hashes depend on ``LLDAP_KEY_SEED``. | Yes. |
+| ``advisory-map-vex`` | ``advisory-map`` | Verdicts on the findings, made by hand. Without them every finding is unassessed again. | Yes. |
 | ``data-grafana-0`` | ``monitoring`` | Users, preferences, anything made in the UI. Dashboards and data sources are provisioned from git. | If wanted. |
 | ``data-victoriametrics-0``, ``data-victorialogs-0`` | ``monitoring`` | Metrics and logs history. | If wanted. |
 | ``data-redis-0..2`` | ``redis`` | contentbot's data (the AOF). | If wanted. |

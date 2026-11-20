@@ -3,7 +3,9 @@
 # package-versions, everything else through config/mapping.toml. Advisories are downloaded whole
 # (the Debian Security Tracker, the CVE List from GitHub, OSV's bucket, CISA's KEV) and matched
 # here; fixes are the mapped projects' releases, their tags looked up by name. Nothing about what's
-# installed is sent out. Plain manifests, the app has no chart.
+# installed is sent out. Verdicts on the findings (OpenVEX, made in the pod: deployment.yaml) are
+# on a volume of their own, the one here to back up (pvc.yaml). Plain manifests, the app has no
+# chart.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: advisory-map
