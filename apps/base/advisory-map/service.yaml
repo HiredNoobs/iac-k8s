@@ -1,4 +1,4 @@
-# /metrics, for vmagent (its advisory-map job).
+# /metrics for vmagent (its advisory-map job), the verdicts page for the Gateway (httproute.yaml).
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,4 +12,8 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+      protocol: TCP
+    - name: web
+      port: 8081
+      targetPort: web
       protocol: TCP

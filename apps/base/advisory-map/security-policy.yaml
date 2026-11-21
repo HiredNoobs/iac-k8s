@@ -1,0 +1,33 @@
+# Behind Authelia: ext-authz against its Service (HTTPS, see apps/base/authelia/certificate.yaml),
+# allowed by apps/base/authelia/reference-grant.yaml.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: advisory-map
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: advisory-map
+  extAuth:
+    failOpen: false
+    headersToExtAuth:
+      - X-Forwarded-Proto
+      - X-Forwarded-For
+      - Authorization
+      - Proxy-Authorization
+      - Accept
+      - Cookie
+    http:
+      path: /api/authz/ext-authz/
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: authelia
+          namespace: authelia
+          port: 9091
+      headersToBackend:
+        - Remote-User
+        - Remote-Groups
+        - Remote-Name
+        - Remote-Email
