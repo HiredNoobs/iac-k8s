@@ -1754,7 +1754,8 @@
                 "value": [
                   {
                     "title": "Verdict",
-                    "url": "https://advisory-map.hirednoobs.com/assess?cve=${__data.fields.cve}&kind=${__data.fields.target_kind:percentencode}&target=${__data.fields.target:percentencode}"
+                    "url": "https://advisory-map.hirednoobs.com/assess?cve=${__data.fields.cve}&kind=${__data.fields.target_kind:percentencode}&target=${__data.fields.target:percentencode}",
+                    "targetBlank": true
                   }
                 ]
               }
@@ -2762,7 +2763,8 @@
                 "value": [
                   {
                     "title": "Verdict",
-                    "url": "https://advisory-map.hirednoobs.com/assess?cve=${__data.fields.cve}&kind=debian-package&package=${__data.fields.package:percentencode}"
+                    "url": "https://advisory-map.hirednoobs.com/assess?cve=${__data.fields.cve}&kind=debian-package&package=${__data.fields.package:percentencode}",
+                    "targetBlank": true
                   }
                 ]
               }
