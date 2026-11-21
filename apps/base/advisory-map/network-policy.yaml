@@ -1,5 +1,5 @@
-# Only vmagent reaches advisory-map (its metrics are the advisories), every other connection to
-# its pods is dropped.
+# Only vmagent (its metrics are the advisories) and the Gateway's Envoy (the verdicts page) reach
+# advisory-map, every other connection to its pods is dropped.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -18,3 +18,13 @@ spec:
               app.kubernetes.io/name: vmagent
       ports:
         - port: http
+    - from:
+        # The Gateway's Envoy, for the verdicts page behind Authelia.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: public
+      ports:
+        - port: web
