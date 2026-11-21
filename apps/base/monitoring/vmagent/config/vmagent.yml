@@ -275,6 +275,7 @@ scrape_configs:
       - labels: { __param_module: https_authelia }
         targets:
           - https://homepage.hirednoobs.com/
+          - https://advisory-map.hirednoobs.com/
           - https://alertmanager.hirednoobs.com/
           - https://victoriametrics.hirednoobs.com/
           - https://victorialogs.hirednoobs.com/

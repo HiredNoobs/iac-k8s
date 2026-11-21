@@ -2,7 +2,8 @@
 # them. The image's user is 10001 (the restricted pod security standard), fsGroup lets it write the
 # volumes; it writes nothing else, so the root filesystem is read only.
 #
-# Verdicts on the findings are added in the pod, which needs no port of its own:
+# Verdicts on the findings are added on its page (httproute.yaml), where each finding on Grafana's
+# Vulnerabilities dashboard links, or in the pod:
 #   kubectl -n advisory-map exec -it deploy/advisory-map -- advisory-map vex tui --author <you>
 # (or vex list, vex add, vex prune; see the app's docs/vex.md).
 apiVersion: apps/v1
@@ -36,7 +37,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: advisory-map
-          image: hirednoobs/advisory-map:0.7.0@sha256:234c9cdff39ba75a9ee58dbe9b003b53c852d01e76ab45322d49dca54fe887c6
+          image: hirednoobs/advisory-map:0.8.0@sha256:2b414fc01d386eda1995b3e487976f35bc96a4d65731c668ce52fba2f2b3ff80
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -55,6 +56,13 @@ spec:
             # away, VEX_DIR can't. VEX_AUTHOR is left unset, so each verdict says who made it.
             - name: VEX_DIR
               value: /vex
+            # The verdicts page saves each verdict as the user in Remote-User, which the Gateway
+            # sets from Authelia. Only the Gateway is meant to reach the port: anything else that
+            # does can send the header itself and save as anyone.
+            - name: WEB_PORT
+              value: "8081"
+            - name: WEB_AUTHOR_HEADER
+              value: Remote-User
             # Hourly where a refresh fetches only what changed (KEV, OSV, the CVE List); the Debian
             # tracker comes whole. CWE keeps the 24h default.
             - name: FEED_REFRESH_KEV
@@ -68,6 +76,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+            - name: web
+              containerPort: 8081
               protocol: TCP
           readinessProbe:
             httpGet:

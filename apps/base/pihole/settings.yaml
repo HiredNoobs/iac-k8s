@@ -20,6 +20,7 @@ data:
   # while Pi-hole is down, they're here too as Pi-hole doesn't ask the router for names it
   # doesn't know. Names not listed (e.g. a public host on hirednoobs.com) resolve upstream.
   FTLCONF_dns_hosts: "\
+    192.168.111.101 advisory-map.hirednoobs.com;\
     192.168.111.101 alertmanager.hirednoobs.com;\
     192.168.111.101 auth.hirednoobs.com;\
     192.168.111.101 bazarr.hirednoobs.com;\
@@ -77,6 +78,7 @@ data:
   # names itself (e.g. an empty AAAA or HTTPS answer) instead of forwarding them upstream. Keep
   # it in line with the records.
   FTLCONF_misc_dnsmasq_lines: "\
+    local=/advisory-map.hirednoobs.com/;\
     local=/alertmanager.hirednoobs.com/;\
     local=/auth.hirednoobs.com/;\
     local=/bazarr.hirednoobs.com/;\

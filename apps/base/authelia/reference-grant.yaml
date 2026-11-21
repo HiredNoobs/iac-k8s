@@ -9,6 +9,9 @@ spec:
   from:
     - group: gateway.envoyproxy.io
       kind: SecurityPolicy
+      namespace: advisory-map
+    - group: gateway.envoyproxy.io
+      kind: SecurityPolicy
       namespace: homepage
     - group: gateway.envoyproxy.io
       kind: SecurityPolicy

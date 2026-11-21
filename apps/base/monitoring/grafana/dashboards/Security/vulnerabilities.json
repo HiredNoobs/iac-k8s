@@ -943,7 +943,7 @@
       "type": "stat",
       "title": "To assess",
       "id": 31,
-      "description": "Findings (a CVE on one target) without a verdict that holds: none made, or one that expired. Add them with advisory-map vex in its pod (deployment.yaml says how).",
+      "description": "Findings (a CVE on one target) without a verdict that holds: none made, or one that expired. Add them on its page (an Assessment's Verdict link in CVEs by target or CVEs by package), or with advisory-map vex in its pod (deployment.yaml says how).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1748,6 +1748,15 @@
                     }
                   ]
                 }
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Verdict",
+                    "url": "https://advisory-map.hirednoobs.com/assess?cve=${__data.fields.cve}&kind=${__data.fields.target_kind:percentencode}&target=${__data.fields.target:percentencode}"
+                  }
+                ]
               }
             ]
           }
@@ -2747,6 +2756,15 @@
                     }
                   ]
                 }
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Verdict",
+                    "url": "https://advisory-map.hirednoobs.com/assess?cve=${__data.fields.cve}&kind=debian-package&package=${__data.fields.package:percentencode}"
+                  }
+                ]
               }
             ]
           }
