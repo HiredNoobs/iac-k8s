@@ -100,7 +100,8 @@ spec:
 
     # -----------------------------------------------------
     # Lean: no Envoy (no L7 policy), no Hubble relay or UI. Hubble prints dropped and audited
-    # flows to the agents' log, one JSON line each, which Vector collects.
+    # flows to the agents' log, one JSON line each, which Vector parses
+    # (apps/base/vector/config/collector/hubble.yaml).
     # -----------------------------------------------------
     envoy:
       enabled: false

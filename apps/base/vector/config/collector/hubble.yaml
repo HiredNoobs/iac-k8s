@@ -1,0 +1,109 @@
+transforms:
+  # Hubble's flows: the ones Cilium's agents drop or audit (the export in
+  # infrastructure/controllers/cilium/release.yaml), one JSON line each in the agent's log,
+  # {"flow": {...}, "node_name", "time"}, as hubble.flow. The agent's own lines are generic's.
+  #   event.action    the verdict, lower case (dropped, audit), and event.type denied for a drop
+  #   event.reason    why Cilium dropped it (POLICY_DENIED, UNSUPPORTED_L3_PROTOCOL, ...)
+  #   source.*, destination.*, network.type, network.transport  the addresses, ports and protocol
+  #   Source.*, Destination.*  each side as Kubernetes knows it: Namespace (from the pod's labels
+  #                   when Hubble doesn't name it), Pod, Workload.Kind and .Name, Cilium's
+  #                   Identity, and for a side that isn't a pod Entities (Cilium's reserved
+  #                   identities: world, host, remote-node, kube-apiserver, ...)
+  #   Flow.*          the rest of the flow under Hubble's own names: traffic_direction (the
+  #                   datapath's, not the pod's: a pod's own outgoing packets can be INGRESS),
+  #                   is_reply, file (where in the datapath a drop happened), l4's TCP flags and
+  #                   ICMP type, and anything else a flow carries
+  # Not kept: what every line repeats (the node's labels, each side's other labels, the cluster's
+  # name, Hubble's version), the MAC addresses, and the duplicate time and node.
+  hubble:
+    type: remap
+    inputs: [by_source.hubble]
+    drop_on_error: true
+    reroute_dropped: true
+    source: |
+      %dataset = "hubble.flow"
+      flow = object(del(.flow)) ?? {}
+      del(.node_name)
+      ."event.category" = ["network"]
+      verdict = string(flow.verdict) ?? ""
+      if verdict == "" {
+        %mismatch = "a flow without a verdict"
+      } else {
+        ."event.action" = downcase(verdict)
+      }
+      ."event.type" = if verdict == "DROPPED" {
+        ["connection", "denied"]
+      } else if includes(["FORWARDED", "AUDIT"], verdict) {
+        ["connection", "allowed"]
+      } else {
+        ["connection"]
+      }
+      if is_string(flow.uuid) { ."event.id" = flow.uuid }
+      reason = string(flow.drop_reason_desc) ?? ""
+      if reason != "" { ."event.reason" = reason }
+
+      ip = object(flow.IP) ?? {}
+      if is_string(ip.source) { ."source.ip" = ip.source }
+      if is_string(ip.destination) { ."destination.ip" = ip.destination }
+      if is_string(ip.ipVersion) { ."network.type" = downcase(string!(ip.ipVersion)) }
+      # One key, the protocol: its ports move, anything else (TCP's flags, ICMP's type) stays.
+      transports = {"TCP": "tcp", "UDP": "udp", "SCTP": "sctp", "ICMPv4": "icmp", "ICMPv6": "ipv6-icmp"}
+      l4 = {}
+      for_each(object(flow.l4) ?? {}) -> |protocol, value| {
+        transport = get!(transports, [protocol])
+        if transport != null { ."network.transport" = transport }
+        fields = object(value) ?? {}
+        if is_integer(fields.source_port) { ."source.port" = fields.source_port }
+        if is_integer(fields.destination_port) { ."destination.port" = fields.destination_port }
+        fields = remove!(remove!(fields, ["source_port"]), ["destination_port"])
+        if fields != {} { l4 = set!(l4, [protocol], fields) }
+      }
+
+      # Keyed by side, not a list: for_each takes an object's keys in alphabetical order.
+      ends = {}
+      for_each({"Source": flow.source, "Destination": flow.destination}) -> |side, value| {
+        endpoint = object(value) ?? {}
+        namespace = string(endpoint.namespace) ?? ""
+        entities = []
+        for_each(array(endpoint.labels) ?? []) -> |_i, item| {
+          label = string(item) ?? ""
+          if namespace == "" && starts_with(label, "k8s:io.kubernetes.pod.namespace=") {
+            namespace = replace(label, r'^k8s:io\.kubernetes\.pod\.namespace=', "")
+          }
+          if starts_with(label, "reserved:") { entities = push(entities, replace(label, r'^reserved:', "")) }
+        }
+        pod = string(endpoint.pod_name) ?? ""
+        workloads = array(endpoint.workloads) ?? []
+        workload = object(workloads[0]) ?? {}
+        if namespace != "" { . = set!(., [side + ".Namespace"], namespace) }
+        if pod != "" { . = set!(., [side + ".Pod"], pod) }
+        if is_string(workload.kind) { . = set!(., [side + ".Workload.Kind"], workload.kind) }
+        if is_string(workload.name) { . = set!(., [side + ".Workload.Name"], workload.name) }
+        if is_integer(endpoint.identity) { . = set!(., [side + ".Identity"], endpoint.identity) }
+        if entities != [] { . = set!(., [side + ".Entities"], entities) }
+        # For _msg: <ip>[:<port>] (<namespace>/<pod>, the namespace, or the entities).
+        end = string(get!(., [downcase(side) + ".ip"])) ?? "?"
+        port = get!(., [downcase(side) + ".port"])
+        if port != null {
+          if contains(end, ":") { end = "[" + end + "]" }
+          end = end + ":" + (to_string(port) ?? "")
+        }
+        who = if pod != "" { namespace + "/" + pod } else if namespace != "" { namespace } else { join(entities, ",") }
+        if who != "" { end = end + " (" + who + ")" }
+        ends = set!(ends, [side], end)
+      }
+
+      # "DROPPED 10.245.1.5:40312 (default/client) -> 10.245.2.7:80 (web/server): TCP Flags: SYN (POLICY_DENIED)"
+      msg = verdict + " " + (string(ends.Source) ?? "") + " -> " + (string(ends.Destination) ?? "")
+      summary = string(flow.Summary) ?? ""
+      if summary != "" { msg = msg + ": " + summary }
+      if reason != "" { msg = msg + " (" + reason + ")" }
+      ._msg = msg
+
+      moved = ["verdict", "uuid", "drop_reason", "drop_reason_desc", "IP", "l4", "source", "destination", "Summary"]
+      repeated = ["time", "node_name", "node_labels", "emitter", "ethernet", "event_type", "Type"]
+      rest = filter(flow) -> |key, _value| { !includes(moved, key) && !includes(repeated, key) }
+      if l4 != {} { rest.l4 = l4 }
+      for_each(flatten(rest)) -> |key, value| {
+        . = set!(., ["Flow." + key], value)
+      }

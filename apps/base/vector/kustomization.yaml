@@ -28,6 +28,7 @@ configMapGenerator:
       - config/collector/ghostunnel.yaml
       - config/collector/grafana.yaml
       - config/collector/handoff.yaml
+      - config/collector/hubble.yaml
       - config/collector/kubernetes-audit.yaml
       - config/collector/kubernetes-events.yaml
       - config/collector/lldap.yaml

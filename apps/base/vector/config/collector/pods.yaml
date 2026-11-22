@@ -104,3 +104,4 @@ transforms:
       grafana: .kubernetes.namespace == "monitoring" && .kubernetes.container.name == "grafana"
       ghostunnel: .kubernetes.namespace == "lldap" && .kubernetes.container.name == "ghostunnel"
       kubectl: .kubernetes.namespace == "kubectl" && .kubernetes.container.name == "events"
+      hubble: .kubernetes.namespace == "kube-system" && .kubernetes.container.name == "cilium-agent" && is_object(.flow)
