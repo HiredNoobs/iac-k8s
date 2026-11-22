@@ -51,8 +51,6 @@ spec:
     # Pod network
     # -----------------------------------------------------
     # A /24 per node from 10.245.0.0/16 (handed out by the operator), over VXLAN on port 8473.
-    # Both differ from Flannel's (10.244.0.0/16, port 4789), so the two networks can run side by
-    # side during the migration.
     ipam:
       mode: cluster-pool
       operator:
