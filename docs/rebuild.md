@@ -11,16 +11,7 @@ What runs on a new, empty cluster (built by iac-homelab's ``./build.sh clusters`
 
 ## Cilium
 
-Talos deploys no network (iac-homelab's ``terraform/modules/talos-cluster``), so a new cluster's nodes stay NotReady and Flux's controllers can't start until Cilium runs. Install it once with helm (iac-homelab's ``docs/rebuild.md`` has it on the machine running the build), with the HelmRelease's own chart and values, from ``infrastructure/controllers/cilium/``:
-
-```sh
-helm pull oci://quay.io/cilium/charts/cilium --version <repository.yaml's tag>
-python3 -c 'import sys, yaml; yaml.safe_dump(yaml.safe_load(open("release.yaml"))["spec"]["values"], sys.stdout)' >values.yaml
-helm install cilium cilium-<tag>.tgz -n kube-system -f values.yaml
-rm values.yaml cilium-<tag>.tgz
-```
-
-The pull's ``Digest:`` must be ``repository.yaml``'s digest. PyYAML comes with Ansible. ``kubectl get nodes`` shows every node Ready within a few minutes.
+Talos deploys no network (iac-homelab's ``terraform/modules/talos-cluster``), so a new cluster's nodes stay NotReady and Flux's controllers can't start until Cilium runs. Install it once, with the HelmRelease's own chart and values: ``bash infrastructure/controllers/cilium/install.sh`` (helm on the machine running the build, as in iac-homelab's ``docs/rebuild.md``; PyYAML comes with Ansible). It stops if the chart's digest isn't ``repository.yaml``'s, and ends once every node is Ready, within a few minutes.
 
 Flux takes the release over on its first reconcile: ``helm history cilium -n kube-system`` shows the install and then an upgrade, not a reinstall. That upgrade restarts the agents once, one node at a time (Flux's chart version carries the OCI digest, which is in the pods' labels).
 
