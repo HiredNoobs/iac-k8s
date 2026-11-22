@@ -115,6 +115,19 @@ images = '(^|/)stakater/reloader(:|$)'
 # Containers
 # -----------------------------------------------------
 
+# The agent and the operator, released together from one repository.
+[[software]]
+query = 'kube_pod_container_info{image_spec=~"(.*/)?cilium/(cilium|operator-generic):.*"}'
+vendor = "cilium"
+product = "cilium"
+ecosystem = "Go"
+package = "github.com/cilium/cilium"
+version_label = "image_spec"
+version_regex = ':v?([0-9][^@]*)'
+target_labels = ["namespace", "container"]
+kind = "container"
+releases = "registry:quay.io/cilium/cilium"
+
 [[software]]
 query = 'kube_pod_container_info{image_spec=~"(.*/)?external-secrets/external-secrets:.*"}'
 vendor = "external-secrets"
