@@ -1,0 +1,97 @@
+# Who reaches the monitoring stack: its own pods (vmagent scraping, Grafana and vmalert querying,
+# remote writes), the Gateway's Envoy (each UI and API, the Proxmox hosts' metrics), and per
+# component below. Every other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    # The namespace's own pods.
+    - from:
+        - podSelector: {}
+    - from:
+        # The Gateway's Envoy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: public
+      ports:
+        - port: https
+---
+# Vector's aggregator writes the logs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: victorialogs
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: victorialogs
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vector
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vector
+              app.kubernetes.io/component: aggregator
+      ports:
+        - port: https
+---
+# advisory-map and Homepage's widget query metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: victoriametrics
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: victoriametrics
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # advisory-map.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: advisory-map
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: advisory-map
+        # Homepage's widget.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: homepage
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: homepage
+      ports:
+        - port: https
+---
+# Pi-hole's metrics are pushed to vmagent's import endpoint.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vmagent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vmagent
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Pi-hole.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pihole
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: pihole
+      ports:
+        - port: https

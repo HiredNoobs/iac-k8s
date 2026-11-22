@@ -85,9 +85,9 @@ spec:
     csi:
       snapshotterReplicaCount: "0"
       allowControllerSecretAccess: false
-    # Longhorn's NetworkPolicies for its own traffic (on by default since 1.13). Flannel doesn't
-    # enforce them; with a CNI that does, only Longhorn's components could reach the managers'
-    # port 9500, so vmagent's longhorn job is added for the metrics on it.
+    # Longhorn's NetworkPolicies for its own traffic (on by default since 1.13): only Longhorn's
+    # components reach the managers' port 9500, so vmagent's longhorn job is added for the
+    # metrics on it.
     networkPolicies:
       metricsScrapeSources:
         - namespaceSelector:

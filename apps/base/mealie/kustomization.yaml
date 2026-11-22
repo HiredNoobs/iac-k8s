@@ -11,6 +11,7 @@ kind: Kustomization
 namespace: mealie
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - external-secret.yaml
   - pvc.yaml
   - deployment.yaml

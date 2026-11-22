@@ -1,0 +1,21 @@
+# Who reaches cert-manager: kube-apiserver (as remote-node too, kustomization.yaml; its webhook,
+# which checks and converts its resources) and vmagent (the controller's, webhook's and
+# cainjector's metrics).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress
+  namespace: cert-manager
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - kube-apiserver
+        - remote-node
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: vmagent
+      toPorts:
+        - ports:
+            - port: http-metrics

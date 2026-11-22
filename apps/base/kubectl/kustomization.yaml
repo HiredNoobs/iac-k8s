@@ -11,5 +11,6 @@ kind: Kustomization
 namespace: kubectl
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - rbac.yaml
   - deployment.yaml

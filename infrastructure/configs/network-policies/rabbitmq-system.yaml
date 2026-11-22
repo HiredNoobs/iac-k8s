@@ -1,0 +1,13 @@
+# Only kube-apiserver (as remote-node too, kustomization.yaml) reaches the Topology Operator
+# (its webhooks).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress
+  namespace: rabbitmq-system
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - kube-apiserver
+        - remote-node

@@ -1,0 +1,36 @@
+# Who reaches Pi-hole: DNS from anywhere (the LAN's clients, through its LoadBalancer IP: the port
+# only, a LAN client's address isn't a pod's), its admin UI from the Gateway's Envoy and
+# Homepage's widget. Every other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    # The namespace's own pods.
+    - from:
+        - podSelector: {}
+    - ports:
+        - port: dns-udp
+          protocol: UDP
+        - port: dns-tcp
+          protocol: TCP
+    - from:
+        # The Gateway's Envoy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: public
+        # Homepage's widget.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: homepage
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: homepage
+      ports:
+        - port: https

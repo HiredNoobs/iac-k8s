@@ -6,4 +6,5 @@ kind: Kustomization
 namespace: falco
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - release.yaml

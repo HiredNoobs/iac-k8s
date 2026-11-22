@@ -9,6 +9,7 @@ kind: Kustomization
 namespace: pihole
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - external-secret.yaml
   - certificate.yaml
   - metrics-certificate.yaml

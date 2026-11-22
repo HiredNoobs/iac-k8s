@@ -1,0 +1,19 @@
+# Who reaches RabbitMQ: its own pods (clustering), and the ports its LoadBalancer IP serves to the
+# LAN (AMQPS, management, metrics) from anywhere: the port only, a LAN client's address isn't a
+# pod's. That covers contentbot, the Topology Operator, the Gateway's Envoy and vmagent. Every
+# other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    # The namespace's own pods.
+    - from:
+        - podSelector: {}
+    - ports:
+        - port: amqps
+        - port: management
+        - port: prometheus

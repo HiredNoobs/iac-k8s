@@ -10,6 +10,7 @@ kind: Kustomization
 namespace: vaultwarden
 resources:
   - namespace.yaml
+  - network-policy.yaml
   - statefulset.yaml
   - service.yaml
   - httproute.yaml

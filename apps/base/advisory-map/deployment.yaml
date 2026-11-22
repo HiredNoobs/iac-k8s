@@ -57,8 +57,8 @@ spec:
             - name: VEX_DIR
               value: /vex
             # The verdicts page saves each verdict as the user in Remote-User, which the Gateway
-            # sets from Authelia. Only the Gateway is meant to reach the port: anything else that
-            # does can send the header itself and save as anyone.
+            # sets from Authelia. Only the Gateway reaches the port (network-policy.yaml): anything
+            # else could send the header itself and save as anyone.
             - name: WEB_PORT
               value: "8081"
             - name: WEB_AUTHOR_HEADER

@@ -1,5 +1,5 @@
 # Cluster-wide config: the admission policies, CoreDNS' disruption budget, and config using the
-# controllers' CRDs (ClusterSecretStore, ClusterIssuer, ...).
+# controllers' CRDs (ClusterSecretStore, ClusterIssuer, the controllers' network policies, ...).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -10,3 +10,4 @@ resources:
   - flux-notifications
   - gateway
   - longhorn
+  - network-policies

@@ -42,6 +42,11 @@ env:
   # renovate: datasource=helm depName=longhorn registryUrl=https://charts.longhorn.io
   LONGHORN_VERSION: "1.13.0"
   LONGHORN_MANIFEST_SHA256: "d0f99488e7b2789312d45b0127ce7388df71a971e6fca2085e88635303cc0a1f"
+  # CiliumNetworkPolicy's CRD (infrastructure/configs/network-policies), same version as Cilium's
+  # chart (its operator creates the CRDs, the chart has none).
+  # renovate: datasource=docker depName=quay.io/cilium/charts/cilium
+  CILIUM_VERSION: "1.20.4"
+  CILIUM_CNP_CRD_SHA256: "62c6de8f358da125b94468d39187edb1cea157d79503fdc50ccec8a6aaa79a76"
   # Vector, the same version as its image (apps/base/vector/daemonset.yaml, aggregator.yaml), for
   # its config tests.
   # renovate: datasource=github-releases depName=vectordotdev/vector extractVersion=^v(?<version>.+)$
@@ -134,8 +139,12 @@ jobs:
             "https://raw.githubusercontent.com/longhorn/longhorn/v${LONGHORN_VERSION}/deploy/longhorn.yaml"
           echo "${LONGHORN_MANIFEST_SHA256}  /tmp/longhorn.yaml" | sha256sum -c -
 
+          curl -fsSLo /tmp/cilium-cnp-crd.yaml \
+            "https://raw.githubusercontent.com/cilium/cilium/v${CILIUM_VERSION}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml"
+          echo "${CILIUM_CNP_CRD_SHA256}  /tmp/cilium-cnp-crd.yaml" | sha256sum -c -
+
           python3 .forgejo/scripts/crd-schemas.py /tmp/crd-schemas /tmp/eso-crds.yaml /tmp/cert-manager-crds.yaml \
-            /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml \
+            /tmp/envoy-gateway-crds.yaml /tmp/gateway-api-crds.yaml /tmp/longhorn.yaml /tmp/cilium-cnp-crd.yaml \
             infrastructure/operators/rabbitmq-topology-operator/messaging-topology-operator-with-certmanager.yaml
 
       # Both Vectors' configs load (the common files and their side's), and their transforms do

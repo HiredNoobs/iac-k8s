@@ -1,0 +1,33 @@
+# Who reaches LLDAP: its bootstrap job, the Gateway's Envoy (the UI) and Authelia (LDAPS). Every
+# other connection to its pods is dropped.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    # The namespace's own pods.
+    - from:
+        - podSelector: {}
+    - from:
+        # The Gateway's Envoy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-name: public
+      ports:
+        - port: https
+    - from:
+        # Authelia, looking users up.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: authelia
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: authelia
+      ports:
+        - port: ldaps
