@@ -98,7 +98,7 @@ spec:
         # abuse.ch's and Spamhaus's indicators into the volume, or each feed's last copy if it can't
         # be fetched.
         - name: threatintel
-          image: docker.io/library/python:3.15.1-alpine3.24@sha256:54448f67d7c31c39e5cdd3ea2d6382395ce142806c284425f8e897d78a0465b3
+          image: docker.io/library/python:3.15.2-alpine3.24@sha256:0f9552bb28711333da16915ec146f5e6bb44a7fdac9ced15dc17c2e0206346dd
           # -B: no .pyc next to the script (read-only).
           command: ["python", "-B", "/scripts/threatintel.py"]
           env:
@@ -197,7 +197,7 @@ spec:
         # half a file, and keeps the last good copy when a feed can't be fetched. As PID 1 the shell
         # ignores SIGTERM without a trap; the sleep runs in the background so the trap ends it at once.
         - name: refresh
-          image: docker.io/library/python:3.15.1-alpine3.24@sha256:54448f67d7c31c39e5cdd3ea2d6382395ce142806c284425f8e897d78a0465b3
+          image: docker.io/library/python:3.15.2-alpine3.24@sha256:0f9552bb28711333da16915ec146f5e6bb44a7fdac9ced15dc17c2e0206346dd
           command:
             - sh
             - -c
