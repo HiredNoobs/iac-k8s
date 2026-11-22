@@ -1,8 +1,5 @@
-# The cluster's network (CNI), replacing Talos' Flannel: pod addresses, NetworkPolicy and, once
-# the migration from Flannel is finished, Services in place of kube-proxy. Until then it runs
-# beside Flannel with the migration values below: a node moves to Cilium when it's labelled
-# io.cilium.migration/cilium-default=true (selected by the cilium-default CiliumNodeConfig, applied
-# by hand for the migration), its agent restarted and the node rebooted.
+# The cluster's network (CNI), replacing Talos' Flannel: pod addresses, NetworkPolicy and Services
+# in place of kube-proxy.
 #
 # The images come from the chart, pinned by digest (image.useDigest, the chart's default): bump
 # the chart (repository.yaml) to change them. Cilium's CRDs are created by its operator, not by
@@ -94,9 +91,6 @@ spec:
           memory: 64Mi
         limits:
           memory: 256Mi
-      # Migration: pods still on Flannel's network move when their node is drained, not before.
-      unmanagedPodWatcher:
-        restart: false
 
     # -----------------------------------------------------
     # Lean: no Envoy (no L7 policy), no Hubble relay or UI. Hubble prints dropped and audited
@@ -117,16 +111,16 @@ spec:
           filePath: stdout
           allowList:
             - '{"verdict":["DROPPED","AUDIT"]}'
+          # Not pods' IPv6 multicast (router and neighbour solicitations, MLD), dropped as the
+          # cluster is IPv4 only: every pod sends it, a few lines a minute on every node.
+          denyList:
+            - '{"drop_reason_desc":["UNSUPPORTED_L3_PROTOCOL"]}'
 
     # -----------------------------------------------------
-    # Migration from Flannel: kube-proxy still handles Services, a node keeps Flannel's CNI config
-    # until the cilium-default CiliumNodeConfig selects it, no policy is enforced, and host
-    # traffic goes through iptables while both networks share the nodes. Replaced by
-    # kubeProxyReplacement: true and bpf.masquerade: true once every node is on Cilium.
+    # Services in place of kube-proxy (eBPF, including masquerading). Policy in audit mode:
+    # traffic a policy would drop passes, and is reported as AUDIT.
     # -----------------------------------------------------
-    kubeProxyReplacement: false
-    cni:
-      customConf: true
-    policyEnforcementMode: never
+    kubeProxyReplacement: true
     bpf:
-      hostLegacyRouting: true
+      masquerade: true
+    policyAuditMode: true
