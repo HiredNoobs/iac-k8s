@@ -23,7 +23,7 @@ spec:
       ports:
         - port: https
 ---
-# Vector's aggregator writes the logs.
+# Vector writes the logs: its collectors (each node's) and its aggregator (what other machines send).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -41,7 +41,6 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: vector
-              app.kubernetes.io/component: aggregator
       ports:
         - port: https
 ---
