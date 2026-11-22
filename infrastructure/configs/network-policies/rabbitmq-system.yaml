@@ -1,4 +1,5 @@
-# Only kube-apiserver reaches the Topology Operator (its webhooks).
+# Only kube-apiserver (as remote-node too, kustomization.yaml) reaches the Topology Operator
+# (its webhooks).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -9,3 +10,4 @@ spec:
   ingress:
     - fromEntities:
         - kube-apiserver
+        - remote-node

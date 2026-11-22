@@ -1,9 +1,11 @@
-# The controllers' network policies (the apps' are with each app): connections to a namespace's
-# pods are dropped except from what its policy lists. Here, not with the controllers, as
-# CiliumNetworkPolicy is a Cilium CRD. The namespaces kube-apiserver calls (webhooks,
-# APIServices) need a CiliumNetworkPolicy: kube-apiserver runs on the control planes' host
-# network, which only Cilium's entities select. Not here: Longhorn's and Flux's policies come with
-# them, kube-vip and node-exporter run on the host's network, and kube-system has none.
+# The controllers' network policies (the apps' are with each app): connections to a namespace's pods
+# are dropped except from what its policy lists. Here, not with the controllers, as
+# CiliumNetworkPolicy is a Cilium CRD. The namespaces kube-apiserver calls (webhooks, APIServices)
+# need a CiliumNetworkPolicy: kube-apiserver runs on the control planes' host network, which only
+# Cilium's entities select. Its calls to a pod on another node come from that control plane's Cilium
+# address (cilium_host), which Cilium knows only as remote-node, so those policies allow remote-node
+# as well: every other node's host network. Not here: Longhorn's and Flux's policies come with them,
+# kube-vip and node-exporter run on the host's network, and kube-system has none.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

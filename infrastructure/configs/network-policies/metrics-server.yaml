@@ -1,4 +1,5 @@
-# Only kube-apiserver reaches metrics-server (the metrics.k8s.io APIService).
+# Only kube-apiserver (as remote-node too, kustomization.yaml) reaches metrics-server (the
+# metrics.k8s.io APIService).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -9,3 +10,4 @@ spec:
   ingress:
     - fromEntities:
         - kube-apiserver
+        - remote-node

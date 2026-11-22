@@ -1,7 +1,8 @@
-# Who reaches Envoy Gateway's controller and the Gateway's Envoy pods: kube-apiserver (the
-# controller's topology injector webhook), the namespace's own pods (Envoy's config from the
-# controller), anyone on the Envoy listeners (the Gateway's ports 80 and 443 are 10080 and 10443
-# in the pods, 8443 is Jellyfin's) and vmagent (Envoy's metrics).
+# Who reaches Envoy Gateway's controller and the Gateway's Envoy pods: kube-apiserver (as
+# remote-node too, kustomization.yaml; the controller's topology injector webhook), the
+# namespace's own pods (Envoy's config from the controller), anyone on the Envoy listeners (the
+# Gateway's ports 80 and 443 are 10080 and 10443 in the pods, 8443 is Jellyfin's) and vmagent
+# (Envoy's metrics).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -12,6 +13,7 @@ spec:
   ingress:
     - fromEntities:
         - kube-apiserver
+        - remote-node
     - fromEndpoints:
         - {}
     - fromEntities:
