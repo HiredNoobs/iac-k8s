@@ -76,4 +76,4 @@ transforms:
     condition: |
       !(."event.action" == "authorization" && !exists(."user.name") &&
         ."http.response.status_code" == 302 &&
-        (ip_cidr_contains(["10.244.0.0/16", "10.245.0.0/16"], string(."source.ip") ?? "") ?? false))
+        (ip_cidr_contains("10.245.0.0/16", string(."source.ip") ?? "") ?? false))

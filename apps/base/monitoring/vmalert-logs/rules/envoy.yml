@@ -16,7 +16,7 @@ groups:
     type: vlogs
     interval: 5m
     rules:
-      # Pod addresses (10.244.0.0/16, 10.245.0.0/16) stay untrusted on purpose: no pod logs in
+      # Pod addresses (10.245.0.0/16) stay untrusted on purpose: no pod logs in
       # through the Gateway (blackbox only sends GETs), so one that does is a compromised container.
       - alert: LoginFromUntrustedNetwork
         expr: >-
