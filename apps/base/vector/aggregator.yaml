@@ -130,7 +130,7 @@ spec:
               readOnly: true
       containers:
         - name: vector
-          image: timberio/vector:0.61.0-distroless-static@sha256:6901c28cc86ed3d41880198dad12ba7b6df83efdf9c61c0c175d23980689a16f
+          image: timberio/vector:0.62.0-distroless-static@sha256:85c478aa4ab29d17f61aa28afe92da7f506a95cae0ec275ba139558e7816e656
           # --watch-config: also watches the enrichment tables' files (geo.yaml, threat-intel.yaml)
           # and reloads them when the refresh container replaces them.
           args: ["--config", "/etc/vector/*.yaml", "--watch-config"]

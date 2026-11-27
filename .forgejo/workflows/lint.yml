@@ -50,8 +50,8 @@ env:
   # Vector, the same version as its image (apps/base/vector/daemonset.yaml, aggregator.yaml), for
   # its config tests.
   # renovate: datasource=github-releases depName=vectordotdev/vector extractVersion=^v(?<version>.+)$
-  VECTOR_VERSION: "0.61.0"
-  VECTOR_SHA256: "e1609b8a55ef1c1fc4fd88633e2bc6366e9a4022f6f1ae846cadd27af5237621"
+  VECTOR_VERSION: "0.62.0"
+  VECTOR_SHA256: "41fd728f007bbac1f5d12e9fcea569879d1fb8819f3b55f62c54173b3bc0a6f9"
 
 jobs:
   lint:
